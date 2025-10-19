@@ -80,10 +80,10 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     bool finished = false;
 
     SUBCASE("h1 finish first") {
-        finish_handle.set_on_finish([&finished](size_t idx, int r) {
+        finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(idx == 0);
-            CHECK(r == 2);
+            CHECK(r.first == 0);
+            CHECK(r.second == 2);
         });
 
         h1.finish(2);
@@ -93,10 +93,10 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     }
 
     SUBCASE("h2 finish first") {
-        finish_handle.set_on_finish([&finished](size_t idx, int r) {
+        finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(idx == 1);
-            CHECK(r == 3);
+            CHECK(r.first == 1);
+            CHECK(r.second == 3);
         });
 
         h2.finish(3);
@@ -106,10 +106,10 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     }
 
     SUBCASE("h3 finish first") {
-        finish_handle.set_on_finish([&finished](size_t idx, int r) {
+        finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(idx == 2);
-            CHECK(r == 1);
+            CHECK(r.first == 2);
+            CHECK(r.second == 1);
         });
 
         h3.finish(1);
@@ -125,8 +125,11 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle cancel") {
     finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
     bool finished = false;
 
-    finish_handle.set_on_finish(
-        [&finished](size_t idx, int r) { finished = true; });
+    finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
+        finished = true;
+        CHECK(r.first == 0);
+        CHECK(r.second == 1);
+    });
 
     finish_handle.cancel();
     CHECK(!finished);
@@ -161,13 +164,13 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
 
     SUBCASE("h1 -> h3 -> h2 -> h4") {
         finish_handle.set_on_finish(
-            [&finished](size_t idx,
-                        std::vector<int> r) { // idx: 0 for ab, 1 for cd
+            [&finished](std::pair<size_t, std::vector<int>>
+                            r) { // idx: 0 for ab, 1 for cd
                 finished = true;
-                CHECK(idx == 0);
-                CHECK(r.size() == 2);
-                CHECK(r[0] == 2);
-                CHECK(r[1] == 3);
+                CHECK(r.first == 0);
+                CHECK(r.second.size() == 2);
+                CHECK(r.second[0] == 2);
+                CHECK(r.second[1] == 3);
             });
 
         h1.finish(2);
@@ -187,13 +190,13 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
 
     SUBCASE("h3 -> h2 -> h4 -> h1") {
         finish_handle.set_on_finish(
-            [&finished](size_t idx,
-                        std::vector<int> r) { // idx: 0 for ab, 1 for cd
+            [&finished](std::pair<size_t, std::vector<int>>
+                            r) { // idx: 0 for ab, 1 for cd
                 finished = true;
-                CHECK(idx == 1);
-                CHECK(r.size() == 2);
-                CHECK(r[0] == 4);
-                CHECK(r[1] == 1);
+                CHECK(r.first == 1);
+                CHECK(r.second.size() == 2);
+                CHECK(r.second[0] == 4);
+                CHECK(r.second[1] == 1);
             });
 
         h3.finish(4);

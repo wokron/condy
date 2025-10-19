@@ -115,7 +115,8 @@ public:
                 std::pair<std::vector<size_t>, std::vector<ChildReturnType>>
                     r) {
                 auto &[order, results] = r;
-                on_finish(order[0], std::move(results[order[0]]));
+                on_finish(
+                    std::make_pair(order[0], std::move(results[order[0]])));
             };
         Base::set_on_finish(std::move(wrapper));
     }
