@@ -16,10 +16,10 @@ struct SimpleFinishHandle {
         }
     }
 
-    void cancel() { cancelled_ = true; }
+    void cancel() { cancelled_++; }
 
     std::function<void(int)> on_finish_ = nullptr;
-    bool cancelled_ = false;
+    int cancelled_ = 0;
 };
 
 } // namespace
@@ -147,6 +147,36 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle cancel") {
     CHECK(finished);
 }
 
+TEST_CASE(
+    "test parallel_finish_handle - RangedWaitOneFinishHandle multiple cancel") {
+    SimpleFinishHandle h1, h2, h3;
+    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle;
+    finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
+    bool finished = false;
+
+    finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
+        finished = true;
+        CHECK(r.first == 0);
+        CHECK(r.second == 1);
+    });
+
+    h1.finish(1);
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1);
+    CHECK(h3.cancelled_ == 1);
+
+    h3.finish(-1);
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1); // should not increase
+
+    finish_handle.cancel();
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1); // should not increase
+
+    h2.finish(-1);
+    CHECK(finished);
+}
+
 TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
     condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_ab;
@@ -213,6 +243,46 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
         h1.finish(2);
         CHECK(finished);
     }
+}
+
+TEST_CASE("test parallel_finish_handle - Ranged (a || b) && (c || d)") {
+    SimpleFinishHandle h1, h2, h3, h4;
+    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle_ab;
+    finish_handle_ab.init(std::vector<SimpleFinishHandle *>{&h1, &h2});
+    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle_cd;
+    finish_handle_cd.init(std::vector<SimpleFinishHandle *>{&h3, &h4});
+    condy::RangedWaitAllFinishHandle<
+        condy::RangedWaitOneFinishHandle<SimpleFinishHandle>>
+        finish_handle;
+    finish_handle.init(
+        std::vector<condy::RangedWaitOneFinishHandle<SimpleFinishHandle> *>{
+            &finish_handle_ab, &finish_handle_cd});
+
+    bool finished = false;
+
+    finish_handle.set_on_finish(
+        [&finished](std::vector<std::pair<size_t, int>> r) {
+            finished = true;
+            CHECK(r.size() == 2);
+            CHECK(r[0].first == 0); // from ab
+            CHECK(r[0].second == 2);
+            CHECK(r[1].first == 0); // from cd
+            CHECK(r[1].second == 4);
+        });
+
+    h1.finish(2);
+    CHECK(!finished);
+    CHECK(h2.cancelled_);
+
+    h2.finish(-1);
+    CHECK(!finished);
+
+    h3.finish(4);
+    CHECK(!finished);
+    CHECK(h4.cancelled_);
+
+    h4.finish(-1);
+    CHECK(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
@@ -344,6 +414,34 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle cancel") {
     CHECK(finished);
 }
 
+TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle multiple cancel") {
+    SimpleFinishHandle h1, h2, h3;
+    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
+                               SimpleFinishHandle>
+        finish_handle;
+    finish_handle.init(&h1, &h2, &h3);
+    bool finished = false;
+
+    finish_handle.set_on_finish(
+        [&finished](std::variant<int, int, int> r) { finished = true; });
+
+    h1.finish(1);
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1);
+    CHECK(h3.cancelled_ == 1);
+
+    h3.finish(-1);
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1); // should not increase
+
+    finish_handle.cancel();
+    CHECK(!finished);
+    CHECK(h2.cancelled_ == 1); // should not increase
+
+    h2.finish(-1);
+    CHECK(finished);
+}
+
 TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
     condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
@@ -411,4 +509,47 @@ TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
         h1.finish(2);
         CHECK(finished);
     }
+}
+
+TEST_CASE("test parallel_finish_handle - (a || b) && (c || d)") {
+    SimpleFinishHandle h1, h2, h3, h4;
+    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+        finish_handle_ab;
+    finish_handle_ab.init(&h1, &h2);
+    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+        finish_handle_cd;
+    finish_handle_cd.init(&h3, &h4);
+    condy::WaitAllFinishHandle<
+        condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
+        condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
+        finish_handle;
+    finish_handle.init(&finish_handle_ab, &finish_handle_cd);
+
+    bool finished = false;
+
+    finish_handle.set_on_finish(
+        [&finished](
+            std::tuple<std::variant<int, int>, std::variant<int, int>> r) {
+            finished = true;
+            auto res_ab = std::get<0>(r);
+            CHECK(res_ab.index() == 0);
+            CHECK(std::get<0>(res_ab) == 2);
+            auto res_cd = std::get<1>(r);
+            CHECK(res_cd.index() == 0);
+            CHECK(std::get<0>(res_cd) == 4);
+        });
+
+    h1.finish(2);
+    CHECK(!finished);
+    CHECK(h2.cancelled_);
+
+    h2.finish(-1);
+    CHECK(!finished);
+
+    h3.finish(4);
+    CHECK(!finished);
+    CHECK(h4.cancelled_);
+
+    h4.finish(-1);
+    CHECK(finished);
 }
