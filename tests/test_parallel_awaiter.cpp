@@ -208,3 +208,192 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
         REQUIRE(finished);
     }
 }
+
+TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
+    SimpleAwaiter a1, a2, a3;
+    auto h1 = a1.handle_ptr_;
+    auto h2 = a2.handle_ptr_;
+    auto h3 = a3.handle_ptr_;
+    bool finished = false;
+
+    auto func = [&]() -> condy::Coro {
+        condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
+            awaiter(a1, a2, a3);
+        std::tuple<int, int, int> results = co_await awaiter;
+        CHECK(std::get<0>(results) == 1);
+        CHECK(std::get<1>(results) == 2);
+        CHECK(std::get<2>(results) == 3);
+        finished = true;
+    };
+
+    auto coro = func();
+    REQUIRE(!finished);
+
+    coro.release().resume();
+    REQUIRE(!finished);
+    // Now all awaiters should be registered
+    REQUIRE(h1->on_finish_ != nullptr);
+    REQUIRE(h2->on_finish_ != nullptr);
+    REQUIRE(h3->on_finish_ != nullptr);
+
+    h1->finish(1);
+    REQUIRE(!finished);
+
+    h2->finish(2);
+    REQUIRE(!finished);
+
+    h3->finish(3);
+    REQUIRE(finished);
+}
+
+TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
+    SimpleAwaiter a1, a2, a3;
+    auto h1 = a1.handle_ptr_;
+    auto h2 = a2.handle_ptr_;
+    auto h3 = a3.handle_ptr_;
+    bool finished = false;
+
+    auto func =
+        [&](size_t expected_idx,
+            std::variant<int, int, int> expected_result) -> condy::Coro {
+        condy::WaitOneAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
+            awaiter(a1, a2, a3);
+        auto result = co_await awaiter;
+        CHECK(result.index() == expected_idx);
+        CHECK(result == expected_result);
+        finished = true;
+    };
+
+    SUBCASE("a1 finish first") {
+        auto coro =
+            func(0, std::variant<int, int, int>{std::in_place_index<0>, 2});
+        REQUIRE(!finished);
+
+        coro.release().resume();
+        REQUIRE(!finished);
+        // Now all awaiters should be registered
+        REQUIRE(h1->on_finish_ != nullptr);
+        REQUIRE(h2->on_finish_ != nullptr);
+        REQUIRE(h3->on_finish_ != nullptr);
+
+        h1->finish(2);
+        REQUIRE(h2->cancelled_);
+        REQUIRE(h3->cancelled_);
+
+        h2->finish(-1);
+        h3->finish(-1);
+        REQUIRE(finished);
+    }
+
+    SUBCASE("a2 finish first") {
+        auto coro =
+            func(1, std::variant<int, int, int>{std::in_place_index<1>, 3});
+        REQUIRE(!finished);
+
+        coro.release().resume();
+        REQUIRE(!finished);
+        // Now all awaiters should be registered
+        REQUIRE(h1->on_finish_ != nullptr);
+        REQUIRE(h2->on_finish_ != nullptr);
+        REQUIRE(h3->on_finish_ != nullptr);
+
+        h2->finish(3);
+        REQUIRE(h1->cancelled_);
+        REQUIRE(h3->cancelled_);
+
+        h1->finish(-1);
+        h3->finish(-1);
+        REQUIRE(finished);
+    }
+
+    SUBCASE("a3 finish first") {
+        auto coro =
+            func(2, std::variant<int, int, int>{std::in_place_index<2>, 1});
+        REQUIRE(!finished);
+
+        coro.release().resume();
+        REQUIRE(!finished);
+        // Now all awaiters should be registered
+        REQUIRE(h1->on_finish_ != nullptr);
+        REQUIRE(h2->on_finish_ != nullptr);
+        REQUIRE(h3->on_finish_ != nullptr);
+
+        h3->finish(1);
+        REQUIRE(h1->cancelled_);
+        REQUIRE(h2->cancelled_);
+
+        h1->finish(-1);
+        h2->finish(-1);
+        REQUIRE(finished);
+    }
+}
+
+TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
+          "and WaitOneAwaiter") {
+    SimpleAwaiter a1, a2, a3, a4;
+    auto h1 = a1.handle_ptr_;
+    auto h2 = a2.handle_ptr_;
+    auto h3 = a3.handle_ptr_;
+    auto h4 = a4.handle_ptr_;
+    bool finished = false;
+
+    auto func = [&](size_t expected_idx,
+                    std::variant<std::tuple<int, int>, std::tuple<int, int>>
+                        expected_results) -> condy::Coro {
+        using WaitAll = condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter>;
+        using WaitOne = condy::WaitOneAwaiter<WaitAll, WaitAll>;
+        WaitAll awaiter_ab(a1, a2);
+        WaitAll awaiter_cd(a3, a4);
+        WaitOne awaiter(awaiter_ab, awaiter_cd);
+        auto result = co_await awaiter;
+        CHECK(result.index() == expected_idx);
+        CHECK(result == expected_results);
+        finished = true;
+    };
+
+    SUBCASE("a1 -> a3 -> a2 -> a4") {
+        auto coro =
+            func(0, std::variant<std::tuple<int, int>, std::tuple<int, int>>{
+                        std::in_place_index<0>, std::make_tuple(2, 3)});
+        REQUIRE(!finished);
+
+        coro.release().resume();
+        REQUIRE(!finished);
+
+        h1->finish(2);
+        REQUIRE(!finished);
+
+        h3->finish(4);
+        REQUIRE(!finished);
+
+        h2->finish(3);
+        REQUIRE(h3->cancelled_);
+        REQUIRE(h4->cancelled_);
+
+        h4->finish(-1); // finish due to cancellation
+        REQUIRE(finished);
+    }
+
+    SUBCASE("a1 -> a3 -> a2 -> a4") {
+        auto coro =
+            func(1, std::variant<std::tuple<int, int>, std::tuple<int, int>>{
+                        std::in_place_index<1>, std::make_tuple(4, 5)});
+        REQUIRE(!finished);
+
+        coro.release().resume();
+        REQUIRE(!finished);
+
+        h3->finish(4);
+        REQUIRE(!finished);
+
+        h1->finish(2);
+        REQUIRE(!finished);
+
+        h4->finish(5);
+        REQUIRE(h1->cancelled_);
+        REQUIRE(h2->cancelled_);
+
+        h2->finish(-1); // finish due to cancellation
+        REQUIRE(finished);
+    }
+}
