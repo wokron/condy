@@ -32,8 +32,10 @@ public:
     }
 
     void cancel() {
-        for (auto &handle : handles_) {
-            handle->cancel();
+        if (canceled_count_++ == 0) {
+            for (auto &handle : handles_) {
+                handle->cancel();
+            }
         }
     }
 
@@ -53,7 +55,7 @@ private:
             return;
         }
 
-        if (cancel_checker_(idx, r)) {
+        if (cancel_checker_(idx, r) && canceled_count_++ == 0) {
             for (size_t i = 0; i < handles_.size(); i++) {
                 if (i != idx) {
                     handles_[i]->cancel();
@@ -64,6 +66,7 @@ private:
 
 private:
     size_t finished_count_ = 0;
+    size_t canceled_count_ = 0;
     std::function<void(ReturnType)> on_finish_ = nullptr;
     std::vector<Handle *> handles_ = {};
     Condition cancel_checker_ = {};
@@ -133,8 +136,10 @@ public:
     }
 
     void cancel() {
-        constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
-        foreach_call_cancel_<SkipIdx>();
+        if (canceled_count_++ == 0) {
+            constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
+            foreach_call_cancel_<SkipIdx>();
+        }
     }
 
     template <typename Func> void set_on_finish(Func &&on_finish) {
@@ -177,13 +182,14 @@ private:
             return;
         }
 
-        if (cancel_checker_(Idx, r)) {
+        if (cancel_checker_(Idx, r) && canceled_count_++ == 0) {
             foreach_call_cancel_<Idx>();
         }
     }
 
 private:
     size_t finished_count_ = 0;
+    size_t canceled_count_ = 0;
     std::function<void(ReturnType)> on_finish_ = nullptr;
     std::tuple<Handles *...> handles_;
     Condition cancel_checker_ = {};
