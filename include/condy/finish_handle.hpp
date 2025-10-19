@@ -20,7 +20,7 @@ public:
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
 
-    template <typename Range> RangedParallelFinishHandle(Range &&handle_ptrs) {
+    template <typename Range> void init(Range &&handle_ptrs) {
         for (auto &handle : handle_ptrs) {
             auto no = handles_.size();
             auto on_finish = [this, no](ChildReturnType r) { finish_(no, r); };
@@ -31,7 +31,6 @@ public:
         results_.resize(handles_.size());
     }
 
-public:
     void cancel() {
         for (auto &handle : handles_) {
             handle->cancel();
@@ -93,9 +92,6 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::vector<ChildReturnType>;
 
-    using Base::Base;
-
-public:
     template <typename Func> void set_on_finish(Func &&on_finish) {
         auto wrapper =
             [on_finish = std::forward<Func>(on_finish)](
@@ -113,9 +109,6 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
-    using Base::Base;
-
-public:
     template <typename Func> void set_on_finish(Func &&on_finish) {
         auto wrapper =
             [on_finish = std::forward<Func>(on_finish)](
@@ -133,12 +126,11 @@ public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
-    ParallelFinishHandle(Handles *...handles) {
+    void init(Handles *...handles) {
         handles_ = std::make_tuple(handles...);
         foreach_call_set_on_finish_();
     }
 
-public:
     void cancel() {
         constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
         foreach_call_cancel_<SkipIdx>();
@@ -206,9 +198,6 @@ public:
     using Base = ParallelFinishHandle<WaitAllCancelCondition, Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
-    using Base::Base;
-
-public:
     template <typename Func> void set_on_finish(Func &&on_finish) {
         auto wrapper =
             [on_finish = std::forward<Func>(on_finish)](
@@ -226,9 +215,6 @@ public:
     using Base = ParallelFinishHandle<WaitOneCancelCondition, Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
-    using Base::Base;
-
-public:
     template <typename Func> void set_on_finish(Func &&on_finish) {
         auto wrapper =
             [on_finish = std::forward<Func>(on_finish)](

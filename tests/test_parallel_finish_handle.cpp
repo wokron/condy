@@ -26,8 +26,8 @@ struct SimpleFinishHandle {
 
 TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle(
-        std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
+    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle;
+    finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
 
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::vector<int> r) {
@@ -50,8 +50,8 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle finish") {
 
 TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle(
-        std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
+    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle;
+    finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
 
     bool finished = false;
     finish_handle.set_on_finish(
@@ -75,8 +75,8 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
 
 TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle(
-        std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
+    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle;
+    finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
     bool finished = false;
 
     SUBCASE("h1 finish first") {
@@ -121,8 +121,8 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
 
 TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle(
-        std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
+    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> finish_handle;
+    finish_handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
     bool finished = false;
 
     finish_handle.set_on_finish(
@@ -146,15 +146,16 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle cancel") {
 
 TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_ab(
-        std::vector<SimpleFinishHandle *>{&h1, &h2});
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_cd(
-        std::vector<SimpleFinishHandle *>{&h3, &h4});
+    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_ab;
+    finish_handle_ab.init(std::vector<SimpleFinishHandle *>{&h1, &h2});
+    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_cd;
+    finish_handle_cd.init(std::vector<SimpleFinishHandle *>{&h3, &h4});
     condy::RangedWaitOneFinishHandle<
         condy::RangedWaitAllFinishHandle<SimpleFinishHandle>>
-        finish_handle(
-            std::vector<condy::RangedWaitAllFinishHandle<SimpleFinishHandle> *>{
-                &finish_handle_ab, &finish_handle_cd});
+        finish_handle;
+    finish_handle.init(
+        std::vector<condy::RangedWaitAllFinishHandle<SimpleFinishHandle> *>{
+            &finish_handle_ab, &finish_handle_cd});
 
     bool finished = false;
 
@@ -215,7 +216,8 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
     condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
-        finish_handle(&h1, &h2, &h3);
+        finish_handle;
+    finish_handle.init(&h1, &h2, &h3);
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::tuple<int, int, int> r) {
         finished = true;
@@ -238,7 +240,8 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
     condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
-        finish_handle(&h1, &h2, &h3);
+        finish_handle;
+    finish_handle.init(&h1, &h2, &h3);
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::tuple<int, int, int> r) {
         finished = true;
@@ -267,7 +270,8 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
     condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
-        finish_handle(&h1, &h2, &h3);
+        finish_handle;
+    finish_handle.init(&h1, &h2, &h3);
     bool finished = false;
 
     SUBCASE("h1 finish first") {
@@ -314,7 +318,8 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
     condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
-        finish_handle(&h1, &h2, &h3);
+        finish_handle;
+    finish_handle.init(&h1, &h2, &h3);
     bool finished = false;
 
     finish_handle.set_on_finish(
@@ -339,20 +344,23 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle cancel") {
 TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
     condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
-        finish_handle_ab(&h1, &h2);
+        finish_handle_ab;
+    finish_handle_ab.init(&h1, &h2);
     condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
-        finish_handle_cd(&h3, &h4);
+        finish_handle_cd;
+    finish_handle_cd.init(&h3, &h4);
     condy::WaitOneFinishHandle<
         condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
         condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
-        finish_handle(&finish_handle_ab, &finish_handle_cd);
+        finish_handle;
+    finish_handle.init(&finish_handle_ab, &finish_handle_cd);
 
     bool finished = false;
 
     SUBCASE("h1 -> h3 -> h2 -> h4") {
         finish_handle.set_on_finish(
-            [&finished](std::variant<std::tuple<int, int>, std::tuple<int, int>>
-                            r) {
+            [&finished](
+                std::variant<std::tuple<int, int>, std::tuple<int, int>> r) {
                 finished = true;
                 CHECK(r.index() == 0);
                 auto res = std::get<0>(r);
@@ -377,8 +385,8 @@ TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
 
     SUBCASE("h3 -> h2 -> h4 -> h1") {
         finish_handle.set_on_finish(
-            [&finished](std::variant<std::tuple<int, int>, std::tuple<int, int>>
-                            r) {
+            [&finished](
+                std::variant<std::tuple<int, int>, std::tuple<int, int>> r) {
                 finished = true;
                 CHECK(r.index() == 1);
                 auto res = std::get<1>(r);
