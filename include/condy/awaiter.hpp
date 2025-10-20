@@ -11,11 +11,13 @@ template <typename Handle, typename Awaiter> class RangedParallelAwaiter {
 public:
     using HandleType = Handle;
 
-    template <typename Range,
-              typename = std::enable_if_t<!std::same_as<
-                  std::remove_cvref_t<Range>, RangedParallelAwaiter>>>
-    RangedParallelAwaiter(Range &&awaiters)
-        : awaiters_(std::begin(awaiters), std::end(awaiters)) {}
+    RangedParallelAwaiter(std::vector<Awaiter> awaiters)
+        : awaiters_(std::move(awaiters)) {}
+    RangedParallelAwaiter(RangedParallelAwaiter &&) = default;
+
+    RangedParallelAwaiter(const RangedParallelAwaiter &) = delete;
+    RangedParallelAwaiter &operator=(const RangedParallelAwaiter &) = delete;
+    RangedParallelAwaiter &operator=(RangedParallelAwaiter &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -65,6 +67,11 @@ public:
     using HandleType = Handle;
 
     ParallelAwaiter(Awaiters... awaiters) : awaiters_(std::move(awaiters)...) {}
+    ParallelAwaiter(ParallelAwaiter &&) = default;
+
+    ParallelAwaiter(const ParallelAwaiter &) = delete;
+    ParallelAwaiter &operator=(const ParallelAwaiter &) = delete;
+    ParallelAwaiter &operator=(ParallelAwaiter &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }

@@ -180,7 +180,10 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
         using WaitOne = condy::RangedWaitOneAwaiter<WaitAll>;
         WaitAll awaiter_ab(std::vector<SimpleAwaiter>{a1, a2});
         WaitAll awaiter_cd(std::vector<SimpleAwaiter>{a3, a4});
-        WaitOne awaiter(std::vector<WaitAll>{awaiter_ab, awaiter_cd});
+        std::vector<WaitAll> awaiters;
+        awaiters.push_back(std::move(awaiter_ab));
+        awaiters.push_back(std::move(awaiter_cd));
+        WaitOne awaiter(std::move(awaiters));
         auto [idx, results] = co_await awaiter;
         REQUIRE(idx == expected_idx);
         REQUIRE(results == expected_results);
@@ -344,7 +347,7 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
         using WaitOne = condy::WaitOneAwaiter<WaitAll, WaitAll>;
         WaitAll awaiter_ab(a1, a2);
         WaitAll awaiter_cd(a3, a4);
-        WaitOne awaiter(awaiter_ab, awaiter_cd);
+        WaitOne awaiter(std::move(awaiter_ab), std::move(awaiter_cd));
         auto result = co_await awaiter;
         REQUIRE(result.index() == expected_idx);
         REQUIRE(result == expected_results);
