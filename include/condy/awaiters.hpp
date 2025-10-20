@@ -62,12 +62,6 @@ private:
     int result_;
 };
 
-template <typename Func, typename... Args>
-auto build_op_awaiter(Func &&func, Args &&...args) {
-    return OpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
-        std::forward<Func>(func), std::forward<Args>(args)...);
-}
-
 template <typename Handle, typename Awaiter> class RangedParallelAwaiter {
 public:
     using HandleType = Handle;
@@ -115,6 +109,11 @@ public:
     }
 
     typename Handle::ReturnType await_resume() { return std::move(result_); }
+
+public:
+    void append_awaiter(Awaiter awaiter) {
+        awaiters_.push_back(std::move(awaiter));
+    }
 
 private:
     HandleType finish_handle_;
@@ -175,6 +174,9 @@ public:
     }
 
     typename Handle::ReturnType await_resume() { return std::move(result_); }
+
+public:
+    auto awaiters() && { return std::move(awaiters_); }
 
 private:
     template <size_t Idx = 0> auto foreach_init_finish_handle_() {
