@@ -62,10 +62,10 @@ TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
         condy::RangedWaitAllAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         std::vector<int> results = co_await awaiter;
-        CHECK(results.size() == 3);
-        CHECK(results[0] == 1);
-        CHECK(results[1] == 2);
-        CHECK(results[2] == 3);
+        REQUIRE(results.size() == 3);
+        REQUIRE(results[0] == 1);
+        REQUIRE(results[1] == 2);
+        REQUIRE(results[2] == 3);
         finished = true;
     };
 
@@ -100,8 +100,8 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
         condy::RangedWaitOneAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         auto [idx, result] = co_await awaiter;
-        CHECK(idx == expected_idx);
-        CHECK(result == expected_result);
+        REQUIRE(idx == expected_idx);
+        REQUIRE(result == expected_result);
         finished = true;
     };
 
@@ -182,8 +182,8 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
         WaitAll awaiter_cd(std::vector<SimpleAwaiter>{a3, a4});
         WaitOne awaiter(std::vector<WaitAll>{awaiter_ab, awaiter_cd});
         auto [idx, results] = co_await awaiter;
-        CHECK(idx == expected_idx);
-        CHECK(results == expected_results);
+        REQUIRE(idx == expected_idx);
+        REQUIRE(results == expected_results);
         finished = true;
     };
 
@@ -220,9 +220,9 @@ TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
         condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         std::tuple<int, int, int> results = co_await awaiter;
-        CHECK(std::get<0>(results) == 1);
-        CHECK(std::get<1>(results) == 2);
-        CHECK(std::get<2>(results) == 3);
+        REQUIRE(std::get<0>(results) == 1);
+        REQUIRE(std::get<1>(results) == 2);
+        REQUIRE(std::get<2>(results) == 3);
         finished = true;
     };
 
@@ -259,8 +259,8 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
         condy::WaitOneAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         auto result = co_await awaiter;
-        CHECK(result.index() == expected_idx);
-        CHECK(result == expected_result);
+        REQUIRE(result.index() == expected_idx);
+        REQUIRE(result == expected_result);
         finished = true;
     };
 
@@ -346,8 +346,8 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
         WaitAll awaiter_cd(a3, a4);
         WaitOne awaiter(awaiter_ab, awaiter_cd);
         auto result = co_await awaiter;
-        CHECK(result.index() == expected_idx);
-        CHECK(result == expected_results);
+        REQUIRE(result.index() == expected_idx);
+        REQUIRE(result == expected_results);
         finished = true;
     };
 

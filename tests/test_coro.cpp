@@ -9,7 +9,7 @@ TEST_CASE("test coro - run coro") {
     };
 
     auto coro = func();
-    REQUIRE_FALSE(executed);
+    REQUIRE(!executed);
 
     coro.release().resume();
     REQUIRE(executed);
@@ -28,7 +28,7 @@ TEST_CASE("test coro - await coro") {
 
     auto inner_coro = inner_func();
     auto outer_coro = outer_func(std::move(inner_coro));
-    REQUIRE_FALSE(executed);
+    REQUIRE(!executed);
 
     outer_coro.release().resume();
     REQUIRE(executed);
@@ -52,7 +52,7 @@ TEST_CASE("test coro - nested await") {
     auto inner_coro = inner_func();
     auto middle_coro = middle_func(std::move(inner_coro));
     auto outer_coro = outer_func(std::move(middle_coro));
-    REQUIRE_FALSE(executed);
+    REQUIRE(!executed);
 
     outer_coro.release().resume();
     REQUIRE(executed);
@@ -74,12 +74,12 @@ TEST_CASE("test coro - resume by awaiter") {
     };
 
     auto coro = func();
-    REQUIRE_FALSE(executed);
-    REQUIRE_EQ(awaiter.handle, nullptr);
+    REQUIRE(!executed);
+    REQUIRE(awaiter.handle == nullptr);
 
     coro.release().resume();
-    REQUIRE_FALSE(executed);
-    REQUIRE_NE(awaiter.handle, nullptr);
+    REQUIRE(!executed);
+    REQUIRE(awaiter.handle != nullptr);
 
     awaiter.handle.resume();
     REQUIRE(executed);

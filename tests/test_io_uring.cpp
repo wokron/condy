@@ -14,7 +14,7 @@ TEST_CASE("test io_uring - construct and destruct") {
     auto prev_ptr = ring.release();
     ring = condy::make_io_uring(8, 0);
     REQUIRE(ring != nullptr);
-    REQUIRE_NE(ring.get(), prev_ptr);
+    REQUIRE(ring.get() != prev_ptr);
     sqe = io_uring_get_sqe(ring.get());
     REQUIRE(sqe != nullptr);
 }

@@ -32,20 +32,20 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle finish") {
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::vector<int> r) {
         finished = true;
-        CHECK(r.size() == 3);
-        CHECK(r[0] == 1);
-        CHECK(r[1] == 2);
-        CHECK(r[2] == 3);
+        REQUIRE(r.size() == 3);
+        REQUIRE(r[0] == 1);
+        REQUIRE(r[1] == 2);
+        REQUIRE(r[2] == 3);
     });
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
@@ -58,19 +58,19 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
         [&finished](std::vector<int> r) { finished = true; });
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h1.cancelled_);
-    CHECK(h2.cancelled_);
-    CHECK(h3.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h1.cancelled_);
+    REQUIRE(h2.cancelled_);
+    REQUIRE(h3.cancelled_);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
@@ -82,40 +82,40 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     SUBCASE("h1 finish first") {
         finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(r.first == 0);
-            CHECK(r.second == 2);
+            REQUIRE(r.first == 0);
+            REQUIRE(r.second == 2);
         });
 
         h1.finish(2);
         h2.finish(3);
         h3.finish(1);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h2 finish first") {
         finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(r.first == 1);
-            CHECK(r.second == 3);
+            REQUIRE(r.first == 1);
+            REQUIRE(r.second == 3);
         });
 
         h2.finish(3);
         h3.finish(1);
         h1.finish(2);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h3 finish first") {
         finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
             finished = true;
-            CHECK(r.first == 2);
-            CHECK(r.second == 1);
+            REQUIRE(r.first == 2);
+            REQUIRE(r.second == 1);
         });
 
         h3.finish(1);
         h1.finish(2);
         h2.finish(3);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 }
 
@@ -127,24 +127,24 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle cancel") {
 
     finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
         finished = true;
-        CHECK(r.first == 0);
-        CHECK(r.second == 1);
+        REQUIRE(r.first == 0);
+        REQUIRE(r.second == 1);
     });
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h1.cancelled_);
-    CHECK(h2.cancelled_);
-    CHECK(h3.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h1.cancelled_);
+    REQUIRE(h2.cancelled_);
+    REQUIRE(h3.cancelled_);
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE(
@@ -156,25 +156,25 @@ TEST_CASE(
 
     finish_handle.set_on_finish([&finished](std::pair<size_t, int> r) {
         finished = true;
-        CHECK(r.first == 0);
-        CHECK(r.second == 1);
+        REQUIRE(r.first == 0);
+        REQUIRE(r.second == 1);
     });
 
     h1.finish(1);
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1);
-    CHECK(h3.cancelled_ == 1);
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1);
+    REQUIRE(h3.cancelled_ == 1);
 
     h3.finish(-1);
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1); // should not increase
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1); // should not increase
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1); // should not increase
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1); // should not increase
 
     h2.finish(-1);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
@@ -197,25 +197,25 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
             [&finished](std::pair<size_t, std::vector<int>>
                             r) { // idx: 0 for ab, 1 for cd
                 finished = true;
-                CHECK(r.first == 0);
-                CHECK(r.second.size() == 2);
-                CHECK(r.second[0] == 2);
-                CHECK(r.second[1] == 3);
+                REQUIRE(r.first == 0);
+                REQUIRE(r.second.size() == 2);
+                REQUIRE(r.second[0] == 2);
+                REQUIRE(r.second[1] == 3);
             });
 
         h1.finish(2);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h3.finish(4);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h2.finish(3);
-        CHECK(!finished);
-        CHECK(h3.cancelled_);
-        CHECK(h4.cancelled_);
+        REQUIRE(!finished);
+        REQUIRE(h3.cancelled_);
+        REQUIRE(h4.cancelled_);
 
         h4.finish(1);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h3 -> h2 -> h4 -> h1") {
@@ -223,25 +223,25 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
             [&finished](std::pair<size_t, std::vector<int>>
                             r) { // idx: 0 for ab, 1 for cd
                 finished = true;
-                CHECK(r.first == 1);
-                CHECK(r.second.size() == 2);
-                CHECK(r.second[0] == 4);
-                CHECK(r.second[1] == 1);
+                REQUIRE(r.first == 1);
+                REQUIRE(r.second.size() == 2);
+                REQUIRE(r.second[0] == 4);
+                REQUIRE(r.second[1] == 1);
             });
 
         h3.finish(4);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h2.finish(3);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h4.finish(1);
-        CHECK(!finished);
-        CHECK(h1.cancelled_);
-        CHECK(h2.cancelled_);
+        REQUIRE(!finished);
+        REQUIRE(h1.cancelled_);
+        REQUIRE(h2.cancelled_);
 
         h1.finish(2);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 }
 
@@ -263,26 +263,26 @@ TEST_CASE("test parallel_finish_handle - Ranged (a || b) && (c || d)") {
     finish_handle.set_on_finish(
         [&finished](std::vector<std::pair<size_t, int>> r) {
             finished = true;
-            CHECK(r.size() == 2);
-            CHECK(r[0].first == 0); // from ab
-            CHECK(r[0].second == 2);
-            CHECK(r[1].first == 0); // from cd
-            CHECK(r[1].second == 4);
+            REQUIRE(r.size() == 2);
+            REQUIRE(r[0].first == 0); // from ab
+            REQUIRE(r[0].second == 2);
+            REQUIRE(r[1].first == 0); // from cd
+            REQUIRE(r[1].second == 4);
         });
 
     h1.finish(2);
-    CHECK(!finished);
-    CHECK(h2.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_);
 
     h2.finish(-1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(4);
-    CHECK(!finished);
-    CHECK(h4.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h4.cancelled_);
 
     h4.finish(-1);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
@@ -294,19 +294,19 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::tuple<int, int, int> r) {
         finished = true;
-        CHECK(std::get<0>(r) == 1);
-        CHECK(std::get<1>(r) == 2);
-        CHECK(std::get<2>(r) == 3);
+        REQUIRE(std::get<0>(r) == 1);
+        REQUIRE(std::get<1>(r) == 2);
+        REQUIRE(std::get<2>(r) == 3);
     });
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle cancel") {
@@ -318,25 +318,25 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle cancel") {
     bool finished = false;
     finish_handle.set_on_finish([&finished](std::tuple<int, int, int> r) {
         finished = true;
-        CHECK(std::get<0>(r) == 1);
-        CHECK(std::get<1>(r) == 2);
-        CHECK(std::get<2>(r) == 3);
+        REQUIRE(std::get<0>(r) == 1);
+        REQUIRE(std::get<1>(r) == 2);
+        REQUIRE(std::get<2>(r) == 3);
     });
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h1.cancelled_);
-    CHECK(h2.cancelled_);
-    CHECK(h3.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h1.cancelled_);
+    REQUIRE(h2.cancelled_);
+    REQUIRE(h3.cancelled_);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle finish") {
@@ -350,40 +350,40 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle finish") {
     SUBCASE("h1 finish first") {
         finish_handle.set_on_finish([&finished](std::variant<int, int, int> r) {
             finished = true;
-            CHECK(r.index() == 0);
-            CHECK(std::get<0>(r) == 2);
+            REQUIRE(r.index() == 0);
+            REQUIRE(std::get<0>(r) == 2);
         });
 
         h1.finish(2);
         h2.finish(3);
         h3.finish(1);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h2 finish first") {
         finish_handle.set_on_finish([&finished](std::variant<int, int, int> r) {
             finished = true;
-            CHECK(r.index() == 1);
-            CHECK(std::get<1>(r) == 3);
+            REQUIRE(r.index() == 1);
+            REQUIRE(std::get<1>(r) == 3);
         });
 
         h2.finish(3);
         h3.finish(1);
         h1.finish(2);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h3 finish first") {
         finish_handle.set_on_finish([&finished](std::variant<int, int, int> r) {
             finished = true;
-            CHECK(r.index() == 2);
-            CHECK(std::get<2>(r) == 1);
+            REQUIRE(r.index() == 2);
+            REQUIRE(std::get<2>(r) == 1);
         });
 
         h3.finish(1);
         h1.finish(2);
         h2.finish(3);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 }
 
@@ -399,19 +399,19 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle cancel") {
         [&finished](std::variant<int, int, int> r) { finished = true; });
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h1.cancelled_);
-    CHECK(h2.cancelled_);
-    CHECK(h3.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h1.cancelled_);
+    REQUIRE(h2.cancelled_);
+    REQUIRE(h3.cancelled_);
 
     h1.finish(1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h2.finish(2);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(3);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle multiple cancel") {
@@ -426,20 +426,20 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle multiple cancel") {
         [&finished](std::variant<int, int, int> r) { finished = true; });
 
     h1.finish(1);
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1);
-    CHECK(h3.cancelled_ == 1);
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1);
+    REQUIRE(h3.cancelled_ == 1);
 
     h3.finish(-1);
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1); // should not increase
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1); // should not increase
 
     finish_handle.cancel();
-    CHECK(!finished);
-    CHECK(h2.cancelled_ == 1); // should not increase
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_ == 1); // should not increase
 
     h2.finish(-1);
-    CHECK(finished);
+    REQUIRE(finished);
 }
 
 TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
@@ -463,25 +463,25 @@ TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
             [&finished](
                 std::variant<std::tuple<int, int>, std::tuple<int, int>> r) {
                 finished = true;
-                CHECK(r.index() == 0);
+                REQUIRE(r.index() == 0);
                 auto res = std::get<0>(r);
-                CHECK(std::get<0>(res) == 2);
-                CHECK(std::get<1>(res) == 3);
+                REQUIRE(std::get<0>(res) == 2);
+                REQUIRE(std::get<1>(res) == 3);
             });
 
         h1.finish(2);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h3.finish(4);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h2.finish(3);
-        CHECK(!finished);
-        CHECK(h3.cancelled_);
-        CHECK(h4.cancelled_);
+        REQUIRE(!finished);
+        REQUIRE(h3.cancelled_);
+        REQUIRE(h4.cancelled_);
 
         h4.finish(1);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 
     SUBCASE("h3 -> h2 -> h4 -> h1") {
@@ -489,25 +489,25 @@ TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
             [&finished](
                 std::variant<std::tuple<int, int>, std::tuple<int, int>> r) {
                 finished = true;
-                CHECK(r.index() == 1);
+                REQUIRE(r.index() == 1);
                 auto res = std::get<1>(r);
-                CHECK(std::get<0>(res) == 4);
-                CHECK(std::get<1>(res) == 1);
+                REQUIRE(std::get<0>(res) == 4);
+                REQUIRE(std::get<1>(res) == 1);
             });
 
         h3.finish(4);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h2.finish(3);
-        CHECK(!finished);
+        REQUIRE(!finished);
 
         h4.finish(1);
-        CHECK(!finished);
-        CHECK(h1.cancelled_);
-        CHECK(h2.cancelled_);
+        REQUIRE(!finished);
+        REQUIRE(h1.cancelled_);
+        REQUIRE(h2.cancelled_);
 
         h1.finish(2);
-        CHECK(finished);
+        REQUIRE(finished);
     }
 }
 
@@ -532,24 +532,24 @@ TEST_CASE("test parallel_finish_handle - (a || b) && (c || d)") {
             std::tuple<std::variant<int, int>, std::variant<int, int>> r) {
             finished = true;
             auto res_ab = std::get<0>(r);
-            CHECK(res_ab.index() == 0);
-            CHECK(std::get<0>(res_ab) == 2);
+            REQUIRE(res_ab.index() == 0);
+            REQUIRE(std::get<0>(res_ab) == 2);
             auto res_cd = std::get<1>(r);
-            CHECK(res_cd.index() == 0);
-            CHECK(std::get<0>(res_cd) == 4);
+            REQUIRE(res_cd.index() == 0);
+            REQUIRE(std::get<0>(res_cd) == 4);
         });
 
     h1.finish(2);
-    CHECK(!finished);
-    CHECK(h2.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h2.cancelled_);
 
     h2.finish(-1);
-    CHECK(!finished);
+    REQUIRE(!finished);
 
     h3.finish(4);
-    CHECK(!finished);
-    CHECK(h4.cancelled_);
+    REQUIRE(!finished);
+    REQUIRE(h4.cancelled_);
 
     h4.finish(-1);
-    CHECK(finished);
+    REQUIRE(finished);
 }
