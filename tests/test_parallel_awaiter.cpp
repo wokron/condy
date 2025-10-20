@@ -45,6 +45,10 @@ public:
         // Do nothing
     }
 
+    void register_operation(unsigned int flags) {
+        // Do nothing
+    }
+
     // Use ptr to make handle accessible outside of ParallelAwaiter
     std::shared_ptr<HandleType> handle_ptr_ = std::make_shared<HandleType>();
 };

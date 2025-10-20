@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <liburing.h>
-#include <liburing/io_uring.h>
 
 TEST_CASE("test op_finish_handle - basic routine") {
     auto &context = condy::Context::current();
@@ -92,6 +91,8 @@ TEST_CASE("test op_finish_handle - concurrent op") {
     event_loop(unfinished);
 
     REQUIRE(unfinished == 0);
+
+    context.destroy();
 }
 
 TEST_CASE("test op_finish_handle - cancel op") {
@@ -131,4 +132,6 @@ TEST_CASE("test op_finish_handle - cancel op") {
     event_loop(unfinished);
 
     REQUIRE(unfinished == 0);
+
+    context.destroy();
 }

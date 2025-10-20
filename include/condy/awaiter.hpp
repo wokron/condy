@@ -3,9 +3,70 @@
 #include "condy/finish_handle.hpp"
 #include <coroutine>
 #include <cstddef>
+#include <liburing.h>
 #include <tuple>
 
 namespace condy {
+
+template <typename Func, typename... Args> class OpAwaiter {
+public:
+    using HandleType = OpFinishHandle;
+
+    OpAwaiter(Func func, Args... args)
+        : prep_func_(func), args_(std::make_tuple(std::move(args)...)) {}
+    OpAwaiter(OpAwaiter &&) = default;
+
+    OpAwaiter(const OpAwaiter &) = delete;
+    OpAwaiter &operator=(const OpAwaiter &) = delete;
+    OpAwaiter &operator=(OpAwaiter &&) = delete;
+
+public:
+    HandleType *get_handle() { return &finish_handle_; }
+
+    void init_finish_handle() { /* Leaf handle, do nothing */ }
+
+    void register_operation(unsigned int flags) {
+        auto &context = Context::current();
+        auto ring = context.get_ring();
+        io_uring_sqe *sqe = io_uring_get_sqe(ring);
+        if (!sqe) {
+            io_uring_submit(ring);
+            sqe = io_uring_get_sqe(ring);
+        }
+        assert(sqe != nullptr);
+        std::apply([&](auto &&...args) { prep_func_(sqe, args...); }, args_);
+        io_uring_sqe_set_data(sqe, &finish_handle_);
+        io_uring_sqe_set_flags(sqe, flags);
+    }
+
+public:
+    bool await_ready() { return false; }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        init_finish_handle();
+        finish_handle_.set_on_finish(
+            [h, this](typename HandleType::ReturnType r) {
+                result_ = std::move(r);
+                h.resume();
+            });
+        register_operation(0);
+    }
+
+    int await_resume() { return result_; }
+
+private:
+    Func prep_func_;
+    std::tuple<Args...> args_;
+    OpFinishHandle finish_handle_;
+    int result_;
+};
+
+template <typename Func, typename... Args>
+auto build_op_awaiter(Func &&func, Args &&...args) {
+    return OpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
+        std::forward<Func>(func), std::forward<Args>(args)...);
+}
 
 template <typename Handle, typename Awaiter> class RangedParallelAwaiter {
 public:
@@ -33,6 +94,12 @@ public:
         finish_handle_.init(std::move(handles));
     }
 
+    void register_operation(unsigned int flags) {
+        for (auto &awaiter : awaiters_) {
+            awaiter.register_operation(flags);
+        }
+    }
+
 public:
     bool await_ready() const noexcept { return false; }
 
@@ -44,6 +111,7 @@ public:
                 result_ = std::move(r);
                 h.resume();
             });
+        register_operation(0);
     }
 
     typename Handle::ReturnType await_resume() { return std::move(result_); }
@@ -88,6 +156,10 @@ public:
             handles);
     }
 
+    void register_operation(unsigned int flags) {
+        foreach_register_operation_(flags);
+    }
+
 public:
     bool await_ready() const noexcept { return false; }
 
@@ -99,6 +171,7 @@ public:
                 result_ = std::move(r);
                 h.resume();
             });
+        register_operation(0);
     }
 
     typename Handle::ReturnType await_resume() { return std::move(result_); }
@@ -112,6 +185,14 @@ private:
                 foreach_init_finish_handle_<Idx + 1>());
         } else {
             return std::tuple<>();
+        }
+    }
+
+    template <size_t Idx = 0>
+    void foreach_register_operation_(unsigned int flags) {
+        if constexpr (Idx < sizeof...(Awaiters)) {
+            std::get<Idx>(awaiters_).register_operation(flags);
+            foreach_register_operation_<Idx + 1>(flags);
         }
     }
 
