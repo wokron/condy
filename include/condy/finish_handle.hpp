@@ -1,7 +1,10 @@
 #pragma once
 
+#include "condy/context.hpp"
+#include <cassert>
 #include <cstddef>
 #include <functional>
+#include <liburing.h>
 #include <limits>
 #include <pthread.h>
 #include <stdexcept>
@@ -12,6 +15,36 @@
 #include <vector>
 
 namespace condy {
+
+class OpFinishHandle {
+public:
+    using ReturnType = int;
+
+    void cancel() {
+        auto ring = Context::current().get_ring();
+        io_uring_sqe *sqe = io_uring_get_sqe(ring);
+        if (!sqe) {
+            io_uring_submit(ring);
+            sqe = io_uring_get_sqe(ring);
+        }
+        assert(sqe != nullptr);
+        io_uring_prep_cancel(sqe, this, 0);
+        io_uring_sqe_set_data(sqe, nullptr);
+    }
+
+    void set_on_finish(std::function<void(ReturnType)> on_finish) {
+        on_finish_ = std::move(on_finish);
+    }
+
+    void finish(ReturnType r) {
+        if (on_finish_) {
+            std::move(on_finish_)(r);
+        }
+    }
+
+private:
+    std::function<void(ReturnType)> on_finish_ = nullptr;
+};
 
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {
