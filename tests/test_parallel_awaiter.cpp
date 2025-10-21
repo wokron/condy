@@ -62,7 +62,7 @@ TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
     auto h3 = a3.handle_ptr_;
     bool finished = false;
 
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         condy::RangedWaitAllAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         std::vector<int> results = co_await awaiter;
@@ -100,7 +100,7 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
     auto h3 = a3.handle_ptr_;
     bool finished = false;
 
-    auto func = [&](size_t expected_idx, int expected_result) -> condy::Coro {
+    auto func = [&](size_t expected_idx, int expected_result) -> condy::Coro<void> {
         condy::RangedWaitOneAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         auto [idx, result] = co_await awaiter;
@@ -179,7 +179,7 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
     bool finished = false;
 
     auto func = [&](size_t expected_idx,
-                    std::vector<int> expected_results) -> condy::Coro {
+                    std::vector<int> expected_results) -> condy::Coro<void> {
         using WaitAll = condy::RangedWaitAllAwaiter<SimpleAwaiter>;
         using WaitOne = condy::RangedWaitOneAwaiter<WaitAll>;
         WaitAll awaiter_ab(std::vector<SimpleAwaiter>{a1, a2});
@@ -223,7 +223,7 @@ TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
     auto h3 = a3.handle_ptr_;
     bool finished = false;
 
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         std::tuple<int, int, int> results = co_await awaiter;
@@ -262,7 +262,7 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
 
     auto func =
         [&](size_t expected_idx,
-            std::variant<int, int, int> expected_result) -> condy::Coro {
+            std::variant<int, int, int> expected_result) -> condy::Coro<void> {
         condy::WaitOneAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         auto result = co_await awaiter;
@@ -346,7 +346,7 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
 
     auto func = [&](size_t expected_idx,
                     std::variant<std::tuple<int, int>, std::tuple<int, int>>
-                        expected_results) -> condy::Coro {
+                        expected_results) -> condy::Coro<void> {
         using WaitAll = condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter>;
         using WaitOne = condy::WaitOneAwaiter<WaitAll, WaitAll>;
         WaitAll awaiter_ab(a1, a2);

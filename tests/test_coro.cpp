@@ -1,10 +1,11 @@
 #include <condy/coro.hpp>
 #include <doctest/doctest.h>
+#include <memory>
 #include <string>
 
 TEST_CASE("test coro - run coro") {
     bool executed = false;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         executed = true;
         co_return;
     };
@@ -18,11 +19,11 @@ TEST_CASE("test coro - run coro") {
 
 TEST_CASE("test coro - await coro") {
     bool executed = false;
-    auto inner_func = [&]() -> condy::Coro {
+    auto inner_func = [&]() -> condy::Coro<void> {
         executed = true;
         co_return;
     };
-    auto outer_func = [&](condy::Coro inner) -> condy::Coro {
+    auto outer_func = [&](condy::Coro<void> inner) -> condy::Coro<void> {
         co_await std::move(inner);
         co_return;
     };
@@ -37,15 +38,15 @@ TEST_CASE("test coro - await coro") {
 
 TEST_CASE("test coro - nested await") {
     bool executed = false;
-    auto inner_func = [&]() -> condy::Coro {
+    auto inner_func = [&]() -> condy::Coro<void> {
         executed = true;
         co_return;
     };
-    auto middle_func = [&](condy::Coro inner) -> condy::Coro {
+    auto middle_func = [&](condy::Coro<void> inner) -> condy::Coro<void> {
         co_await std::move(inner);
         co_return;
     };
-    auto outer_func = [&](condy::Coro middle) -> condy::Coro {
+    auto outer_func = [&](condy::Coro<void> middle) -> condy::Coro<void> {
         co_await std::move(middle);
         co_return;
     };
@@ -68,7 +69,7 @@ TEST_CASE("test coro - resume by awaiter") {
     } awaiter;
 
     bool executed = false;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         co_await awaiter;
         executed = true;
         co_return;
@@ -95,11 +96,11 @@ TEST_CASE("test coro - exception handling") {
 
     bool caught = false;
 
-    auto inner = [&]() -> condy::Coro {
+    auto inner = [&]() -> condy::Coro<void> {
         throw MyException{};
         co_return;
     };
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         try {
             co_await inner();
         } catch (const MyException &e) {
@@ -114,4 +115,73 @@ TEST_CASE("test coro - exception handling") {
 
     coro.release().resume();
     REQUIRE(caught);
+}
+
+TEST_CASE("test coro - return value") {
+    bool finished = false;
+
+    auto inner = [&]() -> condy::Coro<int> { co_return 42; };
+    auto func = [&]() -> condy::Coro<void> {
+        int value = co_await inner();
+        REQUIRE(value == 42);
+        finished = true;
+        co_return;
+    };
+
+    auto coro = func();
+    REQUIRE(!finished);
+
+    coro.release().resume();
+    REQUIRE(finished);
+}
+
+TEST_CASE("test coro - return value with exception") {
+    struct MyException : public std::exception {
+        const char *what() const noexcept override {
+            return "MyException occurred";
+        }
+    };
+
+    bool caught = false;
+
+    auto inner = [&]() -> condy::Coro<int> {
+        throw MyException{};
+        co_return 0;
+    };
+    auto func = [&]() -> condy::Coro<void> {
+        try {
+            int value = co_await inner();
+            (void)value; // suppress unused variable warning
+        } catch (const MyException &e) {
+            caught = true;
+            REQUIRE(std::string(e.what()) == "MyException occurred");
+        }
+        co_return;
+    };
+
+    auto coro = func();
+    REQUIRE(!caught);
+
+    coro.release().resume();
+    REQUIRE(caught);
+}
+
+TEST_CASE("test coro - return move-only type") {
+    bool finished = false;
+
+    auto inner = [&]() -> condy::Coro<std::unique_ptr<int>> {
+        co_return std::make_unique<int>(99);
+    };
+    auto func = [&]() -> condy::Coro<void> {
+        std::unique_ptr<int> mo = co_await inner();
+        REQUIRE(*mo == 99);
+        finished = true;
+        co_return;
+    };
+
+    auto coro = func();
+    REQUIRE(!finished);
+
+    coro.release().resume();
+    REQUIRE(finished);
 }

@@ -36,7 +36,7 @@ TEST_CASE("test op_awaiter - basic routine") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         co_await condy::build_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
@@ -58,7 +58,7 @@ TEST_CASE("test op_awaiter - multiple ops") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         co_await condy::build_op_awaiter(io_uring_prep_nop);
         co_await condy::build_op_awaiter(io_uring_prep_nop);
         --unfinished;
@@ -81,7 +81,7 @@ TEST_CASE("test op_awaiter - concurrent op") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto awaiter1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto awaiter2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto [r1, r2] = co_await condy::WaitAllAwaiter<decltype(awaiter1),
@@ -109,7 +109,7 @@ TEST_CASE("test op_awaiter - cancel op") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 60,
             .tv_nsec = 0,

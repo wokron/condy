@@ -36,12 +36,12 @@ TEST_CASE("test task - launch multiple tasks") {
 
     size_t unfinished = 1;
 
-    auto sub_func = [&](int v, int &r) -> condy::Coro {
+    auto sub_func = [&](int v, int &r) -> condy::Coro<void> {
         co_await condy::build_op_awaiter(io_uring_prep_nop);
         r = v;
     };
 
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         int r1 = 0, r2 = 0, r3 = 0;
         auto t1 = condy::co_spawn(sub_func(1, r1));
         auto t2 = condy::co_spawn(sub_func(2, r2));

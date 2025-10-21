@@ -37,7 +37,7 @@ TEST_CASE("test awaiter_operations - test build_op_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         co_await condy::build_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
@@ -59,7 +59,7 @@ TEST_CASE("test awaiter_operations - test build_all_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
@@ -88,7 +88,7 @@ TEST_CASE("test awaiter_operations - test build_one_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 60,
             .tv_nsec = 0,
@@ -119,7 +119,7 @@ TEST_CASE("test awaiter_operations - test build_ranged_all_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
@@ -150,7 +150,7 @@ TEST_CASE("test awaiter_operations - test build_ranged_one_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts1{
             .tv_sec = 60,
             .tv_nsec = 0,
@@ -189,7 +189,7 @@ TEST_CASE("test awaiter_operations - test &&") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
@@ -218,7 +218,7 @@ TEST_CASE("test awaiter_operations - test ||") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 60,
             .tv_nsec = 0,
@@ -248,7 +248,7 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 60,
             .tv_nsec = 0,
@@ -281,7 +281,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
@@ -313,7 +313,7 @@ TEST_CASE("test awaiter_operations - test build_link_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 0,
             .tv_nsec = 100,
@@ -346,7 +346,7 @@ TEST_CASE("test awaiter_operations - test >>") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
             .tv_sec = 0,
             .tv_nsec = 100,
@@ -379,7 +379,7 @@ TEST_CASE("test awaiter_operations - test build_drained_op_awaiter") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw = condy::build_op_awaiter(io_uring_prep_nop);
         co_await condy::build_drained_op_awaiter(std::move(aw));
         --unfinished;
@@ -402,7 +402,7 @@ TEST_CASE("test awaiter_operations - test ~") {
     context.init({.io_uring_entries = 8});
 
     size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro {
+    auto func = [&]() -> condy::Coro<void> {
         auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);

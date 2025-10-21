@@ -61,7 +61,8 @@ template <typename PromiseType> auto Task<PromiseType>::operator co_await() && {
     return TaskAwaiter{std::exchange(handle_, nullptr)};
 }
 
-inline Task<Coro::promise_type> co_spawn(Coro coro) {
+template <typename T>
+inline Task<typename Coro<T>::promise_type> co_spawn(Coro<T> coro) {
     auto handle = coro.release();
     auto *handle_ptr = new OpFinishHandle();
     handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
