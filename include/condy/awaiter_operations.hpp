@@ -10,6 +10,12 @@ auto build_op_awaiter(Func &&func, Args &&...args) {
         std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
+template <typename Func, typename... Args>
+auto build_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
+    return DrainedOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
+        std::move(op));
+}
+
 template <typename... Awaiters> auto build_all_awaiter(Awaiters &&...awaiters) {
     return WaitAllAwaiter<std::decay_t<Awaiters>...>(
         std::forward<Awaiters>(awaiters)...);
@@ -39,6 +45,11 @@ template <typename Range> auto build_ranged_one_awaiter(Range &&range) {
 template <typename Range> auto build_ranged_link_awaiter(Range &&range) {
     using AwaiterType = typename std::decay_t<Range>::value_type;
     return RangedLinkAwaiter<AwaiterType>(std::forward<Range>(range));
+}
+
+template <typename Func, typename... Args>
+auto operator~(OpAwaiter<Func, Args...> op) {
+    return build_drained_op_awaiter(std::move(op));
 }
 
 template <typename Awaiter1, typename Awaiter2>

@@ -55,11 +55,35 @@ public:
 
     int await_resume() { return result_; }
 
-private:
+protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     OpFinishHandle finish_handle_;
     int result_;
+};
+
+template <typename Func, typename... Args>
+class DrainedOpAwaiter : public OpAwaiter<Func, Args...> {
+public:
+    using Base = OpAwaiter<Func, Args...>;
+    using Base::Base;
+
+    DrainedOpAwaiter(OpAwaiter<Func, Args...> &&base) : Base(std::move(base)) {}
+
+    void register_operation(unsigned int flags) {
+        Base::register_operation(flags | IOSQE_IO_DRAIN);
+    }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        Base::init_finish_handle();
+        Base::finish_handle_.set_on_finish(
+            [h, this](typename Base::HandleType::ReturnType r) {
+                Base::result_ = std::move(r);
+                h.resume();
+            });
+        register_operation(0);
+    }
 };
 
 template <typename Handle, typename Awaiter> class RangedParallelAwaiter {

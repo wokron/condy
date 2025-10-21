@@ -373,3 +373,51 @@ TEST_CASE("test awaiter_operations - test >>") {
 
     context.destroy();
 }
+
+TEST_CASE("test awaiter_operations - test build_drained_op_awaiter") {
+    auto &context = condy::Context::current();
+    context.init({.io_uring_entries = 8});
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro {
+        auto aw = condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::build_drained_op_awaiter(std::move(aw));
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
+
+TEST_CASE("test awaiter_operations - test ~") {
+    auto &context = condy::Context::current();
+    context.init({.io_uring_entries = 8});
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro {
+        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        co_await (std::move(aw1) && std::move(aw2) && ~std::move(aw3));
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
