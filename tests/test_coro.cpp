@@ -1,5 +1,6 @@
 #include <condy/coro.hpp>
 #include <doctest/doctest.h>
+#include <string>
 
 TEST_CASE("test coro - run coro") {
     bool executed = false;
@@ -83,4 +84,34 @@ TEST_CASE("test coro - resume by awaiter") {
 
     awaiter.handle.resume();
     REQUIRE(executed);
+}
+
+TEST_CASE("test coro - exception handling") {
+    struct MyException : public std::exception {
+        const char *what() const noexcept override {
+            return "MyException occurred";
+        }
+    };
+
+    bool caught = false;
+
+    auto inner = [&]() -> condy::Coro {
+        throw MyException{};
+        co_return;
+    };
+    auto func = [&]() -> condy::Coro {
+        try {
+            co_await inner();
+        } catch (const MyException &e) {
+            caught = true;
+            REQUIRE(std::string(e.what()) == "MyException occurred");
+        }
+        co_return;
+    };
+
+    auto coro = func();
+    REQUIRE(!caught);
+
+    coro.release().resume();
+    REQUIRE(caught);
 }

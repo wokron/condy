@@ -44,7 +44,7 @@ public:
 
     void return_void() noexcept {} // TODO: support return value
 
-    void unhandled_exception() { std::terminate(); } // TODO: handle exceptions
+    void unhandled_exception() { exception_ = std::current_exception(); }
 
     struct FinalAwaiter {
         bool await_ready() noexcept { return false; }
@@ -74,10 +74,14 @@ public:
 
     bool finished() const noexcept { return finished_; }
 
+    std::exception_ptr exception() const noexcept { return exception_; }
+
 private:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
+
+    std::exception_ptr exception_;
 };
 
 inline auto Coro::operator co_await() && {
@@ -86,11 +90,18 @@ inline auto Coro::operator co_await() && {
 
         std::coroutine_handle<promise_type>
         await_suspend(std::coroutine_handle<> caller_handle) noexcept {
+            handle_.promise().set_auto_destroy(false);
             handle_.promise().set_caller_handle(caller_handle);
             return handle_;
         }
 
-        void await_resume() noexcept {}
+        void await_resume() {
+            auto exception = handle_.promise().exception();
+            handle_.destroy();
+            if (exception) {
+                std::rethrow_exception(exception);
+            }
+        }
 
         std::coroutine_handle<promise_type> handle_;
     };
