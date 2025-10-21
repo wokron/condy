@@ -48,24 +48,36 @@ public:
 
     struct FinalAwaiter {
         bool await_ready() noexcept { return false; }
-        template <typename Promise>
         std::coroutine_handle<>
-        await_suspend(std::coroutine_handle<Promise> h) noexcept {
-            auto caller_handler = h.promise().caller_handle_;
-            h.destroy();
+        await_suspend(std::coroutine_handle<promise_type> self) noexcept {
+            auto caller_handler = self.promise().caller_handle_;
+            if (self.promise().auto_destroy_) {
+                self.destroy();
+            }
             return caller_handler;
         }
         void await_resume() noexcept {}
     };
-    auto final_suspend() noexcept { return FinalAwaiter{}; }
+    auto final_suspend() noexcept {
+        finished_ = true;
+        return FinalAwaiter{};
+    }
 
 public:
     void set_caller_handle(std::coroutine_handle<> handle) noexcept {
         caller_handle_ = handle;
     }
 
+    void set_auto_destroy(bool auto_destroy) noexcept {
+        auto_destroy_ = auto_destroy;
+    }
+
+    bool finished() const noexcept { return finished_; }
+
 private:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
+    bool auto_destroy_ = true;
+    bool finished_ = false;
 };
 
 inline auto Coro::operator co_await() && {
