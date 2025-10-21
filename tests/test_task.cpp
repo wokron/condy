@@ -66,3 +66,39 @@ TEST_CASE("test task - launch multiple tasks") {
 
     context.destroy();
 }
+
+TEST_CASE("test task - return value") {
+    auto &context = condy::Context::current();
+    context.init({.io_uring_entries = 8});
+
+    size_t unfinished = 1;
+
+    auto sub_func = [](int v) -> condy::Coro<int> {
+        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_return v;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t1 = condy::co_spawn(sub_func(10));
+        auto t2 = condy::co_spawn(sub_func(20));
+        auto t3 = condy::co_spawn(sub_func(30));
+        int r3 = co_await std::move(t3);
+        REQUIRE(r3 == 30);
+        int r2 = co_await std::move(t2);
+        REQUIRE(r2 == 20);
+        int r1 = co_await std::move(t1);
+        REQUIRE(r1 == 10);
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
