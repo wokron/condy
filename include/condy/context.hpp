@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <liburing.h>
+#include <stdexcept>
+#include <string>
 
 namespace condy {
 
