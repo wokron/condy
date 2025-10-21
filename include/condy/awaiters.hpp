@@ -115,7 +115,7 @@ public:
         awaiters_.push_back(std::move(awaiter));
     }
 
-private:
+protected:
     HandleType finish_handle_;
     typename HandleType::ReturnType result_;
     std::vector<Awaiter> awaiters_;
@@ -128,6 +128,34 @@ using RangedWaitAllAwaiter = RangedParallelAwaiter<
 template <typename Awaiter>
 using RangedWaitOneAwaiter = RangedParallelAwaiter<
     RangedWaitOneFinishHandle<typename Awaiter::HandleType>, Awaiter>;
+
+template <typename Awaiter>
+class RangedLinkAwaiter : public RangedWaitAllAwaiter<Awaiter> {
+public:
+    using Base = RangedWaitAllAwaiter<Awaiter>;
+    using Base::Base;
+
+    void register_operation(unsigned int flags) {
+        auto *ring = Context::current().get_ring();
+        // TODO: raise exception if number of sqes exceed ring size
+        io_uring_submit(ring);
+        for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
+            Base::awaiters_[i].register_operation(flags | IOSQE_IO_LINK);
+        }
+        Base::awaiters_.back().register_operation(flags);
+    }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        Base::init_finish_handle();
+        Base::finish_handle_.set_on_finish(
+            [h, this](typename Base::HandleType::ReturnType r) {
+                Base::result_ = std::move(r);
+                h.resume();
+            });
+        register_operation(0);
+    }
+};
 
 template <typename Handle, typename... Awaiters> class ParallelAwaiter {
 public:
@@ -198,7 +226,7 @@ private:
         }
     }
 
-private:
+protected:
     HandleType finish_handle_;
     typename HandleType::ReturnType result_;
     std::tuple<Awaiters...> awaiters_;
@@ -213,5 +241,42 @@ template <typename... Awaiter>
 using WaitOneAwaiter =
     ParallelAwaiter<WaitOneFinishHandle<typename Awaiter::HandleType...>,
                     Awaiter...>;
+
+template <typename... Awaiter>
+class LinkAwaiter : public WaitAllAwaiter<Awaiter...> {
+public:
+    using Base = WaitAllAwaiter<Awaiter...>;
+    using Base::Base;
+
+    void register_operation(unsigned int flags) {
+        auto *ring = Context::current().get_ring();
+        // TODO: raise exception if number of sqes exceed ring size
+        io_uring_submit(ring);
+        foreach_register_operation_(flags);
+    }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        Base::init_finish_handle();
+        Base::finish_handle_.set_on_finish(
+            [h, this](typename Base::HandleType::ReturnType r) {
+                Base::result_ = std::move(r);
+                h.resume();
+            });
+        register_operation(0);
+    }
+
+private:
+    template <size_t Idx = 0>
+    void foreach_register_operation_(unsigned int flags) {
+        if constexpr (Idx < sizeof...(Awaiter)) {
+            std::get<Idx>(Base::awaiters_)
+                .register_operation(Idx < sizeof...(Awaiter) - 1
+                                        ? flags | IOSQE_IO_LINK
+                                        : flags);
+            foreach_register_operation_<Idx + 1>(flags);
+        }
+    }
+};
 
 } // namespace condy

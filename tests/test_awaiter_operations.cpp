@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <condy/awaiter_operations.hpp>
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
@@ -292,6 +293,72 @@ TEST_CASE("test awaiter_operations - ranged +=") {
         auto r = co_await std::move(awaiter);
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
+
+TEST_CASE("test awaiter_operations - test build_link_awaiter") {
+    auto &context = condy::Context::current();
+    context.init({.io_uring_entries = 8});
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro {
+        __kernel_timespec ts{
+            .tv_sec = 0,
+            .tv_nsec = 100,
+        };
+        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto [r1, r2, r3] = co_await condy::build_link_awaiter(
+            std::move(aw1), std::move(aw2), std::move(aw3));
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == -ETIME);
+        REQUIRE(r3 == -ECANCELED);
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
+
+TEST_CASE("test awaiter_operations - test >>") {
+    auto &context = condy::Context::current();
+    context.init({.io_uring_entries = 8});
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro {
+        __kernel_timespec ts{
+            .tv_sec = 0,
+            .tv_nsec = 100,
+        };
+        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto [r1, r2, r3] =
+            co_await (std::move(aw1) >> std::move(aw2) >> std::move(aw3));
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == -ETIME);
+        REQUIRE(r3 == -ECANCELED);
         --unfinished;
     };
 
