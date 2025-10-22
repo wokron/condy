@@ -2,6 +2,7 @@
 
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
+#include "condy/strategies.hpp"
 #include <cassert>
 #include <cstddef>
 #include <functional>
@@ -22,11 +23,7 @@ public:
 
     void cancel() {
         auto ring = Context::current().get_ring();
-        io_uring_sqe *sqe = io_uring_get_sqe(ring);
-        if (!sqe) {
-            io_uring_submit(ring);
-            sqe = io_uring_get_sqe(ring);
-        }
+        auto *sqe = Context::current().get_strategy()->get_sqe(ring);
         assert(sqe != nullptr);
         io_uring_prep_cancel(sqe, this, 0);
         io_uring_sqe_set_data(sqe, nullptr);

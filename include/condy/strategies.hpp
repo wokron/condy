@@ -22,6 +22,8 @@ public:
     virtual void record_submitted(int submitted) = 0;
 
     virtual void record_finished(int finished) = 0;
+
+    virtual io_uring_sqe *get_sqe(io_uring *ring) = 0;
 };
 
 class SimpleStrategy : public IStrategy {
@@ -53,6 +55,15 @@ public:
     void record_submitted(int submitted) override {}
 
     void record_finished(int finished) override {}
+
+    io_uring_sqe *get_sqe(io_uring *ring) override {
+        io_uring_sqe *sqe = io_uring_get_sqe(ring);
+        if (!sqe) {
+            io_uring_submit(ring);
+            sqe = io_uring_get_sqe(ring);
+        }
+        return sqe;
+    }
 
 private:
     unsigned int io_uring_entries_;

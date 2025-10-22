@@ -103,16 +103,10 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
         delete handle_ptr; // self delete
     });
     auto ring = Context::current().get_ring();
-    io_uring_sqe *sqe = io_uring_get_sqe(ring);
-    if (!sqe) {
-        io_uring_submit(ring);
-        sqe = io_uring_get_sqe(ring);
-    }
+    io_uring_sqe *sqe = Context::current().get_strategy()->get_sqe(ring);
     assert(sqe != nullptr);
     io_uring_prep_nop(sqe);
     io_uring_sqe_set_data(sqe, handle_ptr);
-    io_uring_submit(ring); // TODO: optimize this
-
     return {handle};
 }
 
