@@ -32,8 +32,9 @@ void event_loop(size_t &unfinished) {
 } // namespace
 
 TEST_CASE("test op_awaiter - basic routine") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -54,8 +55,9 @@ TEST_CASE("test op_awaiter - basic routine") {
 }
 
 TEST_CASE("test op_awaiter - multiple ops") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -77,8 +79,9 @@ TEST_CASE("test op_awaiter - multiple ops") {
 }
 
 TEST_CASE("test op_awaiter - concurrent op") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -105,8 +108,9 @@ TEST_CASE("test op_awaiter - concurrent op") {
 }
 
 TEST_CASE("test op_awaiter - cancel op") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {

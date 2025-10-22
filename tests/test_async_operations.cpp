@@ -36,8 +36,9 @@ TEST_CASE("test async_operations - simple read write") {
     const char msg[] = "Hello, condy!";
     char buf[20] = {0};
 
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
     auto ring = context.get_ring();
 
     size_t unfinished = 1;

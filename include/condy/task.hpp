@@ -93,6 +93,9 @@ template <typename T> inline auto Task<T>::operator co_await() && {
 
 template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     auto handle = coro.release();
+    auto strategy = Context::current().get_strategy();
+    int task_id = strategy->generate_task_id();
+    handle.promise().set_task_id(task_id);
     auto *handle_ptr = new OpFinishHandle();
     handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
         assert(r == 0);

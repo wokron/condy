@@ -1,11 +1,13 @@
+#include "condy/strategies.hpp"
 #include <condy/finish_handles.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <liburing.h>
 
 TEST_CASE("test op_finish_handle - basic routine") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
     auto ring = context.get_ring();
 
     bool finished = false;
@@ -65,8 +67,9 @@ void event_loop(size_t &unfinished) {
 TEST_CASE("test op_finish_handle - concurrent op") {
     size_t unfinished = 2;
 
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
     auto ring = context.get_ring();
 
     condy::OpFinishHandle handle1, handle2;
@@ -98,8 +101,9 @@ TEST_CASE("test op_finish_handle - concurrent op") {
 TEST_CASE("test op_finish_handle - cancel op") {
     size_t unfinished = 1;
 
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
     auto ring = context.get_ring();
 
     condy::OpFinishHandle handle1, handle2;

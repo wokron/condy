@@ -1,10 +1,12 @@
 #include <condy/context.hpp>
+#include <condy/strategies.hpp>
 #include <doctest/doctest.h>
 #include <thread>
 
 TEST_CASE("test context - init and destroy") {
+    condy::SimpleStrategy strategy(8);
     condy::Context &ctx = condy::Context::current();
-    ctx.init({.io_uring_entries = 512, .io_uring_flags = 0});
+    ctx.init(&strategy);
 
     io_uring *ring = ctx.get_ring();
     REQUIRE(ring != nullptr);

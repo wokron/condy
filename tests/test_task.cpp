@@ -31,8 +31,9 @@ void event_loop(size_t &unfinished) {
 } // namespace
 
 TEST_CASE("test task - launch multiple tasks") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
 
@@ -68,8 +69,9 @@ TEST_CASE("test task - launch multiple tasks") {
 }
 
 TEST_CASE("test task - return value") {
+    condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init({.io_uring_entries = 8});
+    context.init(&strategy);
 
     size_t unfinished = 1;
 

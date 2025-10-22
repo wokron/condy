@@ -1,5 +1,7 @@
 #pragma once
 
+#include "condy/context.hpp"
+#include "condy/strategies.hpp"
 #include <coroutine>
 #include <exception>
 #include <utility>
@@ -60,6 +62,9 @@ public:
     };
     auto final_suspend() noexcept {
         finished_ = true;
+        if (task_id_ != -1) {
+            Context::current().get_strategy()->recycle_task_id(task_id_);
+        }
         return FinalAwaiter{};
     }
 
@@ -76,10 +81,14 @@ public:
 
     std::exception_ptr exception() const noexcept { return exception_; }
 
+    void set_task_id(int id) noexcept { task_id_ = id; }
+
 private:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
+
+    int task_id_ = -1;
 
     std::exception_ptr exception_;
 };
@@ -114,6 +123,9 @@ public:
     };
     auto final_suspend() noexcept {
         finished_ = true;
+        if (task_id_ != -1) {
+            Context::current().get_strategy()->recycle_task_id(task_id_);
+        }
         return FinalAwaiter{};
     }
 
@@ -133,10 +145,14 @@ public:
     T &value() & noexcept { return value_; }
     T &&value() && noexcept { return std::move(value_); }
 
+    void set_task_id(int id) noexcept { task_id_ = id; }
+
 private:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
+
+    int task_id_ = -1;
 
     T value_;
     std::exception_ptr exception_;
