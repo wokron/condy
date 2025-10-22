@@ -1,7 +1,7 @@
 #pragma once
 
 #include "condy/awaiter_operations.hpp"
-#include <liburing.h>
+#include "condy/condy_uring.hpp"
 
 namespace condy {
 

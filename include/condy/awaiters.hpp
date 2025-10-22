@@ -1,9 +1,9 @@
 #pragma once
 
+#include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
 #include <coroutine>
 #include <cstddef>
-#include <liburing.h>
 #include <tuple>
 
 namespace condy {

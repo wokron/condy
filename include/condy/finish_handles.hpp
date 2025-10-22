@@ -1,10 +1,10 @@
 #pragma once
 
+#include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include <cassert>
 #include <cstddef>
 #include <functional>
-#include <liburing.h>
 #include <limits>
 #include <pthread.h>
 #include <stdexcept>
