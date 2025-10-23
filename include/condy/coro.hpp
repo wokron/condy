@@ -36,22 +36,16 @@ private:
     std::coroutine_handle<promise_type> handle_;
 };
 
-template <> class Coro<void>::promise_type {
+template <typename Coro, typename PromiseType> class PromiseBase {
 public:
-    Coro get_return_object() {
-        return Coro{std::coroutine_handle<promise_type>::from_promise(*this)};
-    }
-
     std::suspend_always initial_suspend() noexcept { return {}; }
-
-    void return_void() noexcept {}
 
     void unhandled_exception() { exception_ = std::current_exception(); }
 
     struct FinalAwaiter {
         bool await_ready() noexcept { return false; }
         std::coroutine_handle<>
-        await_suspend(std::coroutine_handle<promise_type> self) noexcept {
+        await_suspend(std::coroutine_handle<PromiseType> self) noexcept {
             auto caller_handler = self.promise().caller_handle_;
             if (self.promise().auto_destroy_) {
                 self.destroy();
@@ -60,12 +54,12 @@ public:
         }
         void await_resume() noexcept {}
     };
-    auto final_suspend() noexcept {
+    FinalAwaiter final_suspend() noexcept {
         finished_ = true;
         if (task_id_ != -1) {
             Context::current().get_strategy()->recycle_task_id(task_id_);
         }
-        return FinalAwaiter{};
+        return {};
     }
 
 public:
@@ -75,7 +69,7 @@ public:
         } else {
             // Destroy self immediately
             auto handle =
-                std::coroutine_handle<promise_type>::from_promise(*this);
+                std::coroutine_handle<PromiseType>::from_promise(*this);
             handle.destroy();
         }
     }
@@ -100,7 +94,7 @@ public:
 
     void set_task_id(int id) noexcept { task_id_ = id; }
 
-private:
+protected:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
@@ -110,13 +104,24 @@ private:
     std::exception_ptr exception_;
 };
 
-template <typename T> class Coro<T>::promise_type {
+template <>
+class Coro<void>::promise_type
+    : public PromiseBase<Coro<void>, Coro<void>::promise_type> {
 public:
     Coro get_return_object() {
         return Coro{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }
+    void return_void() noexcept {}
+};
+
+template <typename T>
+class Coro<T>::promise_type
+    : public PromiseBase<Coro<T>, Coro<T>::promise_type> {
+public:
+    Coro get_return_object() {
+        return Coro{std::coroutine_handle<promise_type>::from_promise(*this)};
+    }
 
     template <typename U>
     void
@@ -124,72 +129,11 @@ public:
         value_ = std::move(value);
     }
 
-    void unhandled_exception() { exception_ = std::current_exception(); }
-
-    struct FinalAwaiter {
-        bool await_ready() noexcept { return false; }
-        std::coroutine_handle<>
-        await_suspend(std::coroutine_handle<promise_type> self) noexcept {
-            auto caller_handler = self.promise().caller_handle_;
-            if (self.promise().auto_destroy_) {
-                self.destroy();
-            }
-            return caller_handler;
-        }
-        void await_resume() noexcept {}
-    };
-    auto final_suspend() noexcept {
-        finished_ = true;
-        if (task_id_ != -1) {
-            Context::current().get_strategy()->recycle_task_id(task_id_);
-        }
-        return FinalAwaiter{};
-    }
-
-public:
-    void request_detach() noexcept {
-        if (!finished_) {
-            auto_destroy_ = true;
-        } else {
-            // Destroy self immediately
-            auto handle =
-                std::coroutine_handle<promise_type>::from_promise(*this);
-            handle.destroy();
-        }
-    }
-
-    bool register_task_await(std::coroutine_handle<> caller_handle) noexcept {
-        if (finished_) {
-            return false; // ready to resume immediately
-        }
-        caller_handle_ = caller_handle;
-        return true;
-    }
-
-    void set_caller_handle(std::coroutine_handle<> handle) noexcept {
-        caller_handle_ = handle;
-    }
-
-    void set_auto_destroy(bool auto_destroy) noexcept {
-        auto_destroy_ = auto_destroy;
-    }
-
-    std::exception_ptr exception() const noexcept { return exception_; }
-
     T &value() & noexcept { return value_; }
     T &&value() && noexcept { return std::move(value_); }
 
-    void set_task_id(int id) noexcept { task_id_ = id; }
-
 private:
-    std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
-    bool auto_destroy_ = true;
-    bool finished_ = false;
-
-    int task_id_ = -1;
-
     T value_;
-    std::exception_ptr exception_;
 };
 
 template <> inline auto Coro<void>::operator co_await() && {
