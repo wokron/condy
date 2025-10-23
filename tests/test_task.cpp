@@ -1,9 +1,12 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
+#include "condy/finish_handles.hpp"
 #include <condy/task.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
+#include <semaphore>
+#include <thread>
 
 TEST_CASE("test task - launch multiple tasks") {
     condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
@@ -64,4 +67,60 @@ TEST_CASE("test task - return value") {
 
     loop.run(std::move(coro));
     REQUIRE(unfinished == 0);
+}
+
+namespace {
+
+class SimpleExecutor {
+public:
+    bool try_post(condy::OpFinishHandle *handle) {
+        // Use counter to simulate busy executor
+        if (--counter_ == 0) {
+            handle_ = handle;
+            sem_.release();
+            return true;
+        }
+        return false;
+    }
+
+    void run() {
+        sem_.acquire();
+        handle_->finish(0);
+        sem_.release();
+    }
+
+private:
+    condy::OpFinishHandle *handle_;
+    std::binary_semaphore sem_{0};
+    size_t counter_ = 10;
+};
+
+} // namespace
+
+TEST_CASE("test task - co_spawn to other executor") {
+    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
+    SimpleExecutor executor;
+
+    std::thread executor_thread([&]() { executor.run(); });
+
+    std::atomic<bool> task_finished = false;
+
+    auto task_func = [&](std::thread::id prev_id) -> condy::Coro<void> {
+        auto curr_id = std::this_thread::get_id();
+        REQUIRE(curr_id != prev_id);
+        task_finished = true;
+        co_return;
+    };
+
+    loop.run(condy::Coro<void>([&]() -> condy::Coro<void> {
+        auto prev_id = std::this_thread::get_id();
+        co_await condy::co_spawn(executor, task_func(prev_id));
+        while (!task_finished.load()) {
+            co_await condy::build_op_awaiter(io_uring_prep_nop);
+        }
+    }()));
+
+    executor_thread.join();
+
+    REQUIRE(task_finished.load());
 }

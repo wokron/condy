@@ -17,7 +17,8 @@ class EventLoop {
 public:
     EventLoop(std::unique_ptr<IStrategy> strategy)
         : strategy_(std::move(strategy)),
-          inner_ready_queue_(strategy_->get_ready_queue_capacity()) {}
+          inner_ready_queue_(strategy_->get_ready_queue_capacity()),
+          outer_ready_queue_(strategy_->get_ready_queue_capacity()) {}
 
     EventLoop(const EventLoop &) = delete;
     EventLoop &operator=(const EventLoop &) = delete;
@@ -28,6 +29,10 @@ public:
     template <typename T> void run(Coro<T> entry_point);
 
     void stop() { state_.store(State::STOPPED, std::memory_order_release); }
+
+    bool try_post(OpFinishHandle *handle) {
+        return outer_ready_queue_.try_enqueue(handle);
+    }
 
 public:
     enum class State { IDLE, RUNNING, STOPPED };
@@ -48,6 +53,7 @@ private:
     std::unique_ptr<IStrategy> strategy_;
     std::atomic<State> state_ = State::IDLE;
     SingleThreadRingQueue<OpFinishHandle *> inner_ready_queue_;
+    MultiWriterRingQueue<OpFinishHandle *> outer_ready_queue_;
 };
 
 template <typename T> void EventLoop::run(Coro<T> entry_point) {
@@ -71,6 +77,9 @@ template <typename T> void EventLoop::run(Coro<T> entry_point) {
 
     while (!should_stop_()) {
         std::optional<OpFinishHandle *> ready_handle;
+        while ((ready_handle = outer_ready_queue_.try_dequeue())) {
+            (*ready_handle)->finish(0);
+        }
         while ((ready_handle = inner_ready_queue_.try_dequeue())) {
             (*ready_handle)->finish(0);
         }

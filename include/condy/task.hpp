@@ -114,4 +114,66 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     return {handle};
 }
 
+template <typename Executor> class TryPostAwaiter {
+public:
+    TryPostAwaiter(Executor &executor, OpFinishHandle *handle_to_executor)
+        : executor_(executor), handle_to_executor_(handle_to_executor) {}
+    TryPostAwaiter(TryPostAwaiter &&) = default;
+
+    TryPostAwaiter(const TryPostAwaiter &) = delete;
+    TryPostAwaiter &operator=(const TryPostAwaiter &) = delete;
+    TryPostAwaiter &operator=(TryPostAwaiter &&) = delete;
+
+public:
+    bool await_ready() { return executor_.try_post(handle_to_executor_); }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        finish_handle_.set_on_finish(
+            [h, this](typename OpFinishHandle::ReturnType r) {
+                bool ok = executor_.try_post(handle_to_executor_);
+                if (!ok) {
+                    retry_later_();
+                } else {
+                    h.resume();
+                }
+            });
+        retry_later_();
+    }
+
+    void await_resume() noexcept {}
+
+private:
+    void retry_later_() {
+        auto &context = Context::current();
+        auto ring = context.get_ring();
+        auto *sqe = context.get_strategy()->get_sqe(ring);
+        assert(sqe != nullptr);
+        io_uring_prep_nop(sqe);
+        io_uring_sqe_set_data(sqe, &finish_handle_);
+    }
+
+private:
+    Executor &executor_;
+    OpFinishHandle *handle_to_executor_;
+    OpFinishHandle finish_handle_;
+};
+
+template <typename T, typename Executor>
+inline auto co_spawn(Executor &executor, Coro<T> coro) {
+    auto handle = coro.release();
+    auto *handle_ptr = new OpFinishHandle();
+    handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
+        assert(r == 0);
+        auto *strategy = Context::current().get_strategy();
+        if (strategy) { // Custom executor may not have context
+            handle.promise().set_task_id(strategy->generate_task_id());
+        }
+        handle.resume();
+        delete handle_ptr; // self delete
+    });
+
+    return TryPostAwaiter<Executor>(executor, handle_ptr);
+}
+
 } // namespace condy
