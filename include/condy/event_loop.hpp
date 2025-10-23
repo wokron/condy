@@ -47,8 +47,7 @@ private:
 private:
     std::unique_ptr<IStrategy> strategy_;
     std::atomic<State> state_ = State::IDLE;
-    // TODO: non-atomic for inner ready queue, since only one thread accesses it
-    RingQueue<OpFinishHandle *> inner_ready_queue_;
+    SingleThreadRingQueue<OpFinishHandle *> inner_ready_queue_;
 };
 
 template <typename T> void EventLoop::run(Coro<T> entry_point) {

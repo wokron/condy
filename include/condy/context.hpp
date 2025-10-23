@@ -25,7 +25,8 @@ public:
         return ctx;
     }
 
-    void init(IStrategy *strategy, RingQueue<OpFinishHandle *> *ready_queue) {
+    void init(IStrategy *strategy,
+              SingleThreadRingQueue<OpFinishHandle *> *ready_queue) {
         int r = strategy->init_io_uring(&ring_);
         if (r < 0) {
             throw std::runtime_error("io_uring_queue_init failed: " +
@@ -45,7 +46,9 @@ public:
 
     IStrategy *get_strategy() { return strategy_; }
 
-    RingQueue<OpFinishHandle *> *get_ready_queue() { return ready_queue_; }
+    SingleThreadRingQueue<OpFinishHandle *> *get_ready_queue() {
+        return ready_queue_;
+    }
 
 private:
     Context() = default;
@@ -54,7 +57,7 @@ private:
     io_uring ring_{};
     IStrategy *strategy_ = nullptr;
 
-    RingQueue<OpFinishHandle *> *ready_queue_ = nullptr;
+    SingleThreadRingQueue<OpFinishHandle *> *ready_queue_ = nullptr;
 };
 
 } // namespace condy

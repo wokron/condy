@@ -19,7 +19,8 @@ template <typename T> T round_up_pow2(T n) {
     return n;
 }
 
-template <typename T> class RingQueue {
+template <typename T, template <typename> class Atomic = std::atomic>
+class RingQueue {
 public:
     RingQueue(size_t capacity)
         : data_(std::make_unique<T[]>(round_up_pow2(capacity))),
@@ -58,12 +59,28 @@ public:
 private:
     std::unique_ptr<T[]> data_;
     size_t mask_;
-    std::atomic_size_t head_{0}, tail_{0};
+    Atomic<size_t> head_{0}, tail_{0};
 };
 
-template <typename T> class MultiWriterRingQueue : public RingQueue<T> {
+template <typename T> class FakeAtomic {
 public:
-    using Base = RingQueue<T>;
+    FakeAtomic() = default;
+    FakeAtomic(T value) : value_(value) {}
+    FakeAtomic(const FakeAtomic &) = delete;
+    FakeAtomic &operator=(const FakeAtomic &) = delete;
+    T load(std::memory_order) const { return value_; }
+    void store(T value, std::memory_order) { value_ = value; }
+
+private:
+    T value_;
+};
+
+template <typename T> using SingleThreadRingQueue = RingQueue<T, FakeAtomic>;
+
+template <typename T, template <typename> class Atomic = std::atomic>
+class MultiWriterRingQueue : public RingQueue<T, Atomic> {
+public:
+    using Base = RingQueue<T, Atomic>;
     using Base::Base;
 
     template <typename U> bool try_enqueue(U &&item) {
