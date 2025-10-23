@@ -7,7 +7,7 @@
 TEST_CASE("test op_finish_handle - basic routine") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy);
+    context.init(&strategy, nullptr);
     auto ring = context.get_ring();
 
     bool finished = false;
@@ -69,7 +69,7 @@ TEST_CASE("test op_finish_handle - concurrent op") {
 
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy);
+    context.init(&strategy, nullptr);
     auto ring = context.get_ring();
 
     condy::OpFinishHandle handle1, handle2;
@@ -103,7 +103,7 @@ TEST_CASE("test op_finish_handle - cancel op") {
 
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy);
+    context.init(&strategy, nullptr);
     auto ring = context.get_ring();
 
     condy::OpFinishHandle handle1, handle2;

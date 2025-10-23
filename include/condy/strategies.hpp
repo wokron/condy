@@ -9,6 +9,8 @@ class IStrategy {
 public:
     virtual ~IStrategy() = default;
 
+    virtual size_t get_ready_queue_capacity() const = 0;
+
     virtual int init_io_uring(io_uring *ring) = 0;
 
     virtual int generate_task_id() = 0;
@@ -32,6 +34,8 @@ public:
         : io_uring_entries_(io_uring_entries) {};
 
 public:
+    size_t get_ready_queue_capacity() const override { return 1024; }
+
     int init_io_uring(io_uring *ring) override {
         return io_uring_queue_init(io_uring_entries_, ring, 0);
     }

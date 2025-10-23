@@ -4,6 +4,7 @@
 #include "condy/context.hpp"
 #include "condy/coro.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/queue.hpp"
 #include "condy/strategies.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
@@ -15,7 +16,8 @@ namespace condy {
 class EventLoop {
 public:
     EventLoop(std::unique_ptr<IStrategy> strategy)
-        : strategy_(std::move(strategy)) {}
+        : strategy_(std::move(strategy)),
+          inner_ready_queue_(strategy_->get_ready_queue_capacity()) {}
 
     EventLoop(const EventLoop &) = delete;
     EventLoop &operator=(const EventLoop &) = delete;
@@ -45,6 +47,8 @@ private:
 private:
     std::unique_ptr<IStrategy> strategy_;
     std::atomic<State> state_ = State::IDLE;
+    // TODO: non-atomic for inner ready queue, since only one thread accesses it
+    RingQueue<OpFinishHandle *> inner_ready_queue_;
 };
 
 template <typename T> void EventLoop::run(Coro<T> entry_point) {
@@ -57,7 +61,7 @@ template <typename T> void EventLoop::run(Coro<T> entry_point) {
     auto d1 = defer(
         [&]() { state_.store(State::STOPPED, std::memory_order_release); });
 
-    Context::current().init(strategy_.get());
+    Context::current().init(strategy_.get(), &inner_ready_queue_);
     auto d2 = defer([]() { Context::current().destroy(); });
 
     auto *ring = Context::current().get_ring();
@@ -67,7 +71,10 @@ template <typename T> void EventLoop::run(Coro<T> entry_point) {
     handle.resume();
 
     while (!should_stop_()) {
-        io_uring_cqe *cqe;
+        std::optional<OpFinishHandle *> ready_handle;
+        while ((ready_handle = inner_ready_queue_.try_dequeue())) {
+            (*ready_handle)->finish(0);
+        }
 
         int r = strategy_->submit_and_wait(ring);
         if (r == -EINTR) {
@@ -85,6 +92,7 @@ template <typename T> void EventLoop::run(Coro<T> entry_point) {
 
         unsigned int head;
         int finished = 0;
+        io_uring_cqe *cqe;
         io_uring_for_each_cqe(ring, head, cqe) {
             auto handle_ptr =
                 static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));

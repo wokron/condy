@@ -1,33 +1,8 @@
 #include "condy/coro.hpp"
+#include "condy/event_loop.hpp"
 #include "condy/task.hpp"
 #include <condy/async_operations.hpp>
 #include <doctest/doctest.h>
-
-namespace {
-
-void event_loop(size_t &unfinished) {
-    auto &context = condy::Context::current();
-    auto ring = context.get_ring();
-    while (unfinished > 0) {
-        io_uring_submit_and_wait(ring, 1);
-
-        io_uring_cqe *cqe;
-        io_uring_peek_cqe(ring, &cqe);
-        if (cqe == nullptr) {
-            continue;
-        }
-
-        auto handle_ptr =
-            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        if (handle_ptr) {
-            handle_ptr->finish(cqe->res);
-        }
-
-        io_uring_cqe_seen(ring, cqe);
-    }
-}
-
-} // namespace
 
 TEST_CASE("test async_operations - simple read write") {
     int pipe_fds[2];
@@ -36,10 +11,7 @@ TEST_CASE("test async_operations - simple read write") {
     const char msg[] = "Hello, condy!";
     char buf[20] = {0};
 
-    condy::SimpleStrategy strategy(8);
-    auto &context = condy::Context::current();
-    context.init(&strategy);
-    auto ring = context.get_ring();
+    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
 
     size_t unfinished = 1;
     auto writer = [&]() -> condy::Coro<void> {
@@ -65,11 +37,7 @@ TEST_CASE("test async_operations - simple read write") {
     auto coro = func();
     REQUIRE(unfinished == 1);
 
-    coro.release().resume();
-    REQUIRE(unfinished == 1);
+    loop.run(std::move(coro));
 
-    event_loop(unfinished);
     REQUIRE(unfinished == 0);
-
-    context.destroy();
 }

@@ -1,39 +1,12 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/coro.hpp"
+#include "condy/event_loop.hpp"
 #include <condy/task.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
 
-namespace {
-
-void event_loop(size_t &unfinished) {
-    auto &context = condy::Context::current();
-    auto ring = context.get_ring();
-    while (unfinished > 0) {
-        io_uring_submit_and_wait(ring, 1);
-
-        io_uring_cqe *cqe;
-        io_uring_peek_cqe(ring, &cqe);
-        if (cqe == nullptr) {
-            continue;
-        }
-
-        auto handle_ptr =
-            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        if (handle_ptr) {
-            handle_ptr->finish(cqe->res);
-        }
-
-        io_uring_cqe_seen(ring, cqe);
-    }
-}
-
-} // namespace
-
 TEST_CASE("test task - launch multiple tasks") {
-    condy::SimpleStrategy strategy(8);
-    auto &context = condy::Context::current();
-    context.init(&strategy);
+    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
 
     size_t unfinished = 1;
 
@@ -59,19 +32,12 @@ TEST_CASE("test task - launch multiple tasks") {
     auto coro = func();
     REQUIRE(unfinished == 1);
 
-    coro.release().resume();
-    REQUIRE(unfinished == 1);
-
-    event_loop(unfinished);
+    loop.run(std::move(coro));
     REQUIRE(unfinished == 0);
-
-    context.destroy();
 }
 
 TEST_CASE("test task - return value") {
-    condy::SimpleStrategy strategy(8);
-    auto &context = condy::Context::current();
-    context.init(&strategy);
+    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
 
     size_t unfinished = 1;
 
@@ -96,11 +62,6 @@ TEST_CASE("test task - return value") {
     auto coro = func();
     REQUIRE(unfinished == 1);
 
-    coro.release().resume();
-    REQUIRE(unfinished == 1);
-
-    event_loop(unfinished);
+    loop.run(std::move(coro));
     REQUIRE(unfinished == 0);
-
-    context.destroy();
 }
