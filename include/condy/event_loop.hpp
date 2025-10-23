@@ -9,6 +9,7 @@
 #include "condy/utils.hpp"
 #include <atomic>
 #include <cerrno>
+#include <cstddef>
 #include <memory>
 
 namespace condy {
@@ -26,7 +27,19 @@ public:
     EventLoop &operator=(EventLoop &&) = delete;
 
 public:
-    template <typename T> void run(Coro<T> entry_point);
+    template <typename... Ts> void prologue(Coro<Ts>... coros);
+
+    void run_once();
+
+    void epilogue();
+
+    template <typename... Ts> void run(Coro<Ts>... entry_point) {
+        prologue(std::move(entry_point)...);
+        auto d = defer([&]() { epilogue(); });
+        while (!should_stop_()) {
+            run_once();
+        }
+    }
 
     void stop() { state_.store(State::STOPPED, std::memory_order_release); }
 
@@ -49,6 +62,17 @@ private:
         return check_stopped() || strategy_->should_stop();
     }
 
+    template <size_t Idx = 0, typename... Ts>
+    void foreach_coro_prologue_(std::tuple<Coro<Ts>...> coros) {
+        if constexpr (Idx < sizeof...(Ts)) {
+            auto &coro = std::get<Idx>(coros);
+            auto handle = coro.release();
+            handle.promise().set_task_id(strategy_->generate_task_id());
+            handle.resume();
+            foreach_coro_prologue_<Idx + 1, Ts...>(std::move(coros));
+        }
+    }
+
 private:
     std::unique_ptr<IStrategy> strategy_;
     std::atomic<State> state_ = State::IDLE;
@@ -56,63 +80,61 @@ private:
     MultiWriterRingQueue<OpFinishHandle *> outer_ready_queue_;
 };
 
-template <typename T> void EventLoop::run(Coro<T> entry_point) {
+template <typename... Ts> void EventLoop::prologue(Coro<Ts>... coros) {
     State expected = State::IDLE;
     if (!state_.compare_exchange_strong(expected, State::RUNNING,
                                         std::memory_order_acq_rel)) {
         throw std::runtime_error("EventLoop is already running or stopped");
     }
-
-    auto d1 = defer(
-        [&]() { state_.store(State::STOPPED, std::memory_order_release); });
-
     Context::current().init(strategy_.get(), &inner_ready_queue_, this);
-    auto d2 = defer([]() { Context::current().destroy(); });
 
+    foreach_coro_prologue_(std::make_tuple(std::move(coros)...));
+}
+
+inline void EventLoop::epilogue() {
+    state_.store(State::STOPPED, std::memory_order_release);
+    Context::current().destroy();
+}
+
+inline void EventLoop::run_once() {
     auto *ring = Context::current().get_ring();
 
-    auto handle = entry_point.release();
-    handle.promise().set_task_id(strategy_->generate_task_id());
-    handle.resume();
-
-    while (!should_stop_()) {
-        std::optional<OpFinishHandle *> ready_handle;
-        while ((ready_handle = outer_ready_queue_.try_dequeue())) {
-            (*ready_handle)->finish(0);
-        }
-        while ((ready_handle = inner_ready_queue_.try_dequeue())) {
-            (*ready_handle)->finish(0);
-        }
-
-        int r = strategy_->submit_and_wait(ring);
-        if (r == -EINTR) {
-            continue;
-        } else if (r < 0 && r != -ETIME) {
-            throw std::runtime_error("io_uring_submit_and_wait failed: " +
-                                     std::string(std::strerror(-r)));
-        }
-        int submitted = r;
-        strategy_->record_submitted(submitted);
-
-        if (*ring->cq.koverflow) {
-            throw std::runtime_error("CQ overflow detected");
-        }
-
-        unsigned int head;
-        int finished = 0;
-        io_uring_cqe *cqe;
-        io_uring_for_each_cqe(ring, head, cqe) {
-            auto handle_ptr =
-                static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-            if (handle_ptr) {
-                handle_ptr->finish(cqe->res);
-            }
-            ++finished;
-        }
-
-        io_uring_cq_advance(ring, finished);
-        strategy_->record_finished(finished);
+    std::optional<OpFinishHandle *> ready_handle;
+    while ((ready_handle = outer_ready_queue_.try_dequeue())) {
+        (*ready_handle)->finish(0);
     }
-};
+    while ((ready_handle = inner_ready_queue_.try_dequeue())) {
+        (*ready_handle)->finish(0);
+    }
+
+    int r = strategy_->submit_and_wait(ring);
+    if (r == -EINTR) {
+        return;
+    } else if (r < 0 && r != -ETIME) {
+        throw std::runtime_error("io_uring_submit_and_wait failed: " +
+                                 std::string(std::strerror(-r)));
+    }
+    int submitted = r;
+    strategy_->record_submitted(submitted);
+
+    if (*ring->cq.koverflow) {
+        throw std::runtime_error("CQ overflow detected");
+    }
+
+    unsigned int head;
+    int finished = 0;
+    io_uring_cqe *cqe;
+    io_uring_for_each_cqe(ring, head, cqe) {
+        auto handle_ptr =
+            static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        if (handle_ptr) {
+            handle_ptr->finish(cqe->res);
+        }
+        ++finished;
+    }
+
+    io_uring_cq_advance(ring, finished);
+    strategy_->record_finished(finished);
+}
 
 } // namespace condy
