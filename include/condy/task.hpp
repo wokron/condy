@@ -30,11 +30,7 @@ public:
 
 public:
     void detach() noexcept {
-        if (handle_.promise().finished()) {
-            handle_.destroy();
-        } else {
-            handle_.promise().set_auto_destroy(true);
-        }
+        handle_.promise().request_detach();
         handle_ = nullptr;
     }
 
@@ -46,12 +42,10 @@ private:
 
 template <> inline auto Task<void>::operator co_await() && {
     struct TaskAwaiter {
-        bool await_ready() noexcept {
-            return task_handle_.promise().finished();
-        }
+        bool await_ready() const noexcept { return false; }
 
-        void await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            task_handle_.promise().set_caller_handle(caller_handle);
+        bool await_suspend(std::coroutine_handle<> caller_handle) noexcept {
+            return task_handle_.promise().register_task_await(caller_handle);
         }
 
         void await_resume() {
@@ -70,12 +64,10 @@ template <> inline auto Task<void>::operator co_await() && {
 
 template <typename T> inline auto Task<T>::operator co_await() && {
     struct TaskAwaiter {
-        bool await_ready() noexcept {
-            return task_handle_.promise().finished();
-        }
+        bool await_ready() const noexcept { return false; }
 
-        void await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            task_handle_.promise().set_caller_handle(caller_handle);
+        bool await_suspend(std::coroutine_handle<> caller_handle) noexcept {
+            return task_handle_.promise().register_task_await(caller_handle);
         }
 
         T await_resume() {

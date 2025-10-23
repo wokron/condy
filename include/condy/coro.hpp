@@ -69,6 +69,25 @@ public:
     }
 
 public:
+    void request_detach() noexcept {
+        if (!finished_) {
+            auto_destroy_ = true;
+        } else {
+            // Destroy self immediately
+            auto handle =
+                std::coroutine_handle<promise_type>::from_promise(*this);
+            handle.destroy();
+        }
+    }
+
+    bool register_task_await(std::coroutine_handle<> caller_handle) noexcept {
+        if (finished_) {
+            return false; // ready to resume immediately
+        }
+        caller_handle_ = caller_handle;
+        return true;
+    }
+
     void set_caller_handle(std::coroutine_handle<> handle) noexcept {
         caller_handle_ = handle;
     }
@@ -76,8 +95,6 @@ public:
     void set_auto_destroy(bool auto_destroy) noexcept {
         auto_destroy_ = auto_destroy;
     }
-
-    bool finished() const noexcept { return finished_; }
 
     std::exception_ptr exception() const noexcept { return exception_; }
 
@@ -130,6 +147,25 @@ public:
     }
 
 public:
+    void request_detach() noexcept {
+        if (!finished_) {
+            auto_destroy_ = true;
+        } else {
+            // Destroy self immediately
+            auto handle =
+                std::coroutine_handle<promise_type>::from_promise(*this);
+            handle.destroy();
+        }
+    }
+
+    bool register_task_await(std::coroutine_handle<> caller_handle) noexcept {
+        if (finished_) {
+            return false; // ready to resume immediately
+        }
+        caller_handle_ = caller_handle;
+        return true;
+    }
+
     void set_caller_handle(std::coroutine_handle<> handle) noexcept {
         caller_handle_ = handle;
     }
@@ -137,8 +173,6 @@ public:
     void set_auto_destroy(bool auto_destroy) noexcept {
         auto_destroy_ = auto_destroy;
     }
-
-    bool finished() const noexcept { return finished_; }
 
     std::exception_ptr exception() const noexcept { return exception_; }
 
@@ -160,7 +194,7 @@ private:
 
 template <> inline auto Coro<void>::operator co_await() && {
     struct CoroAwaiter {
-        bool await_ready() noexcept { return false; }
+        bool await_ready() const noexcept { return false; }
 
         std::coroutine_handle<promise_type>
         await_suspend(std::coroutine_handle<> caller_handle) noexcept {
@@ -184,7 +218,7 @@ template <> inline auto Coro<void>::operator co_await() && {
 
 template <typename T> inline auto Coro<T>::operator co_await() && {
     struct CoroAwaiter {
-        bool await_ready() noexcept { return false; }
+        bool await_ready() const noexcept { return false; }
 
         std::coroutine_handle<promise_type>
         await_suspend(std::coroutine_handle<> caller_handle) noexcept {
