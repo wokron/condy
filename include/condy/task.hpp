@@ -30,7 +30,11 @@ public:
 
 public:
     void detach() noexcept {
-        handle_.promise().set_auto_destroy(true);
+        if (handle_.promise().finished()) {
+            handle_.destroy();
+        } else {
+            handle_.promise().set_auto_destroy(true);
+        }
         handle_ = nullptr;
     }
 
