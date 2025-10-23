@@ -53,7 +53,12 @@ public:
     bool should_stop() override { return running_tasks_ == 0; }
 
     int submit_and_wait(io_uring *ring) override {
-        return io_uring_submit_and_wait(ring, 1);
+        __kernel_timespec ts = {
+            .tv_sec = 0,
+            .tv_nsec = 1000000,
+        };
+        io_uring_cqe *cqe;
+        return condy_submit_and_wait_timeout(ring, &cqe, 1, &ts, nullptr);
     }
 
     void record_submitted(int submitted) override {}

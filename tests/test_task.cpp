@@ -103,7 +103,7 @@ TEST_CASE("test task - co_spawn to other executor") {
 
     std::thread executor_thread([&]() { executor.run(); });
 
-    std::atomic<bool> task_finished = false;
+    bool task_finished = false;
 
     auto task_func = [&](std::thread::id prev_id) -> condy::Coro<void> {
         auto curr_id = std::this_thread::get_id();
@@ -114,13 +114,13 @@ TEST_CASE("test task - co_spawn to other executor") {
 
     loop.run(condy::Coro<void>([&]() -> condy::Coro<void> {
         auto prev_id = std::this_thread::get_id();
-        co_await condy::co_spawn(executor, task_func(prev_id));
-        while (!task_finished.load()) {
-            co_await condy::build_op_awaiter(io_uring_prep_nop);
-        }
+        auto t = co_await condy::co_spawn(executor, task_func(prev_id));
+        REQUIRE(t.is_remote_task());
+        co_await std::move(t);
+        REQUIRE(task_finished);
     }()));
 
     executor_thread.join();
 
-    REQUIRE(task_finished.load());
+    REQUIRE(task_finished);
 }

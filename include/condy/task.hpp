@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/context.hpp"
 #include "condy/coro.hpp"
 #include "condy/finish_handles.hpp"
 #include <coroutine>
@@ -12,11 +13,14 @@ template <typename T = void> class Task {
 public:
     using PromiseType = typename Coro<T>::promise_type;
 
-    Task(std::coroutine_handle<PromiseType> h) : handle_(h) {
+    Task(std::coroutine_handle<PromiseType> h, bool remote_task)
+        : handle_(h), remote_task_(remote_task) {
         handle_.promise().set_auto_destroy(false);
+        handle_.promise().set_use_mutex(remote_task_);
     }
     Task(Task &&other) noexcept
-        : handle_(std::exchange(other.handle_, nullptr)) {}
+        : handle_(std::exchange(other.handle_, nullptr)),
+          remote_task_(other.remote_task_) {}
 
     Task(const Task &) = delete;
     Task &operator=(const Task &) = delete;
@@ -36,8 +40,11 @@ public:
 
     auto operator co_await() &&;
 
+    bool is_remote_task() const noexcept { return remote_task_; }
+
 private:
     std::coroutine_handle<PromiseType> handle_;
+    bool remote_task_;
 };
 
 template <> inline auto Task<void>::operator co_await() && {
@@ -45,7 +52,8 @@ template <> inline auto Task<void>::operator co_await() && {
         bool await_ready() const noexcept { return false; }
 
         bool await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            return task_handle_.promise().register_task_await(caller_handle);
+            return task_handle_.promise().register_task_await(caller_handle,
+                                                              loop_);
         }
 
         void await_resume() {
@@ -57,9 +65,12 @@ template <> inline auto Task<void>::operator co_await() && {
         }
 
         std::coroutine_handle<typename Coro<void>::promise_type> task_handle_;
+        EventLoop *loop_ = nullptr;
     };
 
-    return TaskAwaiter{std::exchange(handle_, nullptr)};
+    return TaskAwaiter{std::exchange(handle_, nullptr),
+                       remote_task_ ? Context::current().get_event_loop()
+                                    : nullptr};
 }
 
 template <typename T> inline auto Task<T>::operator co_await() && {
@@ -67,7 +78,8 @@ template <typename T> inline auto Task<T>::operator co_await() && {
         bool await_ready() const noexcept { return false; }
 
         bool await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            return task_handle_.promise().register_task_await(caller_handle);
+            return task_handle_.promise().register_task_await(caller_handle,
+                                                              loop_);
         }
 
         T await_resume() {
@@ -82,9 +94,12 @@ template <typename T> inline auto Task<T>::operator co_await() && {
         }
 
         std::coroutine_handle<typename Coro<T>::promise_type> task_handle_;
+        EventLoop *loop_ = nullptr;
     };
 
-    return TaskAwaiter{std::exchange(handle_, nullptr)};
+    return TaskAwaiter{std::exchange(handle_, nullptr),
+                       remote_task_ ? Context::current().get_event_loop()
+                                    : nullptr};
 }
 
 template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
@@ -107,13 +122,15 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
         io_uring_prep_nop(sqe);
         io_uring_sqe_set_data(sqe, handle_ptr);
     }
-    return {handle};
+    return {handle, false};
 }
 
-template <typename Executor> class TryPostAwaiter {
+template <typename Executor, typename T> class TryPostAwaiter {
 public:
-    TryPostAwaiter(Executor &executor, OpFinishHandle *handle_to_executor)
-        : executor_(executor), handle_to_executor_(handle_to_executor) {}
+    TryPostAwaiter(Executor &executor, OpFinishHandle *handle_to_executor,
+                   Task<T> task)
+        : executor_(executor), handle_to_executor_(handle_to_executor),
+          task_(std::move(task)) {}
     TryPostAwaiter(TryPostAwaiter &&) = default;
 
     TryPostAwaiter(const TryPostAwaiter &) = delete;
@@ -137,7 +154,7 @@ public:
         retry_later_();
     }
 
-    void await_resume() noexcept {}
+    Task<T> await_resume() noexcept { return std::move(task_); }
 
 private:
     void retry_later_() {
@@ -153,6 +170,7 @@ private:
     Executor &executor_;
     OpFinishHandle *handle_to_executor_;
     OpFinishHandle finish_handle_;
+    Task<T> task_;
 };
 
 template <typename T, typename Executor>
@@ -169,7 +187,8 @@ inline auto co_spawn(Executor &executor, Coro<T> coro) {
         delete handle_ptr; // self delete
     });
 
-    return TryPostAwaiter<Executor>(executor, handle_ptr);
+    return TryPostAwaiter<Executor, T>(executor, handle_ptr,
+                                       Task<T>{handle, true});
 }
 
 } // namespace condy

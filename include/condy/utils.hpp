@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
 #include <utility>
 
 namespace condy {
@@ -23,5 +24,35 @@ private:
 template <typename Func> Defer defer(Func &&func) {
     return Defer(std::forward<Func>(func));
 }
+
+class MaybeMutex : public std::mutex {
+public:
+    using Base = std::mutex;
+    using Base::Base;
+
+    void lock() noexcept {
+        if (use_mutex_) {
+            Base::lock();
+        }
+    }
+
+    void unlock() noexcept {
+        if (use_mutex_) {
+            Base::unlock();
+        }
+    }
+
+    bool try_lock() noexcept {
+        if (use_mutex_) {
+            return Base::try_lock();
+        }
+        return true;
+    }
+
+    void set_use_mutex(bool use_mutex) noexcept { use_mutex_ = use_mutex; }
+
+private:
+    bool use_mutex_ = false;
+};
 
 } // namespace condy
