@@ -66,7 +66,7 @@ template <typename T> void EventLoop::run(Coro<T> entry_point) {
     auto d1 = defer(
         [&]() { state_.store(State::STOPPED, std::memory_order_release); });
 
-    Context::current().init(strategy_.get(), &inner_ready_queue_);
+    Context::current().init(strategy_.get(), &inner_ready_queue_, this);
     auto d2 = defer([]() { Context::current().destroy(); });
 
     auto *ring = Context::current().get_ring();

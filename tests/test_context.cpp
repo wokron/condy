@@ -6,7 +6,7 @@
 TEST_CASE("test context - init and destroy") {
     condy::SimpleStrategy strategy(8);
     condy::Context &ctx = condy::Context::current();
-    ctx.init(&strategy, nullptr);
+    ctx.init(&strategy, nullptr, nullptr);
 
     io_uring *ring = ctx.get_ring();
     REQUIRE(ring != nullptr);

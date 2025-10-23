@@ -35,7 +35,7 @@ void event_loop(size_t &unfinished) {
 TEST_CASE("test awaiter_operations - test build_op_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -58,7 +58,7 @@ TEST_CASE("test awaiter_operations - test build_op_awaiter") {
 TEST_CASE("test awaiter_operations - test build_all_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -88,7 +88,7 @@ TEST_CASE("test awaiter_operations - test build_all_awaiter") {
 TEST_CASE("test awaiter_operations - test build_one_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -120,7 +120,7 @@ TEST_CASE("test awaiter_operations - test build_one_awaiter") {
 TEST_CASE("test awaiter_operations - test build_ranged_all_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -152,7 +152,7 @@ TEST_CASE("test awaiter_operations - test build_ranged_all_awaiter") {
 TEST_CASE("test awaiter_operations - test build_ranged_one_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -192,7 +192,7 @@ TEST_CASE("test awaiter_operations - test build_ranged_one_awaiter") {
 TEST_CASE("test awaiter_operations - test &&") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -222,7 +222,7 @@ TEST_CASE("test awaiter_operations - test &&") {
 TEST_CASE("test awaiter_operations - test ||") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -253,7 +253,7 @@ TEST_CASE("test awaiter_operations - test ||") {
 TEST_CASE("test awaiter_operations - mixed && and ||") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -287,7 +287,7 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
 TEST_CASE("test awaiter_operations - ranged +=") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -320,7 +320,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
 TEST_CASE("test awaiter_operations - test build_link_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -354,7 +354,7 @@ TEST_CASE("test awaiter_operations - test build_link_awaiter") {
 TEST_CASE("test awaiter_operations - test >>") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -388,7 +388,7 @@ TEST_CASE("test awaiter_operations - test >>") {
 TEST_CASE("test awaiter_operations - test build_drained_op_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -412,7 +412,7 @@ TEST_CASE("test awaiter_operations - test build_drained_op_awaiter") {
 TEST_CASE("test awaiter_operations - test ~") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr);
+    context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
