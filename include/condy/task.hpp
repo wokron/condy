@@ -125,17 +125,17 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     return {handle, false};
 }
 
-template <typename Executor, typename T> class TryPostAwaiter {
+template <typename Executor, typename T> class RemoteSpawnAwaiter {
 public:
-    TryPostAwaiter(Executor &executor, OpFinishHandle *handle_to_executor,
+    RemoteSpawnAwaiter(Executor &executor, OpFinishHandle *handle_to_executor,
                    Task<T> task)
         : executor_(executor), handle_to_executor_(handle_to_executor),
           task_(std::move(task)) {}
-    TryPostAwaiter(TryPostAwaiter &&) = default;
+    RemoteSpawnAwaiter(RemoteSpawnAwaiter &&) = default;
 
-    TryPostAwaiter(const TryPostAwaiter &) = delete;
-    TryPostAwaiter &operator=(const TryPostAwaiter &) = delete;
-    TryPostAwaiter &operator=(TryPostAwaiter &&) = delete;
+    RemoteSpawnAwaiter(const RemoteSpawnAwaiter &) = delete;
+    RemoteSpawnAwaiter &operator=(const RemoteSpawnAwaiter &) = delete;
+    RemoteSpawnAwaiter &operator=(RemoteSpawnAwaiter &&) = delete;
 
 public:
     bool await_ready() { return executor_.try_post(handle_to_executor_); }
@@ -168,7 +168,7 @@ inline auto co_spawn(Executor &executor, Coro<T> coro) {
         delete handle_ptr; // self delete
     });
 
-    return TryPostAwaiter<Executor, T>(executor, handle_ptr,
+    return RemoteSpawnAwaiter<Executor, T>(executor, handle_ptr,
                                        Task<T>{handle, true});
 }
 
