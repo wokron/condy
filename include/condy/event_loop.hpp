@@ -110,12 +110,14 @@ inline void EventLoop::run_once() {
     int r = strategy_->submit_and_wait(ring);
     if (r == -EINTR) {
         return;
-    } else if (r < 0 && r != -ETIME) {
+    } else if (r == -ETIME) {
+        r = 0;
+    } else if (r < 0) {
         throw std::runtime_error("io_uring_submit_and_wait failed: " +
                                  std::string(std::strerror(-r)));
     }
     int submitted = r;
-    strategy_->record_submitted(submitted);
+    strategy_->record_submitted(submitted); // TODO: Is this useful?
 
     if (*ring->cq.koverflow) {
         throw std::runtime_error("CQ overflow detected");
