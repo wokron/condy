@@ -179,10 +179,8 @@ inline auto co_spawn(Executor &executor, Coro<T> coro) {
     auto *handle_ptr = new OpFinishHandle();
     handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
         assert(r == 0);
-        auto *strategy = Context::current().get_strategy();
-        if (strategy) { // Custom executor may not have context
-            handle.promise().set_task_id(strategy->generate_task_id());
-        }
+        handle.promise().set_task_id(
+            Context::current().get_strategy()->generate_task_id());
         handle.resume();
         delete handle_ptr; // self delete
     });

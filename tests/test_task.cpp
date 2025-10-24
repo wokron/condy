@@ -2,10 +2,10 @@
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/strategies.hpp"
 #include <condy/task.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
-#include <semaphore>
 #include <thread>
 
 TEST_CASE("test task - launch multiple tasks") {
@@ -71,37 +71,37 @@ TEST_CASE("test task - return value") {
 
 namespace {
 
-class SimpleExecutor {
+class BusyEventLoop : public condy::EventLoop {
 public:
+    using Base = condy::EventLoop;
+    using Base::Base;
+
     bool try_post(condy::OpFinishHandle *handle) {
-        // Use counter to simulate busy executor
-        if (--counter_ == 0) {
-            handle_ = handle;
-            sem_.release();
-            return true;
+        if (counter_.fetch_add(1) % 10 == 9) {
+            return Base::try_post(handle);
         }
         return false;
     }
 
-    void run() {
-        sem_.acquire();
-        handle_->finish(0);
-        sem_.release();
-    }
-
 private:
-    condy::OpFinishHandle *handle_;
-    std::binary_semaphore sem_{0};
-    size_t counter_ = 10;
+    std::atomic<size_t> counter_{0};
+};
+
+class BusyEventLoopStrategy : public condy::SimpleStrategy {
+public:
+    using Base = condy::SimpleStrategy;
+    using Base::Base;
+
+    bool should_stop() override { return false; }
 };
 
 } // namespace
 
 TEST_CASE("test task - co_spawn to other executor") {
     condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
-    SimpleExecutor executor;
+    BusyEventLoop busy_loop(std::make_unique<BusyEventLoopStrategy>(8));
 
-    std::thread executor_thread([&]() { executor.run(); });
+    std::thread busy_loop_thread([&]() { busy_loop.run(); });
 
     bool task_finished = false;
 
@@ -114,13 +114,14 @@ TEST_CASE("test task - co_spawn to other executor") {
 
     loop.run(condy::Coro<void>([&]() -> condy::Coro<void> {
         auto prev_id = std::this_thread::get_id();
-        auto t = co_await condy::co_spawn(executor, task_func(prev_id));
+        auto t = co_await condy::co_spawn(busy_loop, task_func(prev_id));
         REQUIRE(t.is_remote_task());
         co_await std::move(t);
         REQUIRE(task_finished);
     }()));
 
-    executor_thread.join();
+    busy_loop.stop();
+    busy_loop_thread.join();
 
     REQUIRE(task_finished);
 }
