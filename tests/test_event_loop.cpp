@@ -4,8 +4,7 @@
 #include <doctest/doctest.h>
 
 TEST_CASE("test event_loop - basic loop") {
-    auto strategy = std::make_unique<condy::SimpleStrategy>(8);
-    condy::EventLoop loop(std::move(strategy));
+    condy::EventLoop<condy::SimpleStrategy> loop(8);
 
     auto func = [&]() -> condy::Coro<void> {
         co_await condy::build_op_awaiter(io_uring_prep_nop);
@@ -18,9 +17,8 @@ TEST_CASE("test event_loop - basic loop") {
     REQUIRE(loop.check_stopped());
 }
 
-TEST_CASE("test event_loop - multiple tasks") {
-    auto strategy = std::make_unique<condy::SimpleStrategy>(16);
-    condy::EventLoop loop(std::move(strategy));
+TEST_CASE("test_event_loop - multiple tasks") {
+    condy::EventLoop<condy::SimpleStrategy> loop(16);
 
     const int num_tasks = 10000;
     int counter = 0;

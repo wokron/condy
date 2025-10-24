@@ -11,7 +11,7 @@ namespace condy {
 
 struct IStrategy;
 struct OpFinishHandle;
-struct EventLoop;
+struct IEventLoop;
 
 class Context {
 public:
@@ -28,7 +28,7 @@ public:
 
     void init(IStrategy *strategy,
               SingleThreadRingQueue<OpFinishHandle *> *ready_queue,
-              EventLoop *event_loop) {
+              IEventLoop *event_loop) {
         int r = strategy->init_io_uring(&ring_);
         if (r < 0) {
             throw std::runtime_error("io_uring_queue_init failed: " +
@@ -54,7 +54,7 @@ public:
         return ready_queue_;
     }
 
-    EventLoop *get_event_loop() { return event_loop_; }
+    IEventLoop *get_event_loop() { return event_loop_; }
 
 private:
     Context() = default;
@@ -63,7 +63,7 @@ private:
     io_uring ring_{};
     IStrategy *strategy_ = nullptr;
     SingleThreadRingQueue<OpFinishHandle *> *ready_queue_ = nullptr;
-    EventLoop *event_loop_ = nullptr;
+    IEventLoop *event_loop_ = nullptr;
 };
 
 } // namespace condy

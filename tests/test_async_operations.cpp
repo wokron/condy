@@ -11,7 +11,7 @@ TEST_CASE("test async_operations - simple read write") {
     const char msg[] = "Hello, condy!";
     char buf[20] = {0};
 
-    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
+    condy::EventLoop<condy::SimpleStrategy> loop(8);
 
     size_t unfinished = 1;
     auto writer = [&]() -> condy::Coro<void> {

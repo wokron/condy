@@ -17,7 +17,7 @@ public:
 
     virtual void recycle_task_id(int id) = 0;
 
-    virtual bool should_stop() = 0;
+    virtual bool should_stop() const = 0;
 
     virtual int submit_and_wait(io_uring *ring) = 0;
 
@@ -50,7 +50,7 @@ public:
         running_tasks_--;
     }
 
-    bool should_stop() override { return running_tasks_ == 0; }
+    bool should_stop() const override { return running_tasks_ == 0; }
 
     int submit_and_wait(io_uring *ring) override {
         __kernel_timespec ts = {

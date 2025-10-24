@@ -5,7 +5,6 @@
 #include "condy/finish_handles.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
-#include <thread>
 
 namespace condy {
 
@@ -97,7 +96,7 @@ public:
     }
 
     bool register_task_await(std::coroutine_handle<> caller_handle,
-                             EventLoop *caller_loop) noexcept {
+                             IEventLoop *caller_loop) noexcept {
         std::lock_guard lock(mutex_);
         if (finished_) {
             return false; // ready to resume immediately
@@ -128,7 +127,7 @@ protected:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
-    EventLoop *caller_loop_ = nullptr;
+    IEventLoop *caller_loop_ = nullptr;
 
     int task_id_ = -1;
 

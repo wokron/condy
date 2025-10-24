@@ -5,21 +5,25 @@
 #include "condy/coro.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/queue.hpp"
-#include "condy/strategies.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
 #include <cerrno>
 #include <cstddef>
-#include <memory>
 
 namespace condy {
 
-class EventLoop {
+class IEventLoop {
 public:
-    EventLoop(std::unique_ptr<IStrategy> strategy)
-        : strategy_(std::move(strategy)),
-          inner_ready_queue_(strategy_->get_ready_queue_capacity()),
-          outer_ready_queue_(strategy_->get_ready_queue_capacity()) {}
+    virtual bool try_post(OpFinishHandle *handle) = 0;
+};
+
+template <typename Strategy> class EventLoop : public IEventLoop {
+public:
+    template <typename... Args>
+    EventLoop(Args &&...args)
+        : strategy_(std::forward<Args>(args)...),
+          inner_ready_queue_(strategy_.get_ready_queue_capacity()),
+          outer_ready_queue_(strategy_.get_ready_queue_capacity()) {}
 
     EventLoop(const EventLoop &) = delete;
     EventLoop &operator=(const EventLoop &) = delete;
@@ -43,7 +47,7 @@ public:
 
     void stop() { state_.store(State::STOPPED, std::memory_order_release); }
 
-    bool try_post(OpFinishHandle *handle) {
+    bool try_post(OpFinishHandle *handle) override {
         return outer_ready_queue_.try_enqueue(handle);
     }
 
@@ -59,7 +63,7 @@ public:
 
 private:
     bool should_stop_() const {
-        return check_stopped() || strategy_->should_stop();
+        return check_stopped() || strategy_.should_stop();
     }
 
     template <size_t Idx = 0, typename... Ts>
@@ -67,36 +71,38 @@ private:
         if constexpr (Idx < sizeof...(Ts)) {
             auto &coro = std::get<Idx>(coros);
             auto handle = coro.release();
-            handle.promise().set_task_id(strategy_->generate_task_id());
+            handle.promise().set_task_id(strategy_.generate_task_id());
             handle.resume();
             foreach_coro_prologue_<Idx + 1, Ts...>(std::move(coros));
         }
     }
 
 private:
-    std::unique_ptr<IStrategy> strategy_;
+    Strategy strategy_;
     std::atomic<State> state_ = State::IDLE;
     SingleThreadRingQueue<OpFinishHandle *> inner_ready_queue_;
     MultiWriterRingQueue<OpFinishHandle *> outer_ready_queue_;
 };
 
-template <typename... Ts> void EventLoop::prologue(Coro<Ts>... coros) {
+template <typename Strategy>
+template <typename... Ts>
+void EventLoop<Strategy>::prologue(Coro<Ts>... coros) {
     State expected = State::IDLE;
     if (!state_.compare_exchange_strong(expected, State::RUNNING,
                                         std::memory_order_acq_rel)) {
         throw std::runtime_error("EventLoop is already running or stopped");
     }
-    Context::current().init(strategy_.get(), &inner_ready_queue_, this);
+    Context::current().init(&strategy_, &inner_ready_queue_, this);
 
     foreach_coro_prologue_(std::make_tuple(std::move(coros)...));
 }
 
-inline void EventLoop::epilogue() {
+template <typename Strategy> void EventLoop<Strategy>::epilogue() {
     state_.store(State::STOPPED, std::memory_order_release);
     Context::current().destroy();
 }
 
-inline void EventLoop::run_once() {
+template <typename Strategy> void EventLoop<Strategy>::run_once() {
     auto *ring = Context::current().get_ring();
 
     std::optional<OpFinishHandle *> ready_handle;
@@ -107,7 +113,7 @@ inline void EventLoop::run_once() {
         (*ready_handle)->finish(0);
     }
 
-    int r = strategy_->submit_and_wait(ring);
+    int r = strategy_.submit_and_wait(ring);
     if (r == -EINTR) {
         return;
     } else if (r == -ETIME) {
@@ -117,7 +123,7 @@ inline void EventLoop::run_once() {
                                  std::string(std::strerror(-r)));
     }
     int submitted = r;
-    strategy_->record_submitted(submitted); // TODO: Is this useful?
+    strategy_.record_submitted(submitted); // TODO: Is this useful?
 
     if (*ring->cq.koverflow) {
         throw std::runtime_error("CQ overflow detected");
@@ -136,7 +142,7 @@ inline void EventLoop::run_once() {
     }
 
     io_uring_cq_advance(ring, finished);
-    strategy_->record_finished(finished);
+    strategy_.record_finished(finished);
 }
 
 } // namespace condy

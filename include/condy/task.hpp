@@ -65,7 +65,7 @@ template <> inline auto Task<void>::operator co_await() && {
         }
 
         std::coroutine_handle<typename Coro<void>::promise_type> task_handle_;
-        EventLoop *loop_ = nullptr;
+        IEventLoop *loop_ = nullptr;
     };
 
     return TaskAwaiter{std::exchange(handle_, nullptr),
@@ -94,7 +94,7 @@ template <typename T> inline auto Task<T>::operator co_await() && {
         }
 
         std::coroutine_handle<typename Coro<T>::promise_type> task_handle_;
-        EventLoop *loop_ = nullptr;
+        IEventLoop *loop_ = nullptr;
     };
 
     return TaskAwaiter{std::exchange(handle_, nullptr),

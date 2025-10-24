@@ -9,7 +9,7 @@
 #include <thread>
 
 TEST_CASE("test task - launch multiple tasks") {
-    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
+    condy::EventLoop<condy::SimpleStrategy> loop(8);
 
     size_t unfinished = 1;
 
@@ -40,7 +40,7 @@ TEST_CASE("test task - launch multiple tasks") {
 }
 
 TEST_CASE("test task - return value") {
-    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
+    condy::EventLoop<condy::SimpleStrategy> loop(8);
 
     size_t unfinished = 1;
 
@@ -71,9 +71,10 @@ TEST_CASE("test task - return value") {
 
 namespace {
 
-class BusyEventLoop : public condy::EventLoop {
+template <typename Strategy>
+class BusyEventLoop : public condy::EventLoop<Strategy> {
 public:
-    using Base = condy::EventLoop;
+    using Base = condy::EventLoop<Strategy>;
     using Base::Base;
 
     bool try_post(condy::OpFinishHandle *handle) {
@@ -92,14 +93,14 @@ public:
     using Base = condy::SimpleStrategy;
     using Base::Base;
 
-    bool should_stop() override { return false; }
+    bool should_stop() const override { return false; }
 };
 
 } // namespace
 
 TEST_CASE("test task - co_spawn to other executor") {
-    BusyEventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
-    BusyEventLoop busy_loop(std::make_unique<BusyEventLoopStrategy>(8));
+    BusyEventLoop<condy::SimpleStrategy> loop{8};
+    BusyEventLoop<BusyEventLoopStrategy> busy_loop{8};
 
     std::thread busy_loop_thread([&]() { busy_loop.run(); });
 
