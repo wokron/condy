@@ -142,13 +142,8 @@ public:
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
-        retry_handle_.set_on_retry([this, h]() -> bool {
-            bool ok = executor_.try_post(handle_to_executor_);
-            if (ok) {
-                h.resume();
-            }
-            return ok;
-        });
+        retry_handle_.set_on_retry(
+            [this, h]() { return executor_.try_post(handle_to_executor_); }, h);
         retry_handle_.prep_retry();
     }
 
@@ -157,7 +152,7 @@ public:
 private:
     Executor &executor_;
     OpFinishHandle *handle_to_executor_;
-    RetryFinishHandle retry_handle_;
+    RetryFinishHandle<> retry_handle_;
     Task<T> task_;
 };
 

@@ -4,6 +4,7 @@
 #include "condy/context.hpp"
 #include "condy/strategies.hpp"
 #include <cassert>
+#include <coroutine>
 #include <cstddef>
 #include <functional>
 #include <limits>
@@ -43,16 +44,27 @@ private:
     std::function<void(ReturnType)> on_finish_ = nullptr;
 };
 
+// TODO: More sophisticated retry coordinator?
+class SimpleRetryCoordinator {
+public:
+    void prep_sqe(io_uring_sqe *sqe) const noexcept { io_uring_prep_nop(sqe); }
+};
+
+template <typename Coordinator = SimpleRetryCoordinator>
 class RetryFinishHandle : public OpFinishHandle {
 public:
-    template <typename Func> void set_on_retry(Func &&on_retry) {
-        set_on_finish([on_retry = std::forward<Func>(on_retry), this](int r) {
+    template <typename Func, typename PromiseType>
+    void set_on_retry(Func &&on_retry, std::coroutine_handle<PromiseType> h) {
+        auto wrapper = [on_retry = std::forward<Func>(on_retry), this,
+                        h](int r) {
             assert(r == 0);
-            bool ok = on_retry();
-            if (!ok) {
+            if (on_retry()) {
+                h.resume();
+            } else {
                 prep_retry(); // Resubmit this
             }
-        });
+        };
+        set_on_finish(std::move(wrapper));
     }
 
     void prep_retry() {
@@ -60,9 +72,12 @@ public:
         auto ring = context.get_ring();
         auto *sqe = context.get_strategy()->get_sqe(ring);
         assert(sqe != nullptr);
-        io_uring_prep_nop(sqe);
+        coordinator_.prep_sqe(sqe);
         io_uring_sqe_set_data(sqe, this);
     }
+
+private:
+    Coordinator coordinator_;
 };
 
 template <typename Condition, typename Handle>

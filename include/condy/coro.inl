@@ -49,16 +49,17 @@ public:
                 });
 
                 if (!self.caller_loop_->try_post(handle)) {
-                    auto *retry_handle = new RetryFinishHandle();
-                    retry_handle->set_on_retry(
-                        [retry_handle, handle,
-                         caller_loop = self.caller_loop_] {
-                            bool ok = caller_loop->try_post(handle);
-                            if (ok) {
-                                delete retry_handle; // self delete
-                            }
-                            return ok;
-                        });
+                    auto *retry_handle = new RetryFinishHandle<>();
+                    auto on_retry = [retry_handle, handle,
+                                     caller_loop = self.caller_loop_] {
+                        bool ok = caller_loop->try_post(handle);
+                        if (ok) {
+                            delete retry_handle; // self delete
+                        }
+                        return ok;
+                    };
+                    retry_handle->set_on_retry(std::move(on_retry),
+                                               std::noop_coroutine());
                     retry_handle->prep_retry();
                 }
 
