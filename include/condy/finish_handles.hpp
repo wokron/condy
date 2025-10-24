@@ -29,8 +29,8 @@ public:
         io_uring_sqe_set_data(sqe, nullptr);
     }
 
-    void set_on_finish(std::function<void(ReturnType)> on_finish) {
-        on_finish_ = std::move(on_finish);
+    template <typename Func> void set_on_finish(Func &&on_finish) {
+        on_finish_ = std::forward<Func>(on_finish);
     }
 
     void finish(ReturnType r) {
@@ -41,6 +41,28 @@ public:
 
 private:
     std::function<void(ReturnType)> on_finish_ = nullptr;
+};
+
+class RetryFinishHandle : public OpFinishHandle {
+public:
+    template <typename Func> void set_on_retry(Func &&on_retry) {
+        set_on_finish([on_retry = std::forward<Func>(on_retry), this](int r) {
+            assert(r == 0);
+            bool ok = on_retry();
+            if (!ok) {
+                prep_retry(); // Resubmit this
+            }
+        });
+    }
+
+    void prep_retry() {
+        auto &context = Context::current();
+        auto ring = context.get_ring();
+        auto *sqe = context.get_strategy()->get_sqe(ring);
+        assert(sqe != nullptr);
+        io_uring_prep_nop(sqe);
+        io_uring_sqe_set_data(sqe, this);
+    }
 };
 
 template <typename Condition, typename Handle>

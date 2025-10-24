@@ -98,7 +98,7 @@ public:
 } // namespace
 
 TEST_CASE("test task - co_spawn to other executor") {
-    condy::EventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
+    BusyEventLoop loop(std::make_unique<condy::SimpleStrategy>(8));
     BusyEventLoop busy_loop(std::make_unique<BusyEventLoopStrategy>(8));
 
     std::thread busy_loop_thread([&]() { busy_loop.run(); });

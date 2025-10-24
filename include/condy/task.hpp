@@ -142,34 +142,22 @@ public:
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
-        finish_handle_.set_on_finish(
-            [h, this](typename OpFinishHandle::ReturnType r) {
-                bool ok = executor_.try_post(handle_to_executor_);
-                if (!ok) {
-                    retry_later_();
-                } else {
-                    h.resume();
-                }
-            });
-        retry_later_();
+        retry_handle_.set_on_retry([this, h]() -> bool {
+            bool ok = executor_.try_post(handle_to_executor_);
+            if (ok) {
+                h.resume();
+            }
+            return ok;
+        });
+        retry_handle_.prep_retry();
     }
 
     Task<T> await_resume() noexcept { return std::move(task_); }
 
 private:
-    void retry_later_() {
-        auto &context = Context::current();
-        auto ring = context.get_ring();
-        auto *sqe = context.get_strategy()->get_sqe(ring);
-        assert(sqe != nullptr);
-        io_uring_prep_nop(sqe);
-        io_uring_sqe_set_data(sqe, &finish_handle_);
-    }
-
-private:
     Executor &executor_;
     OpFinishHandle *handle_to_executor_;
-    OpFinishHandle finish_handle_;
+    RetryFinishHandle retry_handle_;
     Task<T> task_;
 };
 

@@ -49,9 +49,18 @@ public:
                     delete handle; // self delete
                 });
 
-                // TODO: No busy wait
-                while (!self.caller_loop_->try_post(handle)) {
-                    std::this_thread::yield();
+                if (!self.caller_loop_->try_post(handle)) {
+                    auto *retry_handle = new RetryFinishHandle();
+                    retry_handle->set_on_retry(
+                        [retry_handle, handle,
+                         caller_loop = self.caller_loop_] {
+                            bool ok = caller_loop->try_post(handle);
+                            if (ok) {
+                                delete retry_handle; // self delete
+                            }
+                            return ok;
+                        });
+                    retry_handle->prep_retry();
                 }
 
                 return std::noop_coroutine();
