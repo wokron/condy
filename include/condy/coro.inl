@@ -3,6 +3,7 @@
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/spin_lock.hpp"
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
@@ -125,7 +126,7 @@ public:
     void set_task_id(int id) noexcept { task_id_ = id; }
 
 protected:
-    MaybeMutex mutex_;
+    MaybeMutex<SpinLock> mutex_;
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;

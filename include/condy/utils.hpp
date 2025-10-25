@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
 #include <utility>
 
 namespace condy {
@@ -25,9 +24,9 @@ template <typename Func> Defer defer(Func &&func) {
     return Defer(std::forward<Func>(func));
 }
 
-class MaybeMutex : public std::mutex {
+template <typename BaseMutex> class MaybeMutex : public BaseMutex {
 public:
-    using Base = std::mutex;
+    using Base = BaseMutex;
     using Base::Base;
 
     void lock() noexcept {
