@@ -1,88 +1,87 @@
 #pragma once
 
+#include "condy/event_loop.hpp"
 #include "condy/finish_handles.hpp"
-#include "condy/queue.hpp"
+#include "condy/link_list.hpp"
+#include "condy/spin_lock.hpp"
+#include <atomic>
 #include <coroutine>
-#include <cstddef>
-#include <queue>
+#include <cstdint>
+#include <sys/types.h>
 
 namespace condy {
 
-// TODO: Is single-threaded version useful?
-class Semaphore {
+class SingleReleaseSemaphore {
 public:
-    Semaphore(size_t capacity, size_t initial_count = 0)
-        : capacity_(capacity), count_(initial_count) {
-        assert(capacity_ > 0);
-        assert(0 <= initial_count && initial_count <= capacity_);
-    }
+    SingleReleaseSemaphore(ssize_t desired) : count_(desired) {}
 
-    Semaphore(const Semaphore &) = delete;
-    Semaphore &operator=(const Semaphore &) = delete;
-    Semaphore(Semaphore &&) = delete;
-    Semaphore &operator=(Semaphore &&) = delete;
+    struct [[nodiscard]] AcquireAwaiter : public IntrusiveNode {
+        AcquireAwaiter(SingleReleaseSemaphore &self, IEventLoop *event_loop)
+            : self_(self), event_loop_(event_loop) {}
+        bool await_ready() noexcept;
+        void await_suspend(std::coroutine_handle<> h) noexcept;
+        void await_resume() noexcept {}
 
-    ~Semaphore() {
-        if (!wait_queue_.empty()) {
-            std::terminate();
-        }
-    }
-
-    struct AcquireAwaiter {
-        bool await_ready() {
-            if (self_.count_ > 0) {
-                self_.count_--;
-                return true;
-            }
-            return false;
-        }
-
-        void await_suspend(std::coroutine_handle<> h) {
-            handle_.set_on_finish([h](int r) {
-                assert(r == 0);
-                h.resume();
-            });
-            self_.wait_queue_.emplace(&handle_);
-        }
-
-        void await_resume() {}
-
-        Semaphore &self_;
+        SingleReleaseSemaphore &self_;
+        IEventLoop *event_loop_ = nullptr;
         OpFinishHandle handle_;
     };
 
-    AcquireAwaiter acquire() { return {.self_ = *this}; }
+    AcquireAwaiter acquire() {
+        return {*this, Context::current().get_event_loop()};
+    }
 
-    void release(size_t n = 1) {
-        assert(n >= 0 && count_ + n <= capacity_);
-        count_ += n;
-        while (count_ > 0 && !wait_queue_.empty()) {
-            auto *handle = wait_queue_.front();
-            wait_queue_.pop();
-            bool ok = Context::current().get_ready_queue()->try_enqueue(handle);
-            if (!ok) {
-                auto *ring = Context::current().get_ring();
-                io_uring_sqe *sqe =
-                    Context::current().get_strategy()->get_sqe(ring);
-                assert(sqe != nullptr);
-                io_uring_prep_nop(sqe);
-                io_uring_sqe_set_data(sqe, handle);
-            }
-            count_--;
+    void release(ssize_t n = 1) {
+        assert(n >= 0);
+        ssize_t old_count = count_.fetch_add(n, std::memory_order_release);
+        if (old_count >= 0) {
+            return;
+        }
+        ssize_t to_wake = std::min(n, -old_count);
+        for (ssize_t i = 0; i < to_wake; ++i) {
+            AcquireAwaiter *awaiter;
+            while ((awaiter = static_cast<AcquireAwaiter *>(
+                        wait_queue_.try_pop())) == nullptr)
+                ; // Busy wait
+
+            auto event_loop = awaiter->event_loop_;
+            // TODO: if (event_loop == Context::current().get_event_loop()) ...
+            while (!event_loop->try_post(&awaiter->handle_))
+                ; // Busy wait // TODO: improve this
         }
     }
 
-    size_t capacity() const { return capacity_; }
-
 private:
-    std::queue<OpFinishHandle *> wait_queue_;
-    size_t count_;
-    size_t capacity_;
+    std::atomic<ssize_t> count_ = 0;
+    LinkList wait_queue_;
 };
 
-class BinarySemaphore : public Semaphore {
+inline bool SingleReleaseSemaphore::AcquireAwaiter::await_ready() noexcept {
+    int64_t old_count = self_.count_.fetch_sub(1, std::memory_order_acquire);
+    return old_count > 0;
+}
+
+inline void SingleReleaseSemaphore::AcquireAwaiter::await_suspend(
+    std::coroutine_handle<> h) noexcept {
+    handle_.set_on_finish([this, h](int r) {
+        assert(r == 0);
+        h.resume();
+    });
+    self_.wait_queue_.push(this);
+}
+
+class Semaphore : public SingleReleaseSemaphore {
 public:
-    BinarySemaphore(size_t initial_count) : Semaphore(1, initial_count) {}
+    using Base = SingleReleaseSemaphore;
+    using Base::Base;
+
+    void release(ssize_t n = 1) {
+        std::lock_guard lock(mutex_);
+        Base::release(n);
+    }
+
+private:
+    SpinLock mutex_;
 };
 
 } // namespace condy
