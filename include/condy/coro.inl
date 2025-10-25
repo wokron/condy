@@ -3,6 +3,7 @@
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
 
@@ -146,14 +147,14 @@ public:
     template <typename U>
     void
     return_value(U &&value) noexcept(std::is_nothrow_constructible_v<T, U &&>) {
-        value_ = std::move(value);
+        value_.emplace(std::move(value));
     }
 
-    T &value() & noexcept { return value_; }
-    T &&value() && noexcept { return std::move(value_); }
+    T &value() & noexcept { return value_.get(); }
+    T &&value() && noexcept { return std::move(value_.get()); }
 
 private:
-    T value_;
+    Uninitialized<T> value_;
 };
 
 template <> inline auto Coro<void>::operator co_await() && {

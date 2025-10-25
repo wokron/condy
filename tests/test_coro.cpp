@@ -185,3 +185,26 @@ TEST_CASE("test coro - return move-only type") {
     coro.release().resume();
     REQUIRE(finished);
 }
+
+TEST_CASE("test coro - return no default constructible type") {
+    struct NoDefault {
+        NoDefault(int v) : value(v) {}
+        int value;
+    };
+
+    bool finished = false;
+
+    auto inner = [&]() -> condy::Coro<NoDefault> { co_return NoDefault{123}; };
+    auto func = [&]() -> condy::Coro<void> {
+        NoDefault nd = co_await inner();
+        REQUIRE(nd.value == 123);
+        finished = true;
+        co_return;
+    };
+
+    auto coro = func();
+    REQUIRE(!finished);
+
+    coro.release().resume();
+    REQUIRE(finished);
+}
