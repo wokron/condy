@@ -3,6 +3,7 @@
 #include "condy/context.hpp"
 #include "condy/coro.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/retry.hpp"
 #include <coroutine>
 #include <exception>
 #include <utility>
@@ -125,39 +126,12 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     return {handle, false};
 }
 
-template <typename Executor, typename T> class RemoteSpawnAwaiter {
-public:
-    RemoteSpawnAwaiter(Executor &executor, OpFinishHandle *handle_to_executor,
-                   Task<T> task)
-        : executor_(executor), handle_to_executor_(handle_to_executor),
-          task_(std::move(task)) {}
-    RemoteSpawnAwaiter(RemoteSpawnAwaiter &&) = default;
-
-    RemoteSpawnAwaiter(const RemoteSpawnAwaiter &) = delete;
-    RemoteSpawnAwaiter &operator=(const RemoteSpawnAwaiter &) = delete;
-    RemoteSpawnAwaiter &operator=(RemoteSpawnAwaiter &&) = delete;
-
-public:
-    bool await_ready() { return executor_.try_post(handle_to_executor_); }
-
-    template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
-        retry_handle_.set_on_retry(
-            [this, h]() { return executor_.try_post(handle_to_executor_); }, h);
-        retry_handle_.prep_retry();
-    }
-
-    Task<T> await_resume() noexcept { return std::move(task_); }
-
-private:
-    Executor &executor_;
-    OpFinishHandle *handle_to_executor_;
-    RetryFinishHandle<> retry_handle_;
-    Task<T> task_;
-};
-
 template <typename T, typename Executor>
-inline auto co_spawn(Executor &executor, Coro<T> coro) {
+inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
+    if (static_cast<IEventLoop *>(&executor) ==
+        Context::current().get_event_loop()) {
+        co_return co_spawn(std::move(coro));
+    }
     auto handle = coro.release();
     auto *handle_ptr = new OpFinishHandle();
     handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
@@ -168,8 +142,9 @@ inline auto co_spawn(Executor &executor, Coro<T> coro) {
         delete handle_ptr; // self delete
     });
 
-    return RemoteSpawnAwaiter<Executor, T>(executor, handle_ptr,
-                                       Task<T>{handle, true});
+    co_await retry([&]() { return executor.try_post(handle_ptr); });
+
+    co_return {handle, true};
 }
 
 } // namespace condy

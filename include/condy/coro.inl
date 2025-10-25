@@ -145,11 +145,7 @@ public:
 template <typename T>
 class Coro<T>::promise_type : public PromiseBase<Coro<T>> {
 public:
-    template <typename U>
-    void
-    return_value(U &&value) noexcept(std::is_nothrow_constructible_v<T, U &&>) {
-        value_.emplace(std::move(value));
-    }
+    void return_value(T value) { value_.emplace(std::move(value)); }
 
     T &value() & noexcept { return value_.get(); }
     T &&value() && noexcept { return std::move(value_.get()); }
