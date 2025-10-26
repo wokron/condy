@@ -41,9 +41,9 @@ public:
     template <typename... Ts> void run(Coro<Ts>... entry_point) {
         prologue(std::move(entry_point)...);
         auto d = defer([&]() { epilogue(); });
-        while (!should_stop_()) {
+        do {
             run_once();
-        }
+        } while (!should_stop_());
     }
 
     void stop() { state_.store(State::STOPPED, std::memory_order_release); }

@@ -49,3 +49,32 @@ TEST_CASE("test_event_loop - multiple tasks") {
     REQUIRE(loop.check_stopped());
     REQUIRE(counter == num_tasks);
 }
+
+TEST_CASE("test_event_loop - multiple tasks without join") {
+    condy::EventLoop<condy::SimpleStrategy> loop(16);
+
+    const int num_tasks = 10000;
+    int counter = 0;
+
+    auto task_func = [&counter]() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 0,
+            .tv_nsec = 100,
+        };
+        co_await condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        counter++;
+    };
+    auto func = [&]() -> condy::Coro<void> {
+        for (int i = 0; i < num_tasks; ++i) {
+            condy::co_spawn(task_func()).detach();
+        }
+        co_return;
+    };
+
+    REQUIRE(loop.check_idle());
+
+    loop.run(func());
+
+    REQUIRE(loop.check_stopped());
+    REQUIRE(counter == num_tasks);
+}
