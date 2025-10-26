@@ -11,7 +11,7 @@ public:
 
     void unlock() { sem_.release(); }
 
-    struct LockGuard {
+    struct [[nodiscard]] LockGuard {
         LockGuard(Mutex *m) : mutex_(m) {}
         LockGuard(LockGuard &&other) noexcept
             : mutex_(std::exchange(other.mutex_, nullptr)) {}
@@ -35,6 +35,8 @@ public:
 
 private:
     SingleReleaseSemaphore sem_{1};
+
+    friend class ConditionVariable;
 };
 
 } // namespace condy

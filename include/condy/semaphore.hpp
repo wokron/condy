@@ -16,12 +16,12 @@ public:
 
     struct [[nodiscard]] AcquireAwaiter : public IntrusiveNode {
         AcquireAwaiter(SingleReleaseSemaphore &self, IEventLoop *event_loop)
-            : self_(self), event_loop_(event_loop) {}
+            : sem_(self), event_loop_(event_loop) {}
         bool await_ready() noexcept;
         void await_suspend(std::coroutine_handle<> h) noexcept;
         void await_resume() noexcept {}
 
-        SingleReleaseSemaphore &self_;
+        SingleReleaseSemaphore &sem_;
         IEventLoop *event_loop_ = nullptr;
         std::coroutine_handle<> handle_;
     };
@@ -56,14 +56,15 @@ private:
 };
 
 inline bool SingleReleaseSemaphore::AcquireAwaiter::await_ready() noexcept {
-    int64_t old_count = self_.count_.fetch_sub(1, std::memory_order_acquire);
+    int64_t old_count =
+        sem_.count_.fetch_sub(1, std::memory_order_acquire);
     return old_count > 0;
 }
 
 inline void SingleReleaseSemaphore::AcquireAwaiter::await_suspend(
     std::coroutine_handle<> h) noexcept {
     handle_ = h;
-    self_.wait_queue_.push(this);
+    sem_.wait_queue_.push(this);
 }
 
 class Semaphore : public SingleReleaseSemaphore {
