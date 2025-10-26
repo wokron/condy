@@ -1,3 +1,4 @@
+#include "condy/finish_handles.hpp"
 #include <cerrno>
 #include <condy/awaiter_operations.hpp>
 #include <condy/awaiters.hpp>
@@ -420,6 +421,38 @@ TEST_CASE("test awaiter_operations - test ~") {
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         co_await (std::move(aw1) && std::move(aw2) && ~std::move(aw3));
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.destroy();
+}
+
+TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
+    condy::SimpleStrategy strategy(8);
+    auto &context = condy::Context::current();
+    context.init(&strategy, nullptr, nullptr);
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro<void> {
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto [order, results] = co_await condy::make_parallel_awaiter<
+            condy::WaitAllCancelCondition>(std::move(aw1), std::move(aw2),
+                                           std::move(aw3));
+        auto [r1, r2, r3] = results;
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == 0);
+        REQUIRE(r3 == 0);
         --unfinished;
     };
 

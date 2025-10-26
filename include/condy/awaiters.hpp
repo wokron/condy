@@ -135,6 +135,11 @@ protected:
     std::vector<Awaiter> awaiters_;
 };
 
+template <typename Condition, typename Awaiter>
+using RangedParallelAwaiterWrapper = RangedParallelAwaiter<
+    RangedParallelFinishHandle<Condition, typename Awaiter::HandleType>,
+    Awaiter>;
+
 template <typename Awaiter>
 using RangedWaitAllAwaiter = RangedParallelAwaiter<
     RangedWaitAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
@@ -246,6 +251,11 @@ protected:
     HandleType finish_handle_;
     std::tuple<Awaiters...> awaiters_;
 };
+
+template <typename Condition, typename... Awaiter>
+using ParallelAwaiterWrapper = ParallelAwaiter<
+    ParallelFinishHandle<Condition, typename Awaiter::HandleType...>,
+    Awaiter...>;
 
 template <typename... Awaiter>
 using WaitAllAwaiter =
