@@ -7,7 +7,7 @@ TEST_CASE("test event_loop - basic loop") {
     condy::EventLoop<condy::SimpleStrategy> loop(8);
 
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
     };
 
     REQUIRE(loop.check_idle());
@@ -28,7 +28,7 @@ TEST_CASE("test_event_loop - multiple tasks") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        co_await condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        co_await condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         counter++;
     };
     auto func = [&]() -> condy::Coro<void> {

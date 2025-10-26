@@ -38,7 +38,7 @@ TEST_CASE("test op_awaiter - basic routine") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -61,8 +61,8 @@ TEST_CASE("test op_awaiter - multiple ops") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -85,8 +85,8 @@ TEST_CASE("test op_awaiter - concurrent op") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto awaiter1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto awaiter2 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto awaiter1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto awaiter2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2] = co_await condy::WaitAllAwaiter<decltype(awaiter1),
                                                        decltype(awaiter2)>(
             std::move(awaiter1), std::move(awaiter2));
@@ -119,8 +119,8 @@ TEST_CASE("test op_awaiter - cancel op") {
             .tv_nsec = 0,
         };
         auto awaiter1 =
-            condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto awaiter2 = condy::build_op_awaiter(io_uring_prep_nop);
+            condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto awaiter2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto awaiter =
             condy::WaitOneAwaiter<decltype(awaiter1), decltype(awaiter2)>(
                 std::move(awaiter1), std::move(awaiter2));

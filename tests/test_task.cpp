@@ -14,7 +14,7 @@ TEST_CASE("test task - launch multiple tasks") {
     size_t unfinished = 1;
 
     auto sub_func = [&](int v, int &r) -> condy::Coro<void> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
         r = v;
     };
 
@@ -45,7 +45,7 @@ TEST_CASE("test task - return value") {
     size_t unfinished = 1;
 
     auto sub_func = [](int v) -> condy::Coro<int> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
         co_return v;
     };
 

@@ -32,14 +32,14 @@ void event_loop(size_t &unfinished) {
 
 } // namespace
 
-TEST_CASE("test awaiter_operations - test build_op_awaiter") {
+TEST_CASE("test awaiter_operations - test make_op_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::build_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -55,17 +55,17 @@ TEST_CASE("test awaiter_operations - test build_op_awaiter") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_all_awaiter") {
+TEST_CASE("test awaiter_operations - test make_all_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto [r1, r2, r3] = co_await condy::build_all_awaiter(
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto [r1, r2, r3] = co_await condy::make_all_awaiter(
             std::move(aw1), std::move(aw2), std::move(aw3));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
@@ -85,7 +85,7 @@ TEST_CASE("test awaiter_operations - test build_all_awaiter") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_one_awaiter") {
+TEST_CASE("test awaiter_operations - test make_one_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
@@ -96,10 +96,10 @@ TEST_CASE("test awaiter_operations - test build_one_awaiter") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto r = co_await condy::build_one_awaiter(
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto r = co_await condy::make_one_awaiter(
             std::move(aw1), std::move(aw2), std::move(aw3));
         REQUIRE(r.index() == 1);
         --unfinished;
@@ -117,21 +117,21 @@ TEST_CASE("test awaiter_operations - test build_one_awaiter") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_ranged_all_awaiter") {
+TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         std::vector<decltype(aw1)> awaiters;
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
         awaiters.emplace_back(std::move(aw3));
-        auto r = co_await condy::build_ranged_all_awaiter(std::move(awaiters));
+        auto r = co_await condy::make_ranged_all_awaiter(std::move(awaiters));
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});
         --unfinished;
@@ -149,7 +149,7 @@ TEST_CASE("test awaiter_operations - test build_ranged_all_awaiter") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_ranged_one_awaiter") {
+TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
@@ -164,15 +164,15 @@ TEST_CASE("test awaiter_operations - test build_ranged_one_awaiter") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_timeout, &ts2, 0, 0);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts2, 0, 0);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
         std::vector<decltype(aw1)> awaiters;
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
         awaiters.emplace_back(std::move(aw3));
         auto [idx, r] =
-            co_await condy::build_ranged_one_awaiter(std::move(awaiters));
+            co_await condy::make_ranged_one_awaiter(std::move(awaiters));
         REQUIRE(idx == 1);
         --unfinished;
     };
@@ -196,9 +196,9 @@ TEST_CASE("test awaiter_operations - test &&") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] =
             co_await (std::move(aw1) && std::move(aw2) && std::move(aw3));
         REQUIRE(r1 == 0);
@@ -230,9 +230,9 @@ TEST_CASE("test awaiter_operations - test ||") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto r = co_await (std::move(aw1) || std::move(aw2) || std::move(aw3));
         REQUIRE(r.index() == 1);
         --unfinished;
@@ -261,10 +261,10 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw4 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw4 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto [r1, r2] = co_await ((std::move(aw1) || std::move(aw2)) &&
                                   (std::move(aw3) || std::move(aw4)));
         REQUIRE(r1.index() == 1);
@@ -291,11 +291,11 @@ TEST_CASE("test awaiter_operations - ranged +=") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         auto awaiter =
-            condy::build_ranged_all_awaiter(std::vector<decltype(aw1)>{});
+            condy::make_ranged_all_awaiter(std::vector<decltype(aw1)>{});
         awaiter += std::move(aw1);
         awaiter += std::move(aw2);
         awaiter += std::move(aw3);
@@ -317,7 +317,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_link_awaiter") {
+TEST_CASE("test awaiter_operations - test make_link_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
@@ -328,10 +328,10 @@ TEST_CASE("test awaiter_operations - test build_link_awaiter") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto [r1, r2, r3] = co_await condy::build_link_awaiter(
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto [r1, r2, r3] = co_await condy::make_link_awaiter(
             std::move(aw1), std::move(aw2), std::move(aw3));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == -ETIME);
@@ -362,9 +362,9 @@ TEST_CASE("test awaiter_operations - test >>") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] =
             co_await (std::move(aw1) >> std::move(aw2) >> std::move(aw3));
         REQUIRE(r1 == 0);
@@ -385,15 +385,15 @@ TEST_CASE("test awaiter_operations - test >>") {
     context.destroy();
 }
 
-TEST_CASE("test awaiter_operations - test build_drained_op_awaiter") {
+TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw = condy::build_op_awaiter(io_uring_prep_nop);
-        co_await condy::build_drained_op_awaiter(std::move(aw));
+        auto aw = condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::make_drained_op_awaiter(std::move(aw));
         --unfinished;
     };
 
@@ -416,9 +416,9 @@ TEST_CASE("test awaiter_operations - test ~") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::build_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::build_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         co_await (std::move(aw1) && std::move(aw2) && ~std::move(aw3));
         --unfinished;
     };
