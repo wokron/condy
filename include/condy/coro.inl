@@ -6,6 +6,7 @@
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
+#include <mutex>
 #include <thread>
 
 namespace condy {
@@ -47,12 +48,13 @@ public:
         std::coroutine_handle<>
         await_suspend(std::coroutine_handle<PromiseType> handle) noexcept {
             auto &self = handle.promise();
-            std::lock_guard lock(self.mutex_);
+            std::unique_lock lock(self.mutex_);
 
             auto caller_handle = self.caller_handle_;
 
             // 1. Common coro or detached task, destroy self
             if (self.auto_destroy_) {
+                lock.unlock();
                 handle.destroy();
                 return caller_handle;
             }
@@ -60,9 +62,11 @@ public:
             // 2. Task awaited by another coroutine in different event loops,
             // need to post back to caller loop
             if (self.caller_loop_ != nullptr) {
+                auto *caller_loop = self.caller_loop_;
+                lock.unlock();
                 assert(caller_handle != std::noop_coroutine());
                 // TODO: Need to optimize this
-                while (!self.caller_loop_->try_post(caller_handle)) {
+                while (!caller_loop->try_post(caller_handle)) {
                     std::this_thread::yield();
                 }
 
