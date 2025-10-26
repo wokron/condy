@@ -61,18 +61,11 @@ public:
             // need to post back to caller loop
             if (self.caller_loop_ != nullptr) {
                 assert(caller_handle != std::noop_coroutine());
-                OpFinishHandle *handle = new OpFinishHandle();
-                handle->set_on_finish([caller_handle, handle](int r) mutable {
-                    assert(r == 0);
-                    caller_handle.resume();
-                    delete handle; // self delete
-                });
-
-                if (!self.caller_loop_->try_post(handle)) {
+                if (!self.caller_loop_->try_post(caller_handle)) {
                     auto *retry_handle = new RetryFinishHandle<>();
-                    auto on_retry = [retry_handle, handle,
+                    auto on_retry = [retry_handle, caller_handle,
                                      caller_loop = self.caller_loop_] {
-                        bool ok = caller_loop->try_post(handle);
+                        bool ok = caller_loop->try_post(caller_handle);
                         if (ok) {
                             delete retry_handle; // self delete
                         }

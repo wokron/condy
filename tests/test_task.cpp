@@ -1,9 +1,9 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
-#include "condy/finish_handles.hpp"
 #include "condy/strategies.hpp"
 #include <condy/task.hpp>
+#include <coroutine>
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <thread>
@@ -77,7 +77,7 @@ public:
     using Base = condy::EventLoop<Strategy>;
     using Base::Base;
 
-    bool try_post(condy::OpFinishHandle *handle) {
+    bool try_post(std::coroutine_handle<> handle) {
         if (counter_.fetch_add(1) % 10 == 9) {
             return Base::try_post(handle);
         }

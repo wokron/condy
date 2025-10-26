@@ -107,15 +107,15 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     auto handle = coro.release();
     auto *strategy = Context::current().get_strategy();
     handle.promise().set_new_task(true);
-    auto *handle_ptr = new OpFinishHandle();
-    handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
-        assert(r == 0);
-        handle.resume();
-        delete handle_ptr; // self delete
-    });
 
-    bool ok = Context::current().get_ready_queue()->try_enqueue(handle_ptr);
+    bool ok = Context::current().get_ready_queue()->try_enqueue(handle);
     if (!ok) { // Slow path
+        auto *handle_ptr = new OpFinishHandle();
+        handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
+            assert(r == 0);
+            handle.resume();
+            delete handle_ptr; // self delete
+        });
         auto *ring = Context::current().get_ring();
         io_uring_sqe *sqe = strategy->get_sqe(ring);
         assert(sqe != nullptr);
@@ -133,15 +133,8 @@ inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
     }
     auto handle = coro.release();
     handle.promise().set_new_task(true);
-    auto *handle_ptr = new OpFinishHandle();
-    handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
-        assert(r == 0);
-        handle.resume();
-        delete handle_ptr; // self delete
-    });
 
-    co_await retry([&]() { return executor.try_post(handle_ptr); });
-
+    co_await retry([&]() { return executor.try_post(handle); });
     co_return {handle, true};
 }
 

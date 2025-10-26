@@ -3,6 +3,7 @@
 #include "condy/condy_uring.hpp"
 #include "condy/queue.hpp"
 #include "condy/strategies.hpp"
+#include <coroutine>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -10,7 +11,6 @@
 namespace condy {
 
 struct IStrategy;
-struct OpFinishHandle;
 struct IEventLoop;
 
 class Context {
@@ -27,7 +27,7 @@ public:
     }
 
     void init(IStrategy *strategy,
-              SingleThreadRingQueue<OpFinishHandle *> *ready_queue,
+              SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue,
               IEventLoop *event_loop) {
         int r = strategy->init_io_uring(&ring_);
         if (r < 0) {
@@ -50,7 +50,7 @@ public:
 
     IStrategy *get_strategy() { return strategy_; }
 
-    SingleThreadRingQueue<OpFinishHandle *> *get_ready_queue() {
+    SingleThreadRingQueue<std::coroutine_handle<>> *get_ready_queue() {
         return ready_queue_;
     }
 
@@ -62,7 +62,7 @@ private:
 private:
     io_uring ring_{};
     IStrategy *strategy_ = nullptr;
-    SingleThreadRingQueue<OpFinishHandle *> *ready_queue_ = nullptr;
+    SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue_ = nullptr;
     IEventLoop *event_loop_ = nullptr;
 };
 

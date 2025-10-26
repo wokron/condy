@@ -1,7 +1,6 @@
 #pragma once
 
 #include "condy/event_loop.hpp"
-#include "condy/finish_handles.hpp"
 #include "condy/link_list.hpp"
 #include "condy/spin_lock.hpp"
 #include <atomic>
@@ -24,7 +23,7 @@ public:
 
         SingleReleaseSemaphore &self_;
         IEventLoop *event_loop_ = nullptr;
-        OpFinishHandle handle_;
+        std::coroutine_handle<> handle_;
     };
 
     AcquireAwaiter acquire() {
@@ -46,7 +45,7 @@ public:
 
             auto event_loop = awaiter->event_loop_;
             // TODO: if (event_loop == Context::current().get_event_loop()) ...
-            while (!event_loop->try_post(&awaiter->handle_))
+            while (!event_loop->try_post(awaiter->handle_))
                 ; // Busy wait // TODO: improve this
         }
     }
@@ -63,10 +62,7 @@ inline bool SingleReleaseSemaphore::AcquireAwaiter::await_ready() noexcept {
 
 inline void SingleReleaseSemaphore::AcquireAwaiter::await_suspend(
     std::coroutine_handle<> h) noexcept {
-    handle_.set_on_finish([this, h](int r) {
-        assert(r == 0);
-        h.resume();
-    });
+    handle_ = h;
     self_.wait_queue_.push(this);
 }
 
