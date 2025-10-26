@@ -46,21 +46,16 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(
-            [h, this](typename HandleType::ReturnType r) {
-                result_ = std::move(r);
-                h.resume();
-            });
+        finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 
-    int await_resume() { return result_; }
+    int await_resume() { return finish_handle_.extract_result(); }
 
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     OpFinishHandle finish_handle_;
-    int result_;
 };
 
 template <typename Func, typename... Args>
@@ -78,11 +73,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(
-            [h, this](typename Base::HandleType::ReturnType r) {
-                Base::result_ = std::move(r);
-                h.resume();
-            });
+        Base::finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 };
@@ -126,15 +117,13 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(
-            [h, this](typename HandleType::ReturnType r) {
-                result_ = std::move(r);
-                h.resume();
-            });
+        finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 
-    typename Handle::ReturnType await_resume() { return std::move(result_); }
+    typename Handle::ReturnType await_resume() {
+        return finish_handle_.extract_result();
+    }
 
 public:
     void append_awaiter(Awaiter awaiter) {
@@ -143,7 +132,6 @@ public:
 
 protected:
     HandleType finish_handle_;
-    typename HandleType::ReturnType result_;
     std::vector<Awaiter> awaiters_;
 };
 
@@ -181,11 +169,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(
-            [h, this](typename Base::HandleType::ReturnType r) {
-                Base::result_ = std::move(r);
-                h.resume();
-            });
+        Base::finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 };
@@ -227,15 +211,13 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(
-            [h, this](typename HandleType::ReturnType r) {
-                result_ = std::move(r);
-                h.resume();
-            });
+        finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 
-    typename Handle::ReturnType await_resume() { return std::move(result_); }
+    typename Handle::ReturnType await_resume() {
+        return finish_handle_.extract_result();
+    }
 
 public:
     auto awaiters() && { return std::move(awaiters_); }
@@ -262,7 +244,6 @@ private:
 
 protected:
     HandleType finish_handle_;
-    typename HandleType::ReturnType result_;
     std::tuple<Awaiters...> awaiters_;
 };
 
@@ -299,11 +280,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(
-            [h, this](typename Base::HandleType::ReturnType r) {
-                Base::result_ = std::move(r);
-                h.resume();
-            });
+        Base::finish_handle_.set_on_finish(h);
         register_operation(0);
     }
 

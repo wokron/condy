@@ -1,10 +1,10 @@
+#include "condy/finish_handles.hpp"
 #include "condy/strategies.hpp"
-#include <condy/finish_handles.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <liburing.h>
 
-TEST_CASE("test op_finish_handle - basic routine") {
+TEST_CASE("test op_finish_handle - basic usage") {
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
     context.init(&strategy, nullptr, nullptr);
@@ -12,10 +12,12 @@ TEST_CASE("test op_finish_handle - basic routine") {
 
     bool finished = false;
     condy::OpFinishHandle handle;
-    handle.set_on_finish([&](int r) {
-        REQUIRE(r == 0);
-        finished = true;
-    });
+    handle.set_on_finish(
+        [](void *self, size_t no) {
+            auto *finished_ptr = static_cast<bool *>(self);
+            *finished_ptr = true;
+        },
+        &finished, 0);
 
     io_uring_sqe *sqe = io_uring_get_sqe(ring);
     REQUIRE(sqe != nullptr);
@@ -29,7 +31,7 @@ TEST_CASE("test op_finish_handle - basic routine") {
 
     auto handle_ptr =
         static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-    handle_ptr->finish(cqe->res);
+    handle_ptr->invoke(cqe->res);
 
     io_uring_cqe_seen(ring, cqe);
 
@@ -55,7 +57,7 @@ void event_loop(size_t &unfinished) {
         auto handle_ptr =
             static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         if (handle_ptr) {
-            handle_ptr->finish(cqe->res);
+            handle_ptr->invoke(cqe->res);
         }
 
         io_uring_cqe_seen(ring, cqe);
@@ -64,7 +66,7 @@ void event_loop(size_t &unfinished) {
 
 } // namespace
 
-TEST_CASE("test op_finish_handle - concurrent op") {
+TEST_CASE("test op_finish_handle - concurrent ops") {
     size_t unfinished = 2;
 
     condy::SimpleStrategy strategy(8);
@@ -73,14 +75,13 @@ TEST_CASE("test op_finish_handle - concurrent op") {
     auto ring = context.get_ring();
 
     condy::OpFinishHandle handle1, handle2;
-    handle1.set_on_finish([&](int r) {
-        REQUIRE(r == 0);
-        unfinished--;
-    });
-    handle2.set_on_finish([&](int r) {
-        REQUIRE(r == 0);
-        unfinished--;
-    });
+    auto on_finish = [](void *self, size_t no) {
+        auto *unfinished_ptr = static_cast<size_t *>(self);
+        (*unfinished_ptr)--;
+    };
+    handle1.set_on_finish(on_finish, &unfinished, 0);
+    handle2.set_on_finish(on_finish, &unfinished, 0);
+
     io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
     REQUIRE(sqe1 != nullptr);
     io_uring_prep_nop(sqe1);
@@ -111,18 +112,16 @@ TEST_CASE("test op_finish_handle - cancel op") {
                                 condy::OpFinishHandle, condy::OpFinishHandle>
         finish_handle;
     finish_handle.init(&handle1, &handle2);
-    finish_handle.set_on_finish([&](auto r) {
-        auto &[order, results] = r;
-        REQUIRE(order[0] == 1);
-        REQUIRE(std::get<0>(results) == -ECANCELED);
-        REQUIRE(std::get<1>(results) == 0);
-        unfinished--;
-    });
+    auto on_finish = [](void *self, size_t no) {
+        auto *unfinished_ptr = static_cast<size_t *>(self);
+        (*unfinished_ptr)--;
+    };
+    finish_handle.set_on_finish(on_finish, &unfinished, 0);
 
     io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
     REQUIRE(sqe1 != nullptr);
     __kernel_timespec ts{
-        .tv_sec = 60,
+        .tv_sec = 60 * 60,
         .tv_nsec = 0,
     };
     io_uring_prep_timeout(sqe1, &ts, 0, 0);
@@ -136,6 +135,12 @@ TEST_CASE("test op_finish_handle - cancel op") {
     event_loop(unfinished);
 
     REQUIRE(unfinished == 0);
+
+    auto r = finish_handle.extract_result();
+    auto &[order, results] = r;
+    REQUIRE(order[0] == 1);
+    REQUIRE(std::get<0>(results) == -ECANCELED);
+    REQUIRE(std::get<1>(results) == 0);
 
     context.destroy();
 }

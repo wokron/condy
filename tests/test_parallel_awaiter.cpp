@@ -5,23 +5,26 @@
 
 namespace {
 
-struct SimpleFinishHandle {
+struct SimpleFinishHandle : public condy::FinishHandleBase {
     using ReturnType = int;
 
-    void set_on_finish(std::function<void(int)> on_finish) {
-        on_finish_ = std::move(on_finish);
+    void set_on_finish(OnFinishFunc on_finish, void *self, size_t no) {
+        FinishHandleBase::set_on_finish(on_finish, self, no);
+        registered_ = true;
     }
 
-    void finish(int r) {
-        if (on_finish_) {
-            std::move(on_finish_)(r);
-        }
+    void cancel() { cancelled_++; }
+
+    void invoke(int res) {
+        res_ = std::move(res);
+        FinishHandleBase::invoke();
     }
 
-    void cancel() { cancelled_ = true; }
+    int extract_result() { return res_; }
 
-    std::function<void(int)> on_finish_ = nullptr;
-    bool cancelled_ = false;
+    int res_;
+    int cancelled_ = 0;
+    bool registered_ = false;
 };
 
 class SimpleAwaiter {
@@ -79,17 +82,17 @@ TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
     coro.release().resume();
     REQUIRE(!finished);
     // Now all awaiters should be registered
-    REQUIRE(h1->on_finish_ != nullptr);
-    REQUIRE(h2->on_finish_ != nullptr);
-    REQUIRE(h3->on_finish_ != nullptr);
+    REQUIRE(h1->registered_);
+    REQUIRE(h2->registered_);
+    REQUIRE(h3->registered_);
 
-    h1->finish(1);
+    h1->invoke(1);
     REQUIRE(!finished);
 
-    h2->finish(2);
+    h2->invoke(2);
     REQUIRE(!finished);
 
-    h3->finish(3);
+    h3->invoke(3);
     REQUIRE(finished);
 }
 
@@ -100,7 +103,8 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
     auto h3 = a3.handle_ptr_;
     bool finished = false;
 
-    auto func = [&](size_t expected_idx, int expected_result) -> condy::Coro<void> {
+    auto func = [&](size_t expected_idx,
+                    int expected_result) -> condy::Coro<void> {
         condy::RangedWaitOneAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         auto [idx, result] = co_await awaiter;
@@ -116,16 +120,16 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h1->finish(2);
+        h1->invoke(2);
         REQUIRE(h2->cancelled_);
         REQUIRE(h3->cancelled_);
 
-        h2->finish(-1);
-        h3->finish(-1);
+        h2->invoke(-1);
+        h3->invoke(-1);
         REQUIRE(finished);
     }
 
@@ -136,16 +140,16 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h2->finish(3);
+        h2->invoke(3);
         REQUIRE(h1->cancelled_);
         REQUIRE(h3->cancelled_);
 
-        h1->finish(-1);
-        h3->finish(-1);
+        h1->invoke(-1);
+        h3->invoke(-1);
         REQUIRE(finished);
     }
 
@@ -156,16 +160,16 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h3->finish(1);
+        h3->invoke(1);
         REQUIRE(h1->cancelled_);
         REQUIRE(h2->cancelled_);
 
-        h1->finish(-1);
-        h2->finish(-1);
+        h1->invoke(-1);
+        h2->invoke(-1);
         REQUIRE(finished);
     }
 }
@@ -201,17 +205,17 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
         coro.release().resume();
         REQUIRE(!finished);
 
-        h1->finish(2);
+        h1->invoke(2);
         REQUIRE(!finished);
 
-        h3->finish(4);
+        h3->invoke(4);
         REQUIRE(!finished);
 
-        h2->finish(3);
+        h2->invoke(3);
         REQUIRE(h3->cancelled_);
         REQUIRE(h4->cancelled_);
 
-        h4->finish(-1); // finish due to cancellation
+        h4->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
     }
 }
@@ -239,17 +243,17 @@ TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
     coro.release().resume();
     REQUIRE(!finished);
     // Now all awaiters should be registered
-    REQUIRE(h1->on_finish_ != nullptr);
-    REQUIRE(h2->on_finish_ != nullptr);
-    REQUIRE(h3->on_finish_ != nullptr);
+    REQUIRE(h1->registered_);
+    REQUIRE(h2->registered_);
+    REQUIRE(h3->registered_);
 
-    h1->finish(1);
+    h1->invoke(1);
     REQUIRE(!finished);
 
-    h2->finish(2);
+    h2->invoke(2);
     REQUIRE(!finished);
 
-    h3->finish(3);
+    h3->invoke(3);
     REQUIRE(finished);
 }
 
@@ -279,16 +283,16 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h1->finish(2);
+        h1->invoke(2);
         REQUIRE(h2->cancelled_);
         REQUIRE(h3->cancelled_);
 
-        h2->finish(-1);
-        h3->finish(-1);
+        h2->invoke(-1);
+        h3->invoke(-1);
         REQUIRE(finished);
     }
 
@@ -300,16 +304,16 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h2->finish(3);
+        h2->invoke(3);
         REQUIRE(h1->cancelled_);
         REQUIRE(h3->cancelled_);
 
-        h1->finish(-1);
-        h3->finish(-1);
+        h1->invoke(-1);
+        h3->invoke(-1);
         REQUIRE(finished);
     }
 
@@ -321,16 +325,16 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
         coro.release().resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
-        REQUIRE(h1->on_finish_ != nullptr);
-        REQUIRE(h2->on_finish_ != nullptr);
-        REQUIRE(h3->on_finish_ != nullptr);
+        REQUIRE(h1->registered_);
+        REQUIRE(h2->registered_);
+        REQUIRE(h3->registered_);
 
-        h3->finish(1);
+        h3->invoke(1);
         REQUIRE(h1->cancelled_);
         REQUIRE(h2->cancelled_);
 
-        h1->finish(-1);
-        h2->finish(-1);
+        h1->invoke(-1);
+        h2->invoke(-1);
         REQUIRE(finished);
     }
 }
@@ -367,17 +371,17 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
         coro.release().resume();
         REQUIRE(!finished);
 
-        h1->finish(2);
+        h1->invoke(2);
         REQUIRE(!finished);
 
-        h3->finish(4);
+        h3->invoke(4);
         REQUIRE(!finished);
 
-        h2->finish(3);
+        h2->invoke(3);
         REQUIRE(h3->cancelled_);
         REQUIRE(h4->cancelled_);
 
-        h4->finish(-1); // finish due to cancellation
+        h4->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
     }
 
@@ -390,17 +394,17 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
         coro.release().resume();
         REQUIRE(!finished);
 
-        h3->finish(4);
+        h3->invoke(4);
         REQUIRE(!finished);
 
-        h1->finish(2);
+        h1->invoke(2);
         REQUIRE(!finished);
 
-        h4->finish(5);
+        h4->invoke(5);
         REQUIRE(h1->cancelled_);
         REQUIRE(h2->cancelled_);
 
-        h2->finish(-1); // finish due to cancellation
+        h2->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
     }
 }

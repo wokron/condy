@@ -1,9 +1,8 @@
 #pragma once
 
+#include "condy/async_operations.hpp"
 #include "condy/context.hpp"
 #include "condy/coro.hpp"
-#include "condy/finish_handles.hpp"
-#include "condy/retry.hpp"
 #include <coroutine>
 #include <exception>
 #include <utility>
@@ -111,11 +110,7 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     bool ok = Context::current().get_ready_queue()->try_enqueue(handle);
     if (!ok) { // Slow path
         auto *handle_ptr = new OpFinishHandle();
-        handle_ptr->set_on_finish([handle, handle_ptr](int r) mutable {
-            assert(r == 0);
-            handle.resume();
-            delete handle_ptr; // self delete
-        });
+        handle_ptr->set_on_finish(handle, true);
         auto *ring = Context::current().get_ring();
         io_uring_sqe *sqe = strategy->get_sqe(ring);
         assert(sqe != nullptr);
@@ -134,7 +129,9 @@ inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
     auto handle = coro.release();
     handle.promise().set_new_task(true);
 
-    co_await retry([&]() { return executor.try_post(handle); });
+    while (!executor.try_post(handle)) {
+        co_await async_nop();
+    }
     co_return {handle, true};
 }
 

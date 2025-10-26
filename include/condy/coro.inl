@@ -2,11 +2,11 @@
 
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
-#include "condy/finish_handles.hpp"
 #include "condy/spin_lock.hpp"
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
+#include <thread>
 
 namespace condy {
 
@@ -61,19 +61,9 @@ public:
             // need to post back to caller loop
             if (self.caller_loop_ != nullptr) {
                 assert(caller_handle != std::noop_coroutine());
-                if (!self.caller_loop_->try_post(caller_handle)) {
-                    auto *retry_handle = new RetryFinishHandle<>();
-                    auto on_retry = [retry_handle, caller_handle,
-                                     caller_loop = self.caller_loop_] {
-                        bool ok = caller_loop->try_post(caller_handle);
-                        if (ok) {
-                            delete retry_handle; // self delete
-                        }
-                        return ok;
-                    };
-                    retry_handle->set_on_retry(std::move(on_retry),
-                                               std::noop_coroutine());
-                    retry_handle->prep_retry();
+                // TODO: Need to optimize this
+                while (!self.caller_loop_->try_post(caller_handle)) {
+                    std::this_thread::yield();
                 }
 
                 return std::noop_coroutine();

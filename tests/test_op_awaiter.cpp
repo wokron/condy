@@ -22,7 +22,7 @@ void event_loop(size_t &unfinished) {
         auto handle_ptr =
             static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         if (handle_ptr) {
-            handle_ptr->finish(cqe->res);
+            handle_ptr->invoke(cqe->res);
         }
 
         io_uring_cqe_seen(ring, cqe);

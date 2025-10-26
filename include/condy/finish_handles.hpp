@@ -1,24 +1,51 @@
 #pragma once
 
-#include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
-#include "condy/strategies.hpp"
-#include <cassert>
+#include <array>
 #include <coroutine>
 #include <cstddef>
-#include <functional>
 #include <limits>
-#include <pthread.h>
-#include <stdexcept>
-#include <tuple>
-#include <type_traits>
-#include <utility>
 #include <variant>
 #include <vector>
 
 namespace condy {
 
-class OpFinishHandle {
+class FinishHandleBase {
+public:
+    using OnFinishFunc = void (*)(void *self, size_t no);
+
+    void set_on_finish(OnFinishFunc on_finish, void *self, size_t no) {
+        on_finish_ = on_finish;
+        data_ = self;
+        no_ = no;
+    }
+
+    void set_on_finish(std::coroutine_handle<> handle,
+                       bool self_delete = false) {
+        data_ = handle.address();
+        on_finish_ = nullptr;
+        no_ = self_delete ? 1 : 0;
+    }
+
+    void invoke() {
+        if (on_finish_) {
+            on_finish_(data_, no_);
+        } else {
+            auto h = std::coroutine_handle<>::from_address(data_);
+            if (no_) {
+                delete this;
+            }
+            h.resume();
+        }
+    }
+
+protected:
+    OnFinishFunc on_finish_ = nullptr;
+    void *data_ = nullptr;
+    size_t no_ = 0;
+};
+
+class OpFinishHandle : public FinishHandleBase {
 public:
     using ReturnType = int;
 
@@ -30,72 +57,38 @@ public:
         io_uring_sqe_set_data(sqe, nullptr);
     }
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        on_finish_ = std::forward<Func>(on_finish);
+    void invoke(int res) {
+        res_ = std::move(res);
+        FinishHandleBase::invoke();
     }
 
-    void finish(ReturnType r) {
-        if (on_finish_) {
-            std::move(on_finish_)(r);
-        }
-    }
+    int extract_result() { return res_; }
 
 private:
-    std::function<void(ReturnType)> on_finish_ = nullptr;
-};
-
-// TODO: More sophisticated retry coordinator?
-class SimpleRetryCoordinator {
-public:
-    void prep_sqe(io_uring_sqe *sqe) const noexcept { io_uring_prep_nop(sqe); }
-};
-
-template <typename Coordinator = SimpleRetryCoordinator>
-class RetryFinishHandle : public OpFinishHandle {
-public:
-    template <typename Func, typename PromiseType>
-    void set_on_retry(Func &&on_retry, std::coroutine_handle<PromiseType> h) {
-        auto wrapper = [on_retry = std::forward<Func>(on_retry), this,
-                        h](int r) {
-            assert(r == 0);
-            if (on_retry()) {
-                h.resume();
-            } else {
-                prep_retry(); // Resubmit this
-            }
-        };
-        set_on_finish(std::move(wrapper));
-    }
-
-    void prep_retry() {
-        auto &context = Context::current();
-        auto ring = context.get_ring();
-        auto *sqe = context.get_strategy()->get_sqe(ring);
-        assert(sqe != nullptr);
-        coordinator_.prep_sqe(sqe);
-        io_uring_sqe_set_data(sqe, this);
-    }
-
-private:
-    Coordinator coordinator_;
+    int res_;
 };
 
 template <typename Condition, typename Handle>
-class RangedParallelFinishHandle {
+class RangedParallelFinishHandle : public FinishHandleBase {
 public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
 
-    template <typename Range> void init(Range &&handle_ptrs) {
-        for (auto &handle : handle_ptrs) {
-            auto no = handles_.size();
-            auto on_finish = [this, no](ChildReturnType r) { finish_(no, r); };
-            handle->set_on_finish(on_finish);
-            handles_.push_back(handle);
+    void init(std::vector<Handle *> handles) {
+        handles_ = std::move(handles);
+        for (size_t i = 0; i < handles_.size(); i++) {
+            auto *handle = handles_[i];
+            handle->set_on_finish(
+                [](void *self, size_t no) {
+                    auto *this_ptr = static_cast<
+                        RangedParallelFinishHandle<Condition, Handle> *>(self);
+                    this_ptr->finish_(no);
+                },
+                this, i);
         }
-        order_.resize(handles_.size());
-        results_.resize(handles_.size());
+        res_.first.resize(handles_.size());
+        res_.second.resize(handles_.size());
     }
 
     void cancel() {
@@ -106,23 +99,22 @@ public:
         }
     }
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        on_finish_ = std::forward<Func>(on_finish);
-    }
+    ReturnType extract_result() { return std::move(res_); }
 
 private:
-    void finish_(size_t idx, ChildReturnType r) {
+    void finish_(size_t idx) {
         size_t no = finished_count_++;
-        order_[no] = idx;
-        results_[idx] = r;
+        auto &order = res_.first;
+        auto &results = res_.second;
+        order[no] = idx;
+        results[idx] = handles_[idx]->extract_result();
         if (no == handles_.size() - 1) {
             // All finished
-            auto r = std::make_pair(std::move(order_), std::move(results_));
-            std::move(on_finish_)(std::move(r));
+            invoke();
             return;
         }
 
-        if (cancel_checker_(idx, r) && canceled_count_++ == 0) {
+        if (cancel_checker_(idx, results[idx]) && canceled_count_++ == 0) {
             for (size_t i = 0; i < handles_.size(); i++) {
                 if (i != idx) {
                     handles_[i]->cancel();
@@ -134,12 +126,9 @@ private:
 private:
     size_t finished_count_ = 0;
     size_t canceled_count_ = 0;
-    std::function<void(ReturnType)> on_finish_ = nullptr;
     std::vector<Handle *> handles_ = {};
     Condition cancel_checker_ = {};
-
-    std::vector<size_t> order_ = {};
-    std::vector<ChildReturnType> results_ = {};
+    ReturnType res_;
 };
 
 struct WaitAllCancelCondition {
@@ -159,15 +148,11 @@ class RangedWaitAllFinishHandle
     : public RangedParallelFinishHandle<WaitAllCancelCondition, Handle> {
 public:
     using Base = RangedParallelFinishHandle<WaitAllCancelCondition, Handle>;
-    using ChildReturnType = typename Handle::ReturnType;
-    using ReturnType = std::vector<ChildReturnType>;
+    using ReturnType = std::vector<typename Handle::ReturnType>;
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        auto wrapper =
-            [on_finish = std::forward<Func>(on_finish)](
-                std::pair<std::vector<size_t>, std::vector<ChildReturnType>>
-                    r) { on_finish(std::move(r.second)); };
-        Base::set_on_finish(std::move(wrapper));
+    ReturnType extract_result() {
+        auto r = Base::extract_result();
+        return std::move(r.second);
     }
 };
 
@@ -179,27 +164,22 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        auto wrapper =
-            [on_finish = std::forward<Func>(on_finish)](
-                std::pair<std::vector<size_t>, std::vector<ChildReturnType>>
-                    r) {
-                auto &[order, results] = r;
-                on_finish(
-                    std::make_pair(order[0], std::move(results[order[0]])));
-            };
-        Base::set_on_finish(std::move(wrapper));
+    ReturnType extract_result() {
+        auto r = Base::extract_result();
+        auto &[order, results] = r;
+        return std::make_pair(order[0], std::move(results[order[0]]));
     }
 };
 
-template <typename Condition, typename... Handles> class ParallelFinishHandle {
+template <typename Condition, typename... Handles>
+class ParallelFinishHandle : public FinishHandleBase {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
-    void init(Handles *...handles) {
+    template <typename... HandlePtr> void init(HandlePtr... handles) {
         handles_ = std::make_tuple(handles...);
-        foreach_call_set_on_finish_();
+        foreach_set_on_finish_();
     }
 
     void cancel() {
@@ -209,21 +189,21 @@ public:
         }
     }
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        on_finish_ = std::forward<Func>(on_finish);
-    }
+    ReturnType extract_result() { return std::move(res_); }
 
 private:
-    template <size_t I = 0> void foreach_call_set_on_finish_() {
+    template <size_t I = 0> void foreach_set_on_finish_() {
         if constexpr (I < sizeof...(Handles)) {
-            using Handle = std::remove_pointer_t<
-                std::tuple_element_t<I, decltype(handles_)>>;
-            auto handle = std::get<I>(handles_);
-            handle->set_on_finish([this](typename Handle::ReturnType r) {
-                this->template finish_<I, typename Handle::ReturnType>(
-                    std::move(r));
-            });
-            foreach_call_set_on_finish_<I + 1>();
+            auto *handle = std::get<I>(handles_);
+            handle->set_on_finish(
+                [](void *self, size_t no) {
+                    assert(no == I);
+                    auto *this_ptr = static_cast<
+                        ParallelFinishHandle<Condition, Handles...> *>(self);
+                    this_ptr->template finish_<I>();
+                },
+                this, I);
+            foreach_set_on_finish_<I + 1>();
         }
     }
 
@@ -237,19 +217,19 @@ private:
         }
     }
 
-    template <size_t Idx, typename ChildReturnType>
-    void finish_(ChildReturnType r) {
+    template <size_t Idx> void finish_() {
         size_t no = finished_count_++;
-        order_[no] = Idx;
-        std::get<Idx>(results_) = std::move(r);
+        auto &[order, results] = res_;
+        order[no] = Idx;
+        std::get<Idx>(results) = std::get<Idx>(handles_)->extract_result();
         if (no == sizeof...(Handles) - 1) {
             // All finished
-            auto r = std::make_pair(std::move(order_), std::move(results_));
-            std::move(on_finish_)(std::move(r));
+            invoke();
             return;
         }
 
-        if (cancel_checker_(Idx, r) && canceled_count_++ == 0) {
+        if (cancel_checker_(Idx, std::get<Idx>(results)) &&
+            canceled_count_++ == 0) {
             foreach_call_cancel_<Idx>();
         }
     }
@@ -257,12 +237,9 @@ private:
 private:
     size_t finished_count_ = 0;
     size_t canceled_count_ = 0;
-    std::function<void(ReturnType)> on_finish_ = nullptr;
     std::tuple<Handles *...> handles_;
     Condition cancel_checker_ = {};
-
-    std::array<size_t, sizeof...(Handles)> order_ = {};
-    std::tuple<typename Handles::ReturnType...> results_ = {};
+    ReturnType res_;
 };
 
 template <typename... Handles>
@@ -272,13 +249,9 @@ public:
     using Base = ParallelFinishHandle<WaitAllCancelCondition, Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        auto wrapper =
-            [on_finish = std::forward<Func>(on_finish)](
-                std::pair<std::array<size_t, sizeof...(Handles)>,
-                          std::tuple<typename Handles::ReturnType...>>
-                    r) { on_finish(std::move(r.second)); };
-        Base::set_on_finish(std::move(wrapper));
+    ReturnType extract_result() {
+        auto r = Base::extract_result();
+        return std::move(r.second);
     }
 };
 
@@ -289,17 +262,10 @@ public:
     using Base = ParallelFinishHandle<WaitOneCancelCondition, Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
-    template <typename Func> void set_on_finish(Func &&on_finish) {
-        auto wrapper =
-            [on_finish = std::forward<Func>(on_finish)](
-                std::pair<std::array<size_t, sizeof...(Handles)>,
-                          std::tuple<typename Handles::ReturnType...>>
-                    r) {
-                auto &[order, results] = r;
-                size_t idx = order[0];
-                on_finish(tuple_at_(std::move(results), idx));
-            };
-        Base::set_on_finish(std::move(wrapper));
+    ReturnType extract_result() {
+        auto r = Base::extract_result();
+        auto &[order, results] = r;
+        return tuple_at_(std::move(results), order[0]);
     }
 
 private:
