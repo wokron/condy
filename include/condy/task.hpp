@@ -10,7 +10,7 @@
 
 namespace condy {
 
-template <typename T = void> class Task {
+template <typename T = void> class [[nodiscard]] Task {
 public:
     using PromiseType = typename Coro<T>::promise_type;
 

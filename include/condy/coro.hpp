@@ -5,7 +5,7 @@
 
 namespace condy {
 
-template <typename T = void> class Coro {
+template <typename T = void> class [[nodiscard]] Coro {
 public:
     struct promise_type;
 

@@ -9,7 +9,7 @@
 
 namespace condy {
 
-template <typename Func, typename... Args> class OpAwaiter {
+template <typename Func, typename... Args> class [[nodiscard]] OpAwaiter {
 public:
     using HandleType = OpFinishHandle;
 
@@ -64,7 +64,7 @@ protected:
 };
 
 template <typename Func, typename... Args>
-class DrainedOpAwaiter : public OpAwaiter<Func, Args...> {
+class [[nodiscard]] DrainedOpAwaiter : public OpAwaiter<Func, Args...> {
 public:
     using Base = OpAwaiter<Func, Args...>;
     using Base::Base;
@@ -87,7 +87,8 @@ public:
     }
 };
 
-template <typename Handle, typename Awaiter> class RangedParallelAwaiter {
+template <typename Handle, typename Awaiter>
+class [[nodiscard]] RangedParallelAwaiter {
 public:
     using HandleType = Handle;
 
@@ -155,7 +156,7 @@ using RangedWaitOneAwaiter = RangedParallelAwaiter<
     RangedWaitOneFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
 template <typename Awaiter>
-class RangedLinkAwaiter : public RangedWaitAllAwaiter<Awaiter> {
+class [[nodiscard]] RangedLinkAwaiter : public RangedWaitAllAwaiter<Awaiter> {
 public:
     using Base = RangedWaitAllAwaiter<Awaiter>;
     using Base::Base;
@@ -189,7 +190,8 @@ public:
     }
 };
 
-template <typename Handle, typename... Awaiters> class ParallelAwaiter {
+template <typename Handle, typename... Awaiters>
+class [[nodiscard]] ParallelAwaiter {
 public:
     using HandleType = Handle;
 
@@ -275,7 +277,7 @@ using WaitOneAwaiter =
                     Awaiter...>;
 
 template <typename... Awaiter>
-class LinkAwaiter : public WaitAllAwaiter<Awaiter...> {
+class [[nodiscard]] LinkAwaiter : public WaitAllAwaiter<Awaiter...> {
 public:
     using Base = WaitAllAwaiter<Awaiter...>;
     using Base::Base;

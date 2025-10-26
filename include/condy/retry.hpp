@@ -6,7 +6,7 @@
 
 namespace condy {
 
-template <typename Func> class RetryAwaiter {
+template <typename Func> class [[nodiscard]] RetryAwaiter {
 public:
     RetryAwaiter(Func func) : func_(std::move(func)) {}
     RetryAwaiter(RetryAwaiter &&) = default;
