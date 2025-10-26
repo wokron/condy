@@ -19,7 +19,25 @@ public:
             static_cast<PromiseType &>(*this))};
     }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }
+    struct InitialAwaiter {
+        bool await_ready() const noexcept { return false; }
+
+        void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
+            self_ = h;
+        }
+
+        void await_resume() noexcept {
+            auto &promise = self_.promise();
+            if (promise.new_task_) {
+                promise.task_id_ =
+                    Context::current().get_strategy()->generate_task_id();
+            }
+        }
+
+        std::coroutine_handle<PromiseType> self_;
+    };
+
+    InitialAwaiter initial_suspend() noexcept { return {}; }
 
     void unhandled_exception() { exception_ = std::current_exception(); }
 
@@ -79,7 +97,8 @@ public:
     };
 
     FinalAwaiter final_suspend() noexcept {
-        if (task_id_ != -1) {
+        if (new_task_) {
+            assert(task_id_ != -1);
             Context::current().get_strategy()->recycle_task_id(task_id_);
         }
         return {};
@@ -123,7 +142,7 @@ public:
 
     std::exception_ptr exception() const noexcept { return exception_; }
 
-    void set_task_id(int id) noexcept { task_id_ = id; }
+    void set_new_task(bool is_new) noexcept { new_task_ = is_new; }
 
 protected:
     MaybeMutex<SpinLock> mutex_;
@@ -133,6 +152,7 @@ protected:
     IEventLoop *caller_loop_ = nullptr;
 
     int task_id_ = -1;
+    bool new_task_ = false;
 
     std::exception_ptr exception_;
 };

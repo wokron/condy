@@ -71,7 +71,7 @@ private:
         if constexpr (Idx < sizeof...(Ts)) {
             auto &coro = std::get<Idx>(coros);
             auto handle = coro.release();
-            handle.promise().set_task_id(strategy_.generate_task_id());
+            handle.promise().set_new_task(true);
             handle.resume();
             foreach_coro_prologue_<Idx + 1, Ts...>(std::move(coros));
         }
