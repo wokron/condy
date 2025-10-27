@@ -55,3 +55,4 @@ CMakeUserPresets.json
 
 build/
 .cache/
+.vscode/
