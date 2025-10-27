@@ -34,7 +34,7 @@ public:
             return std::nullopt;
         }
         T item = std::move(data_[head & mask_]);
-        head_.store(head + 1, std::memory_order_relaxed);
+        head_.store(head + 1, std::memory_order_release);
         return item;
     }
 
