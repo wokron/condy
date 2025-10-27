@@ -14,10 +14,7 @@ public:
     using PromiseType = typename Coro<T>::promise_type;
 
     Task(std::coroutine_handle<PromiseType> h, bool remote_task)
-        : handle_(h), remote_task_(remote_task) {
-        handle_.promise().set_auto_destroy(false);
-        handle_.promise().set_use_mutex(remote_task_);
-    }
+        : handle_(h), remote_task_(remote_task) {}
     Task(Task &&other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)),
           remote_task_(other.remote_task_) {}
@@ -105,7 +102,9 @@ template <typename T> inline auto Task<T>::operator co_await() && {
 template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     auto handle = coro.release();
     auto *strategy = Context::current().get_strategy();
-    handle.promise().set_new_task(true);
+    auto &promise = handle.promise();
+    promise.set_auto_destroy(false);
+    promise.set_new_task(true);
 
     bool ok = Context::current().get_ready_queue()->try_enqueue(handle);
     if (!ok) { // Slow path
@@ -126,8 +125,12 @@ inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
         Context::current().get_event_loop()) {
         co_return co_spawn(std::move(coro));
     }
+
     auto handle = coro.release();
-    handle.promise().set_new_task(true);
+    auto &promise = handle.promise();
+    promise.set_auto_destroy(false);
+    promise.set_use_mutex(true);
+    promise.set_new_task(true);
 
     while (!executor.try_post(handle)) {
         co_await async_nop();
