@@ -67,11 +67,11 @@ TEST_CASE("test semaphore - release n") {
         threads.emplace_back([&l]() { l->run(); });
     }
 
-    std::vector<bool> finished(times, false);
+    std::vector<int> finished(times, 0);
 
     auto func = [&](int no) -> condy::Coro<void> {
         co_await sem.acquire();
-        finished[no] = true;
+        finished[no] = 1;
         co_return;
     };
 
