@@ -1,0 +1,5 @@
+add_executable(spawn_tasks spawn_tasks.cpp)
+target_link_libraries(spawn_tasks PRIVATE condy uring)
+
+add_executable(spawn_tasks_remote spawn_tasks_remote.cpp)
+target_link_libraries(spawn_tasks_remote PRIVATE condy uring)
