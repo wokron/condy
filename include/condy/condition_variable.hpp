@@ -21,7 +21,7 @@ public:
 
     void notify_one() {
         std::lock_guard lock(lock_);
-        auto *awaiter = static_cast<WaitAwaiter *>(wait_queue_.try_pop());
+        auto *awaiter = wait_queue_.try_pop();
         if (awaiter == nullptr) {
             return;
         }
@@ -30,9 +30,8 @@ public:
 
     void notify_all() {
         std::lock_guard lock(lock_);
-        wait_queue_.pop_all([&](IntrusiveNode *node) {
-            wakeup_one_(static_cast<WaitAwaiter *>(node));
-        });
+        wait_queue_.pop_all(
+            [&](WaitAwaiter *awaiter) { wakeup_one_(awaiter); });
     }
 
     using AcquireAwaiter = SingleReleaseSemaphore::AcquireAwaiter;
@@ -61,6 +60,7 @@ public:
 
 private:
     void wakeup_one_(WaitAwaiter *awaiter) {
+        // Upper cast to AcquireAwaiter
         auto *acquire_awaiter =
             static_cast<SingleReleaseSemaphore::AcquireAwaiter *>(awaiter);
         if (acquire_awaiter->await_ready()) {
@@ -74,7 +74,7 @@ private:
 
 private:
     SpinLock lock_;
-    LinkList wait_queue_;
+    LinkList<WaitAwaiter> wait_queue_;
     Mutex &mutex_;
 };
 

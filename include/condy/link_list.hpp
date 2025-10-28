@@ -9,7 +9,7 @@ struct IntrusiveNode {
     IntrusiveNode *next_ = nullptr;
 };
 
-class LinkList {
+template <typename T> class LinkList {
 public:
     // LinkList does not take ownership of the nodes, so use default
     // constructor & destructor
@@ -17,7 +17,7 @@ public:
     ~LinkList() = default;
 
 public:
-    void push(IntrusiveNode *node) noexcept {
+    void push(T *node) noexcept {
         // Push the node to the front of the local list
         assert(node != nullptr && node->next_ == nullptr);
         auto *old_head = head_.load(std::memory_order_relaxed);
@@ -28,13 +28,13 @@ public:
                                               std::memory_order_relaxed));
     }
 
-    IntrusiveNode *try_pop() noexcept {
+    T *try_pop() noexcept {
         if (local_head_ == nullptr) {
             // Now fetch the global list to local list
             local_head_ = head_.exchange(nullptr, std::memory_order_acquire);
             local_head_ = reverse_list_(local_head_);
         }
-        return fetch_head_(&local_head_);
+        return static_cast<T *>(fetch_head_(&local_head_));
     }
 
     template <typename Func> void pop_all(Func &&func) noexcept {
@@ -42,11 +42,11 @@ public:
         local_head2 = reverse_list_(local_head2);
 
         while (local_head_ != nullptr) {
-            func(fetch_head_(&local_head_));
+            func(static_cast<T *>(fetch_head_(&local_head_)));
         }
 
         while (local_head2 != nullptr) {
-            func(fetch_head_(&local_head2));
+            func(static_cast<T *>(fetch_head_(&local_head2)));
         }
     }
 

@@ -16,7 +16,7 @@ TEST_CASE("test link_list - test push and try_pop") {
     const int nodes_per_thread = 1000;
     const int thread_count = 4;
 
-    condy::LinkList list;
+    condy::LinkList<TestNode> list;
 
     // Producer threads
     std::vector<std::thread> producers;
@@ -54,7 +54,7 @@ TEST_CASE("test link_list - test pop_all") {
     const int nodes_per_thread = 1000;
     const int thread_count = 4;
 
-    condy::LinkList list;
+    condy::LinkList<TestNode> list;
 
     // Producer threads
     std::vector<std::thread> producers;

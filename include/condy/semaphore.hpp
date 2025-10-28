@@ -39,8 +39,7 @@ public:
         ssize_t to_wake = std::min(n, -old_count);
         for (ssize_t i = 0; i < to_wake; ++i) {
             AcquireAwaiter *awaiter;
-            while ((awaiter = static_cast<AcquireAwaiter *>(
-                        wait_queue_.try_pop())) == nullptr)
+            while ((awaiter = wait_queue_.try_pop()) == nullptr)
                 ; // Busy wait
 
             auto event_loop = awaiter->event_loop_;
@@ -52,12 +51,11 @@ public:
 
 private:
     std::atomic<ssize_t> count_ = 0;
-    LinkList wait_queue_;
+    LinkList<AcquireAwaiter> wait_queue_;
 };
 
 inline bool SingleReleaseSemaphore::AcquireAwaiter::await_ready() noexcept {
-    int64_t old_count =
-        sem_.count_.fetch_sub(1, std::memory_order_acquire);
+    int64_t old_count = sem_.count_.fetch_sub(1, std::memory_order_acquire);
     return old_count > 0;
 }
 
