@@ -4,6 +4,7 @@
 #include "condy/context.hpp"
 #include "condy/coro.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/invoker.hpp"
 #include "condy/queue.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
@@ -15,7 +16,7 @@ namespace condy {
 
 class IEventLoop {
 public:
-    virtual bool try_post(std::coroutine_handle<> handle) = 0;
+    virtual bool try_post(Invoker *invoker) = 0;
 };
 
 template <typename Strategy> class EventLoop : public IEventLoop {
@@ -48,8 +49,8 @@ public:
 
     void stop() { state_.store(State::STOPPED, std::memory_order_release); }
 
-    bool try_post(std::coroutine_handle<> handle) override {
-        return outer_ready_queue_.try_enqueue(handle);
+    bool try_post(Invoker *invoker) override {
+        return outer_ready_queue_.try_enqueue(invoker);
     }
 
 public:
@@ -81,8 +82,8 @@ private:
 private:
     Strategy strategy_;
     std::atomic<State> state_ = State::IDLE;
-    SingleThreadRingQueue<std::coroutine_handle<>> inner_ready_queue_;
-    MultiWriterRingQueue<std::coroutine_handle<>> outer_ready_queue_;
+    SingleThreadRingQueue<Invoker *> inner_ready_queue_;
+    MultiWriterRingQueue<Invoker *> outer_ready_queue_;
 };
 
 template <typename Strategy>
@@ -106,12 +107,12 @@ template <typename Strategy> void EventLoop<Strategy>::epilogue() {
 template <typename Strategy> void EventLoop<Strategy>::run_once() {
     auto *ring = Context::current().get_ring();
 
-    std::optional<std::coroutine_handle<>> handle;
+    std::optional<Invoker *> handle;
     while ((handle = outer_ready_queue_.try_dequeue())) {
-        (*handle).resume();
+        (**handle)();
     }
     while ((handle = inner_ready_queue_.try_dequeue())) {
-        (*handle).resume();
+        (**handle)();
     }
 
     int r = strategy_.submit_and_wait(ring);

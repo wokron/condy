@@ -2,6 +2,7 @@
 
 #include "condy/coro.hpp"
 #include "condy/event_loop.hpp"
+#include "condy/invoker.hpp"
 #include "condy/spin_lock.hpp"
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
@@ -11,7 +12,8 @@
 
 namespace condy {
 
-template <typename Coro> class PromiseBase {
+template <typename Coro>
+class PromiseBase : public InvokerAdapter<PromiseBase<Coro>> {
 public:
     using PromiseType = typename Coro::promise_type;
 
@@ -62,15 +64,16 @@ public:
             // 2. Task awaited by another coroutine in different event loops,
             // need to post back to caller loop
             if (self.caller_loop_ != nullptr) {
-                auto *caller_loop = self.caller_loop_;
-                lock.unlock();
-                assert(caller_handle != std::noop_coroutine());
-                // TODO: Need to optimize this
-                while (!caller_loop->try_post(caller_handle)) {
-                    std::this_thread::yield();
-                }
+                assert(false && "Unimplemented");
+                // auto *caller_loop = self.caller_loop_;
+                // lock.unlock();
+                // assert(caller_handle != std::noop_coroutine());
+                // // TODO: Need to optimize this
+                // while (!caller_loop->try_post(caller_handle)) {
+                //     std::this_thread::yield();
+                // }
 
-                return std::noop_coroutine();
+                // return std::noop_coroutine();
             }
 
             // 3. Task awaited by another coroutine in the same event loop,
@@ -130,6 +133,12 @@ public:
     std::exception_ptr exception() const noexcept { return exception_; }
 
     void set_new_task(bool is_new) noexcept { new_task_ = is_new; }
+
+    void operator()() {
+        auto h = std::coroutine_handle<PromiseType>::from_promise(
+            static_cast<PromiseType &>(*this));
+        h.resume();
+    }
 
 protected:
     MaybeMutex<SpinLock> mutex_;

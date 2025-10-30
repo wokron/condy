@@ -18,12 +18,18 @@ public:
         AcquireAwaiter(SingleReleaseSemaphore &self, IEventLoop *event_loop)
             : sem_(self), event_loop_(event_loop) {}
         bool await_ready() noexcept;
-        void await_suspend(std::coroutine_handle<> h) noexcept;
+        template <typename PromiseType>
+        void await_suspend(std::coroutine_handle<PromiseType> h) noexcept;
         void await_resume() noexcept {}
+
+        void await_suspend(Invoker *invoker) noexcept {
+            invoker_ = invoker;
+            sem_.wait_queue_.push(this);
+        }
 
         SingleReleaseSemaphore &sem_;
         IEventLoop *event_loop_ = nullptr;
-        std::coroutine_handle<> handle_;
+        Invoker *invoker_ = nullptr;
     };
 
     AcquireAwaiter acquire() {
@@ -44,7 +50,7 @@ public:
 
             auto event_loop = awaiter->event_loop_;
             // TODO: if (event_loop == Context::current().get_event_loop()) ...
-            while (!event_loop->try_post(awaiter->handle_))
+            while (!event_loop->try_post(awaiter->invoker_))
                 ; // Busy wait // TODO: improve this
         }
     }
@@ -59,9 +65,10 @@ inline bool SingleReleaseSemaphore::AcquireAwaiter::await_ready() noexcept {
     return old_count > 0;
 }
 
-inline void SingleReleaseSemaphore::AcquireAwaiter::await_suspend(
-    std::coroutine_handle<> h) noexcept {
-    handle_ = h;
+template <typename PromiseType>
+void SingleReleaseSemaphore::AcquireAwaiter::await_suspend(
+    std::coroutine_handle<PromiseType> h) noexcept {
+    invoker_ = &h.promise();
     sem_.wait_queue_.push(this);
 }
 

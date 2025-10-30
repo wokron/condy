@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
+#include "condy/invoker.hpp"
 #include "condy/queue.hpp"
 #include "condy/strategies.hpp"
 #include <coroutine>
@@ -27,7 +28,7 @@ public:
     }
 
     void init(IStrategy *strategy,
-              SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue,
+              SingleThreadRingQueue<Invoker *> *ready_queue,
               IEventLoop *event_loop) {
         int r = strategy->init_io_uring(&ring_);
         if (r < 0) {
@@ -50,9 +51,7 @@ public:
 
     IStrategy *get_strategy() { return strategy_; }
 
-    SingleThreadRingQueue<std::coroutine_handle<>> *get_ready_queue() {
-        return ready_queue_;
-    }
+    SingleThreadRingQueue<Invoker *> *get_ready_queue() { return ready_queue_; }
 
     IEventLoop *get_event_loop() { return event_loop_; }
 
@@ -62,7 +61,7 @@ private:
 private:
     io_uring ring_{};
     IStrategy *strategy_ = nullptr;
-    SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue_ = nullptr;
+    SingleThreadRingQueue<Invoker *> *ready_queue_ = nullptr;
     IEventLoop *event_loop_ = nullptr;
 };
 

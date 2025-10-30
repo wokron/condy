@@ -106,7 +106,7 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     promise.set_auto_destroy(false);
     promise.set_new_task(true);
 
-    bool ok = Context::current().get_ready_queue()->try_enqueue(handle);
+    bool ok = Context::current().get_ready_queue()->try_enqueue(&promise);
     if (!ok) { // Slow path
         auto *handle_ptr = new OpFinishHandle();
         handle_ptr->set_on_finish(handle, true);
@@ -132,7 +132,7 @@ inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
     promise.set_use_mutex(true);
     promise.set_new_task(true);
 
-    while (!executor.try_post(handle)) {
+    while (!executor.try_post(&promise)) {
         co_await async_nop();
     }
     co_return {handle, true};

@@ -42,7 +42,8 @@ public:
             : AcquireAwaiter(sem, event_loop), cv_(cv) {}
 
         bool await_ready() const noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> h) noexcept;
+        template <typename PromiseType>
+        void await_suspend(std::coroutine_handle<PromiseType> h) noexcept;
         void await_resume() const noexcept {}
 
         ConditionVariable &cv_;
@@ -65,10 +66,10 @@ private:
             static_cast<SingleReleaseSemaphore::AcquireAwaiter *>(awaiter);
         if (acquire_awaiter->await_ready()) {
             auto event_loop = awaiter->event_loop_;
-            while (!event_loop->try_post(awaiter->handle_))
+            while (!event_loop->try_post(awaiter->invoker_))
                 ; // Busy wait // TODO: improve this
         } else {
-            acquire_awaiter->await_suspend(acquire_awaiter->handle_);
+            acquire_awaiter->await_suspend(acquire_awaiter->invoker_);
         }
     }
 
@@ -78,9 +79,10 @@ private:
     Mutex &mutex_;
 };
 
-inline void ConditionVariable::WaitAwaiter::await_suspend(
-    std::coroutine_handle<> h) noexcept {
-    handle_ = h;
+template <typename PromiseType>
+void ConditionVariable::WaitAwaiter::await_suspend(
+    std::coroutine_handle<PromiseType> h) noexcept {
+    invoker_ = &h.promise();
     cv_.wait_queue_.push(this);
     sem_.release(); // Unlock after pushed to avoid lost wakeup
 }
