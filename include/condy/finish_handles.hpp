@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/context.hpp"
+#include "condy/invoker.hpp"
 #include <array>
 #include <coroutine>
 #include <cstddef>
@@ -45,7 +46,7 @@ protected:
     size_t no_ = 0;
 };
 
-class OpFinishHandle : public FinishHandleBase {
+class OpFinishHandle : public FinishHandleBase, InvokerAdapter<OpFinishHandle> {
 public:
     using ReturnType = int;
 
@@ -57,10 +58,9 @@ public:
         io_uring_sqe_set_data(sqe, nullptr);
     }
 
-    void invoke(int res) {
-        res_ = std::move(res);
-        FinishHandleBase::invoke();
-    }
+    void set_result(int res) { res_ = res; }
+
+    void operator()() { invoke(); }
 
     int extract_result() { return res_; }
 

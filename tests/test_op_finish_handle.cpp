@@ -31,7 +31,8 @@ TEST_CASE("test op_finish_handle - basic usage") {
 
     auto handle_ptr =
         static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-    handle_ptr->invoke(cqe->res);
+    handle_ptr->set_result(cqe->res);
+    (*handle_ptr)();
 
     io_uring_cqe_seen(ring, cqe);
 
@@ -57,7 +58,8 @@ void event_loop(size_t &unfinished) {
         auto handle_ptr =
             static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         if (handle_ptr) {
-            handle_ptr->invoke(cqe->res);
+            handle_ptr->set_result(cqe->res);
+            (*handle_ptr)();
         }
 
         io_uring_cqe_seen(ring, cqe);
