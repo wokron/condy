@@ -4,44 +4,19 @@
 #include <doctest/doctest.h>
 #include <liburing.h>
 
-TEST_CASE("test op_finish_handle - basic usage") {
-    condy::SimpleStrategy strategy(8);
-    auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
-    auto ring = context.get_ring();
-
-    bool finished = false;
-    condy::OpFinishHandle handle;
-    handle.set_on_finish(
-        [](void *self, size_t no) {
-            auto *finished_ptr = static_cast<bool *>(self);
-            *finished_ptr = true;
-        },
-        &finished, 0);
-
-    io_uring_sqe *sqe = io_uring_get_sqe(ring);
-    REQUIRE(sqe != nullptr);
-    io_uring_prep_nop(sqe);
-    io_uring_sqe_set_data(sqe, &handle);
-
-    io_uring_submit(ring);
-
-    io_uring_cqe *cqe;
-    io_uring_wait_cqe(ring, &cqe);
-
-    auto handle_ptr =
-        static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-    handle_ptr->set_result(cqe->res);
-    (*handle_ptr)();
-
-    io_uring_cqe_seen(ring, cqe);
-
-    REQUIRE(finished);
-
-    context.destroy();
-}
-
 namespace {
+
+struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
+    void operator()() { finished = true; }
+    bool finished = false;
+};
+
+struct SetUnfinishedInvoker
+    : public condy::InvokerAdapter<SetUnfinishedInvoker> {
+    SetUnfinishedInvoker(size_t &unfinished_ref) : unfinished(unfinished_ref) {}
+    void operator()() { unfinished--; }
+    size_t &unfinished;
+};
 
 void event_loop(size_t &unfinished) {
     auto &context = condy::Context::current();
@@ -68,8 +43,41 @@ void event_loop(size_t &unfinished) {
 
 } // namespace
 
+TEST_CASE("test op_finish_handle - basic usage") {
+    condy::SimpleStrategy strategy(8);
+    auto &context = condy::Context::current();
+    context.init(&strategy, nullptr, nullptr);
+    auto ring = context.get_ring();
+
+    SetFinishInvoker invoker;
+    condy::OpFinishHandle handle;
+    handle.set_invoker(&invoker);
+
+    io_uring_sqe *sqe = io_uring_get_sqe(ring);
+    REQUIRE(sqe != nullptr);
+    io_uring_prep_nop(sqe);
+    io_uring_sqe_set_data(sqe, &handle);
+
+    io_uring_submit(ring);
+
+    io_uring_cqe *cqe;
+    io_uring_wait_cqe(ring, &cqe);
+
+    auto handle_ptr =
+        static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+    handle_ptr->set_result(cqe->res);
+    (*handle_ptr)();
+
+    io_uring_cqe_seen(ring, cqe);
+
+    REQUIRE(invoker.finished);
+
+    context.destroy();
+}
+
 TEST_CASE("test op_finish_handle - concurrent ops") {
     size_t unfinished = 2;
+    SetUnfinishedInvoker invoker{unfinished};
 
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
@@ -81,8 +89,8 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
         auto *unfinished_ptr = static_cast<size_t *>(self);
         (*unfinished_ptr)--;
     };
-    handle1.set_on_finish(on_finish, &unfinished, 0);
-    handle2.set_on_finish(on_finish, &unfinished, 0);
+    handle1.set_invoker(&invoker);
+    handle2.set_invoker(&invoker);
 
     io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
     REQUIRE(sqe1 != nullptr);
@@ -103,6 +111,7 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
 
 TEST_CASE("test op_finish_handle - cancel op") {
     size_t unfinished = 1;
+    SetUnfinishedInvoker invoker{unfinished};
 
     condy::SimpleStrategy strategy(8);
     auto &context = condy::Context::current();
@@ -114,11 +123,7 @@ TEST_CASE("test op_finish_handle - cancel op") {
                                 condy::OpFinishHandle, condy::OpFinishHandle>
         finish_handle;
     finish_handle.init(&handle1, &handle2);
-    auto on_finish = [](void *self, size_t no) {
-        auto *unfinished_ptr = static_cast<size_t *>(self);
-        (*unfinished_ptr)--;
-    };
-    finish_handle.set_on_finish(on_finish, &unfinished, 0);
+    finish_handle.set_invoker(&invoker);
 
     io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
     REQUIRE(sqe1 != nullptr);

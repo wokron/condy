@@ -109,7 +109,7 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     bool ok = Context::current().get_ready_queue()->try_enqueue(&promise);
     if (!ok) { // Slow path
         auto *handle_ptr = new OpFinishHandle();
-        handle_ptr->set_on_finish(handle, true);
+        handle_ptr->set_invoker(&promise);
         auto *ring = Context::current().get_ring();
         io_uring_sqe *sqe = strategy->get_sqe(ring);
         assert(sqe != nullptr);

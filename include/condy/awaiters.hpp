@@ -46,7 +46,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -73,7 +73,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 };
@@ -117,7 +117,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -174,7 +174,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 };
@@ -216,7 +216,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -290,7 +290,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
