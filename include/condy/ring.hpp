@@ -64,24 +64,30 @@ public:
         io_uring_submit(&ring_);
     }
 
-    template <typename Func> size_t reap_completions(Func &&process_func) {
+    template <typename Func>
+    size_t reap_completions(Func &&process_func, size_t timeout_us = 0) {
         size_t reaped = 0;
         io_uring_cqe *cqe;
         int r;
+        if (timeout_us > 0) {
+            __kernel_timespec ts;
+            ts.tv_sec = timeout_us / 1000000;
+            ts.tv_nsec = (timeout_us % 1000000) * 1000;
+            r = io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);
+            if (r == -ETIME) {
+                return 0; // Timeout without any completions
+            } else if (r < 0) {
+                throw std::runtime_error("io_uring_wait_cqe_timeout failed");
+            }
+
+            if (reap_one_(cqe, process_func)) {
+                reaped++;
+            }
+        }
         while ((r = io_uring_peek_cqe(&ring_, &cqe)) == 0) {
-            bool unfinished = cqe->flags & IORING_CQE_F_MORE;
-            void *data = io_uring_cqe_get_data(cqe);
-            if (data == IGNORE_DATA) {
-                io_uring_cqe_seen(&ring_, cqe);
-                continue;
+            if (reap_one_(cqe, process_func)) {
+                reaped++;
             }
-            if (!unfinished) {
-                OpFinishHandle *handle = static_cast<OpFinishHandle *>(data);
-                outstanding_ops_.remove(handle);
-            }
-            process_func(cqe);
-            reaped++;
-            io_uring_cqe_seen(&ring_, cqe);
         }
         return reaped;
     }
@@ -113,6 +119,23 @@ public:
     void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
 
 private:
+    template <typename Func>
+    bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {
+        bool unfinished = cqe->flags & IORING_CQE_F_MORE;
+        void *data = io_uring_cqe_get_data(cqe);
+        if (data == IGNORE_DATA) {
+            io_uring_cqe_seen(&ring_, cqe);
+            return false;
+        }
+        if (!unfinished) {
+            OpFinishHandle *handle = static_cast<OpFinishHandle *>(data);
+            outstanding_ops_.remove(handle);
+        }
+        process_func(cqe);
+        io_uring_cqe_seen(&ring_, cqe);
+        return true;
+    }
+
     io_uring_sqe *get_sqe_() {
         io_uring_sqe *sqe;
         do {
