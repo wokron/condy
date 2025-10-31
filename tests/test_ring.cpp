@@ -99,30 +99,3 @@ TEST_CASE("test ring - cancel ops") {
 
     ring.destroy();
 }
-
-TEST_CASE("test ring - event fd") {
-    Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-
-    int event_fd = ring.get_ring_event_fd();
-    REQUIRE(event_fd >= 0);
-
-    eventfd_t value = 0;
-    REQUIRE(eventfd_read(event_fd, &value) == -1);
-
-    OpFinishHandle handle;
-    ring.register_op(io_uring_prep_nop, &handle);
-    ring.submit();
-
-    auto reaped = ring.reap_completions([&](io_uring_cqe *cqe) {
-        // No-op
-    });
-    REQUIRE(reaped == 1);
-
-    REQUIRE(eventfd_read(event_fd, &value) == 0);
-    REQUIRE(value == 1);
-
-    ring.destroy();
-}

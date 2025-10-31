@@ -28,20 +28,12 @@ public:
             throw std::runtime_error("io_uring_queue_init_params failed");
         }
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
-        ring_event_fd_ = eventfd(0, EFD_NONBLOCK);
-        r = io_uring_register_eventfd(&ring_, ring_event_fd_);
-        if (r < 0) {
-            io_uring_queue_exit(&ring_);
-            throw std::runtime_error("io_uring_register_eventfd failed");
-        }
         initialized_ = true;
     }
 
     void destroy() {
         if (initialized_) {
             io_uring_queue_exit(&ring_);
-            close(ring_event_fd_);
-            ring_event_fd_ = -1;
             initialized_ = false;
         }
     }
@@ -120,8 +112,6 @@ public:
 
     void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
 
-    int get_ring_event_fd() const { return ring_event_fd_; }
-
 private:
     io_uring_sqe *get_sqe_() {
         io_uring_sqe *sqe;
@@ -152,7 +142,6 @@ public:
 private:
     bool initialized_ = false;
     io_uring ring_;
-    int ring_event_fd_ = -1;
     IntrusiveDoubleList<OpFinishHandle, &OpFinishHandle::link_>
         outstanding_ops_;
     bool sqpoll_mode_ = false;
