@@ -4,6 +4,7 @@
 #include "condy/finish_handles.hpp"
 #include "condy/intrusive.hpp"
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <sys/eventfd.h>
 
@@ -74,7 +75,7 @@ public:
             ts.tv_sec = timeout_us / 1000000;
             ts.tv_nsec = (timeout_us % 1000000) * 1000;
             r = io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);
-            if (r == -ETIME) {
+            if (r == -ETIME || r == -EINTR) {
                 return 0; // Timeout without any completions
             } else if (r < 0) {
                 throw std::runtime_error("io_uring_wait_cqe_timeout failed");

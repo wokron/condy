@@ -29,6 +29,10 @@ public:
     virtual void wait() = 0;
 
     virtual void schedule(Invoker *invoker) = 0;
+
+    virtual void pend_work() = 0;
+
+    virtual void resume_work() = 0;
 };
 
 class SingleThreadRuntime : public IRuntime {
@@ -59,10 +63,14 @@ public:
         }
     }
 
+    void pend_work() override { pending_works_++; }
+
+    void resume_work() override { pending_works_--; }
+
     void wait() override {
         // In SingleThreadRuntime, wait is the place to run the event loop.
 
-        Context::current().init(&ring_);
+        Context::current().init(&ring_, this, schedule_local_);
         auto d = defer([]() { Context::current().destroy(); });
 
         while (!canceled_) {
@@ -91,6 +99,11 @@ public:
     }
 
 private:
+    static void schedule_local_(IRuntime *runtime, Invoker *invoker) {
+        auto *self = static_cast<SingleThreadRuntime *>(runtime);
+        self->local_queue_.push_back(invoker);
+    }
+
     bool wait_for_work_() {
         ring_.submit();
         auto reaped = flush_ring_();
@@ -109,7 +122,7 @@ private:
             }
 
             if (!ring_.has_outstanding_ops()) {
-                if (done_) {
+                if (done_ && pending_works_ == 0) {
                     // 3. If done_ is set and there is no more works, we can
                     // exit.
                     return false;
@@ -207,6 +220,10 @@ private:
     std::deque<Invoker *> local_queue_;
 
     Ring ring_;
+
+    // When pending_works_ > 0, it means there are some works going to be posted
+    // to the runtime, so the runtime should not exit even if done_ is set.
+    size_t pending_works_ = 0;
 
     const size_t global_queue_interval_ = 31;
     const size_t event_interval_ = 61;

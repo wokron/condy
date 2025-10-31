@@ -1,7 +1,6 @@
 #pragma once
 
 #include "condy/coro.hpp"
-#include "condy/event_loop.hpp"
 #include "condy/invoker.hpp"
 #include "condy/spin_lock.hpp"
 #include "condy/uninitialized.hpp"
@@ -44,17 +43,11 @@ public:
 
             // 2. Task awaited by another coroutine in different event loops,
             // need to post back to caller loop
-            if (self.caller_loop_ != nullptr) {
-                assert(false && "Unimplemented");
-                // auto *caller_loop = self.caller_loop_;
-                // lock.unlock();
-                // assert(caller_handle != std::noop_coroutine());
-                // // TODO: Need to optimize this
-                // while (!caller_loop->try_post(caller_handle)) {
-                //     std::this_thread::yield();
-                // }
-
-                // return std::noop_coroutine();
+            if (self.remote_callback_ != nullptr) {
+                auto *callback = self.remote_callback_;
+                lock.unlock();
+                (*callback)();
+                return std::noop_coroutine();
             }
 
             // 3. Task awaited by another coroutine in the same event loop,
@@ -82,14 +75,21 @@ public:
         }
     }
 
-    bool register_task_await(std::coroutine_handle<> caller_handle,
-                             IEventLoop *caller_loop) noexcept {
+    bool register_task_await(std::coroutine_handle<> caller_handle) noexcept {
         std::lock_guard lock(mutex_);
         if (finished_) {
             return false; // ready to resume immediately
         }
         caller_handle_ = caller_handle;
-        caller_loop_ = caller_loop;
+        return true;
+    }
+
+    bool register_task_await(Invoker *remote_callback) noexcept {
+        std::lock_guard lock(mutex_);
+        if (finished_) {
+            return false; // ready to resume immediately
+        }
+        remote_callback_ = remote_callback;
         return true;
     }
 
@@ -118,7 +118,7 @@ protected:
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
-    IEventLoop *caller_loop_ = nullptr;
+    Invoker *remote_callback_ = nullptr;
 
     std::exception_ptr exception_;
 };
