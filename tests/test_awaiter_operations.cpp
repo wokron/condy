@@ -7,6 +7,8 @@
 #include <doctest/doctest.h>
 #include <liburing.h>
 
+using namespace condy::operators;
+
 namespace {
 
 void event_loop(size_t &unfinished) {

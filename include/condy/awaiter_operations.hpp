@@ -59,6 +59,8 @@ template <typename Range> auto make_ranged_link_awaiter(Range &&range) {
     return RangedLinkAwaiter<AwaiterType>(std::forward<Range>(range));
 }
 
+namespace operators {
+
 template <typename Func, typename... Args>
 auto operator~(OpAwaiter<Func, Args...> op) {
     return make_drained_op_awaiter(std::move(op));
@@ -113,5 +115,7 @@ template <typename Handle, typename Awaiter>
 void operator+=(RangedParallelAwaiter<Handle, Awaiter> &rwa, Awaiter a) {
     rwa.append_awaiter(std::move(a));
 }
+
+} // namespace operators
 
 } // namespace condy
