@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/context.hpp"
+#include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include <array>
 #include <cstddef>
@@ -12,6 +13,9 @@
 namespace condy {
 
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle> {
+public:
+    DoubleLinkEntry link_; // For outstanding ops list
+
 public:
     using ReturnType = int;
 
