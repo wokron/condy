@@ -1,7 +1,5 @@
 #pragma once
 
-#include "condy/async_operations.hpp"
-#include "condy/context.hpp"
 #include "condy/coro.hpp"
 #include <coroutine>
 #include <exception>
@@ -65,9 +63,7 @@ template <> inline auto Task<void>::operator co_await() && {
         IEventLoop *loop_ = nullptr;
     };
 
-    return TaskAwaiter{std::exchange(handle_, nullptr),
-                       remote_task_ ? Context::current().get_event_loop()
-                                    : nullptr};
+    return TaskAwaiter{std::exchange(handle_, nullptr), nullptr};
 }
 
 template <typename T> inline auto Task<T>::operator co_await() && {
@@ -94,48 +90,46 @@ template <typename T> inline auto Task<T>::operator co_await() && {
         IEventLoop *loop_ = nullptr;
     };
 
-    return TaskAwaiter{std::exchange(handle_, nullptr),
-                       remote_task_ ? Context::current().get_event_loop()
-                                    : nullptr};
+    return TaskAwaiter{std::exchange(handle_, nullptr), nullptr};
 }
 
-template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
-    auto handle = coro.release();
-    auto *strategy = Context::current().get_strategy();
-    auto &promise = handle.promise();
-    promise.set_auto_destroy(false);
-    promise.set_new_task(true);
+// template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
+//     auto handle = coro.release();
+//     auto *strategy = Context::current().get_strategy();
+//     auto &promise = handle.promise();
+//     promise.set_auto_destroy(false);
+//     promise.set_new_task(true);
 
-    bool ok = Context::current().get_ready_queue()->try_enqueue(&promise);
-    if (!ok) { // Slow path
-        auto *handle_ptr = new OpFinishHandle();
-        handle_ptr->set_invoker(&promise);
-        auto *ring = Context::current().get_ring();
-        io_uring_sqe *sqe = strategy->get_sqe(ring);
-        assert(sqe != nullptr);
-        io_uring_prep_nop(sqe);
-        io_uring_sqe_set_data(sqe, handle_ptr);
-    }
-    return {handle, false};
-}
+//     bool ok = Context::current().get_ready_queue()->try_enqueue(&promise);
+//     if (!ok) { // Slow path
+//         auto *handle_ptr = new OpFinishHandle();
+//         handle_ptr->set_invoker(&promise);
+//         auto *ring = Context::current().get_ring();
+//         io_uring_sqe *sqe = strategy->get_sqe(ring);
+//         assert(sqe != nullptr);
+//         io_uring_prep_nop(sqe);
+//         io_uring_sqe_set_data(sqe, handle_ptr);
+//     }
+//     return {handle, false};
+// }
 
-template <typename T, typename Executor>
-inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
-    if (static_cast<IEventLoop *>(&executor) ==
-        Context::current().get_event_loop()) {
-        co_return co_spawn(std::move(coro));
-    }
+// template <typename T, typename Executor>
+// inline Coro<Task<T>> co_spawn(Executor &executor, Coro<T> coro) {
+//     if (static_cast<IEventLoop *>(&executor) ==
+//         Context::current().get_event_loop()) {
+//         co_return co_spawn(std::move(coro));
+//     }
 
-    auto handle = coro.release();
-    auto &promise = handle.promise();
-    promise.set_auto_destroy(false);
-    promise.set_use_mutex(true);
-    promise.set_new_task(true);
+//     auto handle = coro.release();
+//     auto &promise = handle.promise();
+//     promise.set_auto_destroy(false);
+//     promise.set_use_mutex(true);
+//     promise.set_new_task(true);
 
-    while (!executor.try_post(&promise)) {
-        co_await async_nop();
-    }
-    co_return {handle, true};
-}
+//     while (!executor.try_post(&promise)) {
+//         co_await async_nop();
+//     }
+//     co_return {handle, true};
+// }
 
 } // namespace condy

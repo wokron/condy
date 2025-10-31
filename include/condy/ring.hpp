@@ -146,9 +146,10 @@ private:
         }
     }
 
-private:
+public:
     inline static void *const IGNORE_DATA = reinterpret_cast<void *>(0x1);
 
+private:
     bool initialized_ = false;
     io_uring ring_;
     int ring_event_fd_ = -1;

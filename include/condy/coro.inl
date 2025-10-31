@@ -8,7 +8,6 @@
 #include "condy/utils.hpp"
 #include <coroutine>
 #include <mutex>
-#include <thread>
 
 namespace condy {
 
@@ -22,25 +21,7 @@ public:
             static_cast<PromiseType &>(*this))};
     }
 
-    struct InitialAwaiter {
-        bool await_ready() const noexcept { return false; }
-
-        void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
-            self_ = h;
-        }
-
-        void await_resume() noexcept {
-            auto &promise = self_.promise();
-            if (promise.new_task_) {
-                promise.task_id_ =
-                    Context::current().get_strategy()->generate_task_id();
-            }
-        }
-
-        std::coroutine_handle<PromiseType> self_;
-    };
-
-    InitialAwaiter initial_suspend() noexcept { return {}; }
+    std::suspend_always initial_suspend() noexcept { return {}; }
 
     void unhandled_exception() { exception_ = std::current_exception(); }
 
@@ -86,13 +67,7 @@ public:
         void await_resume() noexcept {}
     };
 
-    FinalAwaiter final_suspend() noexcept {
-        if (new_task_) {
-            assert(task_id_ != -1);
-            Context::current().get_strategy()->recycle_task_id(task_id_);
-        }
-        return {};
-    }
+    FinalAwaiter final_suspend() noexcept { return {}; }
 
 public:
     void request_detach() noexcept {
@@ -132,8 +107,6 @@ public:
 
     std::exception_ptr exception() const noexcept { return exception_; }
 
-    void set_new_task(bool is_new) noexcept { new_task_ = is_new; }
-
     void operator()() {
         auto h = std::coroutine_handle<PromiseType>::from_promise(
             static_cast<PromiseType &>(*this));
@@ -146,9 +119,6 @@ protected:
     bool auto_destroy_ = true;
     bool finished_ = false;
     IEventLoop *caller_loop_ = nullptr;
-
-    int task_id_ = -1;
-    bool new_task_ = false;
 
     std::exception_ptr exception_;
 };

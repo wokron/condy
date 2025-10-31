@@ -1,8 +1,9 @@
 #include "condy/finish_handles.hpp"
-#include "condy/strategies.hpp"
 #include <cstddef>
+#include <cstring>
 #include <doctest/doctest.h>
 #include <liburing.h>
+#include <liburing/io_uring.h>
 
 namespace {
 
@@ -19,58 +20,44 @@ struct SetUnfinishedInvoker
 };
 
 void event_loop(size_t &unfinished) {
-    auto &context = condy::Context::current();
-    auto ring = context.get_ring();
+    auto *ring = condy::Context::current().ring();
     while (unfinished > 0) {
-        io_uring_submit_and_wait(ring, 1);
-
-        io_uring_cqe *cqe;
-        io_uring_peek_cqe(ring, &cqe);
-        if (cqe == nullptr) {
-            continue;
-        }
-
-        auto handle_ptr =
-            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        if (handle_ptr) {
+        ring->submit();
+        ring->reap_completions([&](io_uring_cqe *cqe) {
+            auto handle_ptr = static_cast<condy::OpFinishHandle *>(
+                io_uring_cqe_get_data(cqe));
             handle_ptr->set_result(cqe->res);
             (*handle_ptr)();
-        }
-
-        io_uring_cqe_seen(ring, cqe);
+        });
     }
 }
 
 } // namespace
 
 TEST_CASE("test op_finish_handle - basic usage") {
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
-    auto ring = context.get_ring();
+    context.init(&ring);
 
     SetFinishInvoker invoker;
     condy::OpFinishHandle handle;
     handle.set_invoker(&invoker);
 
-    io_uring_sqe *sqe = io_uring_get_sqe(ring);
-    REQUIRE(sqe != nullptr);
-    io_uring_prep_nop(sqe);
-    io_uring_sqe_set_data(sqe, &handle);
+    ring.register_op(io_uring_prep_nop, &handle);
+    ring.submit();
 
-    io_uring_submit(ring);
-
-    io_uring_cqe *cqe;
-    io_uring_wait_cqe(ring, &cqe);
-
-    auto handle_ptr =
-        static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-    handle_ptr->set_result(cqe->res);
-    (*handle_ptr)();
-
-    io_uring_cqe_seen(ring, cqe);
+    ring.wait_all_completions([](io_uring_cqe *cqe) {
+        auto handle_ptr =
+            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        handle_ptr->set_result(42);
+        (*handle_ptr)();
+    });
 
     REQUIRE(invoker.finished);
+    REQUIRE(handle.extract_result() == 42);
 
     context.destroy();
 }
@@ -79,10 +66,12 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     size_t unfinished = 2;
     SetUnfinishedInvoker invoker{unfinished};
 
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
-    auto ring = context.get_ring();
+    context.init(&ring);
 
     condy::OpFinishHandle handle1, handle2;
     auto on_finish = [](void *self, size_t no) {
@@ -92,18 +81,12 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     handle1.set_invoker(&invoker);
     handle2.set_invoker(&invoker);
 
-    io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
-    REQUIRE(sqe1 != nullptr);
-    io_uring_prep_nop(sqe1);
-    io_uring_sqe_set_data(sqe1, &handle1);
+    ring.register_op(io_uring_prep_nop, &handle1);
+    ring.register_op(io_uring_prep_nop, &handle2);
 
-    io_uring_sqe *sqe2 = io_uring_get_sqe(ring);
-    REQUIRE(sqe2 != nullptr);
-    io_uring_prep_nop(sqe2);
-    io_uring_sqe_set_data(sqe2, &handle2);
+    event_loop(invoker.unfinished);
 
-    event_loop(unfinished);
-
+    REQUIRE(!ring.has_outstanding_ops());
     REQUIRE(unfinished == 0);
 
     context.destroy();
@@ -113,10 +96,12 @@ TEST_CASE("test op_finish_handle - cancel op") {
     size_t unfinished = 1;
     SetUnfinishedInvoker invoker{unfinished};
 
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
-    auto ring = context.get_ring();
+    context.init(&ring);
 
     condy::OpFinishHandle handle1, handle2;
     condy::ParallelFinishHandle<condy::WaitOneCancelCondition,
@@ -125,22 +110,21 @@ TEST_CASE("test op_finish_handle - cancel op") {
     finish_handle.init(&handle1, &handle2);
     finish_handle.set_invoker(&invoker);
 
-    io_uring_sqe *sqe1 = io_uring_get_sqe(ring);
-    REQUIRE(sqe1 != nullptr);
-    __kernel_timespec ts{
-        .tv_sec = 60 * 60,
-        .tv_nsec = 0,
-    };
-    io_uring_prep_timeout(sqe1, &ts, 0, 0);
-    io_uring_sqe_set_data(sqe1, &handle1);
+    ring.register_op(
+        [&](io_uring_sqe *sqe) {
+            __kernel_timespec ts{
+                .tv_sec = 60 * 60,
+                .tv_nsec = 0,
+            };
+            io_uring_prep_timeout(sqe, &ts, 0, 0);
+        },
+        &handle1);
 
-    io_uring_sqe *sqe2 = io_uring_get_sqe(ring);
-    REQUIRE(sqe2 != nullptr);
-    io_uring_prep_nop(sqe2);
-    io_uring_sqe_set_data(sqe2, &handle2);
+    ring.register_op(io_uring_prep_nop, &handle2);
 
     event_loop(unfinished);
 
+    REQUIRE(!ring.has_outstanding_ops());
     REQUIRE(unfinished == 0);
 
     auto r = finish_handle.extract_result();

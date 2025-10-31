@@ -1,11 +1,11 @@
 #pragma once
 
-#include "condy/context.hpp"
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include <array>
 #include <cstddef>
 #include <limits>
+#include <stdexcept>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -19,13 +19,7 @@ public:
 public:
     using ReturnType = int;
 
-    void cancel() {
-        auto ring = Context::current().get_ring();
-        auto *sqe = Context::current().get_strategy()->get_sqe(ring);
-        assert(sqe != nullptr);
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, nullptr);
-    }
+    void cancel();
 
     void set_result(int res) { res_ = res; }
 
@@ -285,3 +279,5 @@ private:
 };
 
 } // namespace condy
+
+#include "condy/finish_handles.inl"
