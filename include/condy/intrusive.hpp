@@ -50,6 +50,13 @@ public:
         return reinterpret_cast<T *>(container_of_(entry));
     }
 
+    T *front() noexcept {
+        if (empty()) {
+            return nullptr;
+        }
+        return reinterpret_cast<T *>(container_of_(head_));
+    }
+
     template <typename Func> void for_each(Func &&func) noexcept {
         SingleLinkEntry *current = head_;
         while (current) {

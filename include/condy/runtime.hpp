@@ -328,7 +328,6 @@ private:
                 continue;
             }
 
-            // TODO: Some work cannot be stolen, e.g., cancellable ops.
             work = steal_work_();
             if (work) {
                 (*work)();
@@ -349,8 +348,12 @@ private:
 
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
-        self->data_->local_queue.push(work);
-        self->cv_.notify_one();
+        if (!self->data_->local_queue.try_push(work)) {
+            self->data_->extended_queue.push_back(work);
+            self->cv_.notify_all();
+        } else {
+            self->cv_.notify_one();
+        }
     }
 
     size_t flush_ring_() {
@@ -363,7 +366,9 @@ private:
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         handle->set_result(cqe->res);
         if (handle->is_stealable()) {
-            data_->local_queue.push(handle);
+            if (!data_->local_queue.try_push(handle)) {
+                data_->extended_queue.push_back(handle);
+            }
         } else {
             data_->no_steal_queue.push_back(handle);
         }
@@ -387,10 +392,14 @@ private:
 
     WorkInvoker *next_local_() {
         WorkInvoker *work = data_->no_steal_queue.pop_front();
-        if (!work) {
-            work = data_->local_queue.pop();
+        if (work) {
+            return work;
         }
-        return work;
+        work = data_->local_queue.pop();
+        if (work) {
+            return work;
+        }
+        return next_extended_flush_();
     }
 
     WorkInvoker *next_global_() {
@@ -411,12 +420,28 @@ private:
         return work;
     }
 
+    WorkInvoker *next_extended_flush_() {
+        WorkInvoker *work = data_->extended_queue.pop_front();
+        if (!work) {
+            return nullptr;
+        }
+        WorkInvoker *next_work;
+        while ((next_work = data_->extended_queue.front()) != nullptr &&
+               data_->local_queue.try_push(next_work)) {
+            auto *tmp = data_->extended_queue.pop_front();
+            assert(tmp == next_work);
+        }
+        return work;
+    }
+
     size_t flush_global_() {
         // NOTICE: mutex_ must be locked before calling this function
         size_t total = 0;
         WorkInvoker *work = nullptr;
-        while ((work = global_queue_.pop_front()) != nullptr) {
-            data_->local_queue.push(work);
+        while ((work = global_queue_.front()) != nullptr &&
+               data_->local_queue.try_push(work)) {
+            auto *tmp = global_queue_.pop_front();
+            assert(tmp == work);
             total++;
         }
         return total;
@@ -504,7 +529,9 @@ private:
     struct LocalData {
         size_t thread_index;
         Ring ring;
-        UnboundedTaskQueue<WorkInvoker *> local_queue{8};
+        BoundedTaskQueue<WorkInvoker *, 8> local_queue;
+        IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
+            extended_queue;
         IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
             no_steal_queue;
         size_t tick_count = 0;
