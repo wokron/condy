@@ -239,7 +239,6 @@ private:
     size_t tick_count_ = 0;
 };
 
-// TODO: Potential deadlock, need to fix
 class MultiThreadRuntime : public IRuntime {
 public:
     MultiThreadRuntime(unsigned int ring_entries_per_thread, size_t num_threads)
@@ -269,12 +268,14 @@ public:
 
 public:
     void cancel() override {
+        std::lock_guard<std::mutex> lock(mutex_);
         canceled_ = true;
         done_ = true;
         cv_.notify_all();
     }
 
     void done() override {
+        std::lock_guard<std::mutex> lock(mutex_);
         done_ = true;
         cv_.notify_all();
     }
@@ -285,12 +286,11 @@ public:
         cv_.notify_one();
     }
 
-    void pend_work() override { data_->pending_works++; }
+    void pend_work() override { pending_works_++; }
 
-    void resume_work() override { data_->pending_works--; }
+    void resume_work() override { pending_works_--; }
 
     void wait() override {
-        assert(done_ || canceled_);
         for (auto &thread : threads_) {
             if (thread.joinable()) {
                 thread.join();
@@ -458,7 +458,7 @@ private:
 
             if (!data_->ring.has_outstanding_ops()) {
                 blocking_threads_++;
-                if (done_ && data_->pending_works == 0 &&
+                if (done_ && pending_works_ == 0 &&
                     blocking_threads_ == num_threads_) {
                     // 3. If done_ is set and there is no more works, we can
                     // exit.
@@ -482,15 +482,14 @@ private:
     }
 
 private:
-    std::atomic_bool done_ = false;
-    std::atomic_bool canceled_ = false;
-
     std::mutex mutex_;
     std::condition_variable cv_;
+    bool done_ = false;
+    std::atomic_bool canceled_ = false;
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
         global_queue_;
-
-    std::atomic_size_t blocking_threads_ = 0;
+    std::atomic_size_t pending_works_ = 0;
+    size_t blocking_threads_ = 0;
 
     const size_t global_queue_interval_ = 31;
     const size_t event_interval_ = 61;
@@ -508,7 +507,6 @@ private:
         UnboundedTaskQueue<WorkInvoker *> local_queue{8};
         IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
             no_steal_queue;
-        size_t pending_works = 0;
         size_t tick_count = 0;
         PCG32 pcg32;
     };
