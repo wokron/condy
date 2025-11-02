@@ -1,69 +1,43 @@
 #pragma once
 
-#include "condy/condy_uring.hpp"
-#include "condy/queue.hpp"
-#include "condy/strategies.hpp"
-#include <coroutine>
-#include <cstring>
-#include <stdexcept>
-#include <string>
+#include "condy/singleton.hpp"
+#include <cassert>
 
 namespace condy {
 
-struct IStrategy;
-struct IEventLoop;
+struct Ring;
+struct IRuntime;
+struct Invoker;
+using ScheduleLocalFunc = void (*)(IRuntime *, Invoker *);
 
-class Context {
+class Context : public ThreadLocalSingleton<Context> {
 public:
-    Context(const Context &) = delete;
-    Context &operator=(const Context &) = delete;
-    Context(Context &&) = delete;
-    Context &operator=(Context &&) = delete;
-
-public:
-    static Context &current() {
-        static thread_local Context ctx;
-        return ctx;
+    void init(Ring *ring, IRuntime *runtime = nullptr,
+              ScheduleLocalFunc schedule_local = nullptr) {
+        ring_ = ring;
+        runtime_ = runtime;
+        schedule_local_ = schedule_local;
     }
-
-    void init(IStrategy *strategy,
-              SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue,
-              IEventLoop *event_loop) {
-        int r = strategy->init_io_uring(&ring_);
-        if (r < 0) {
-            throw std::runtime_error("io_uring_queue_init failed: " +
-                                     std::string(std::strerror(-r)));
-        }
-        strategy_ = strategy;
-        ready_queue_ = ready_queue;
-        event_loop_ = event_loop;
-    }
-
     void destroy() {
-        io_uring_queue_exit(&ring_);
-        strategy_ = nullptr;
-        ready_queue_ = nullptr;
-        event_loop_ = nullptr;
+        ring_ = nullptr;
+        runtime_ = nullptr;
+        schedule_local_ = nullptr;
     }
 
-    io_uring *get_ring() { return &ring_; }
+    Ring *ring() { return ring_; }
 
-    IStrategy *get_strategy() { return strategy_; }
+    IRuntime *runtime() { return runtime_; }
 
-    SingleThreadRingQueue<std::coroutine_handle<>> *get_ready_queue() {
-        return ready_queue_;
+    void schedule_local(Invoker *invoker) {
+        assert(runtime_ != nullptr);
+        assert(schedule_local_ != nullptr);
+        schedule_local_(runtime_, invoker);
     }
 
-    IEventLoop *get_event_loop() { return event_loop_; }
-
 private:
-    Context() = default;
-
-private:
-    io_uring ring_{};
-    IStrategy *strategy_ = nullptr;
-    SingleThreadRingQueue<std::coroutine_handle<>> *ready_queue_ = nullptr;
-    IEventLoop *event_loop_ = nullptr;
+    Ring *ring_ = nullptr;
+    IRuntime *runtime_ = nullptr;
+    ScheduleLocalFunc schedule_local_ = nullptr;
 };
 
 } // namespace condy

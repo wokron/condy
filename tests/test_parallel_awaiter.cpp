@@ -1,3 +1,4 @@
+#include "condy/invoker.hpp"
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
 #include <doctest/doctest.h>
@@ -5,26 +6,27 @@
 
 namespace {
 
-struct SimpleFinishHandle : public condy::FinishHandleBase {
+struct SimpleFinishHandle {
     using ReturnType = int;
-
-    void set_on_finish(OnFinishFunc on_finish, void *self, size_t no) {
-        FinishHandleBase::set_on_finish(on_finish, self, no);
-        registered_ = true;
-    }
 
     void cancel() { cancelled_++; }
 
     void invoke(int res) {
         res_ = std::move(res);
-        FinishHandleBase::invoke();
+        (*invoker_)();
     }
 
     int extract_result() { return res_; }
 
+    void set_invoker(condy::Invoker *invoker) {
+        invoker_ = invoker;
+        registered_ = true;
+    }
+
     int res_;
     int cancelled_ = 0;
     bool registered_ = false;
+    condy::Invoker *invoker_ = nullptr;
 };
 
 class SimpleAwaiter {

@@ -1,75 +1,41 @@
 #pragma once
 
-#include "condy/context.hpp"
+#include "condy/intrusive.hpp"
+#include "condy/invoker.hpp"
 #include <array>
-#include <coroutine>
 #include <cstddef>
 #include <limits>
+#include <stdexcept>
+#include <tuple>
 #include <variant>
 #include <vector>
 
 namespace condy {
 
-class FinishHandleBase {
+class OpFinishHandle : public InvokerAdapter<OpFinishHandle> {
 public:
-    using OnFinishFunc = void (*)(void *self, size_t no);
+    DoubleLinkEntry link_; // For outstanding ops list
 
-    void set_on_finish(OnFinishFunc on_finish, void *self, size_t no) {
-        on_finish_ = on_finish;
-        data_ = self;
-        no_ = no;
-    }
-
-    void set_on_finish(std::coroutine_handle<> handle,
-                       bool self_delete = false) {
-        data_ = handle.address();
-        on_finish_ = nullptr;
-        no_ = self_delete ? 1 : 0;
-    }
-
-    void invoke() {
-        if (on_finish_) {
-            on_finish_(data_, no_);
-        } else {
-            auto h = std::coroutine_handle<>::from_address(data_);
-            if (no_) {
-                delete this;
-            }
-            h.resume();
-        }
-    }
-
-protected:
-    OnFinishFunc on_finish_ = nullptr;
-    void *data_ = nullptr;
-    size_t no_ = 0;
-};
-
-class OpFinishHandle : public FinishHandleBase {
 public:
     using ReturnType = int;
 
-    void cancel() {
-        auto ring = Context::current().get_ring();
-        auto *sqe = Context::current().get_strategy()->get_sqe(ring);
-        assert(sqe != nullptr);
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, nullptr);
-    }
+    void cancel();
 
-    void invoke(int res) {
-        res_ = std::move(res);
-        FinishHandleBase::invoke();
-    }
+    void set_result(int res) { res_ = res; }
+
+    void operator()() { (*invoker_)(); }
 
     int extract_result() { return res_; }
 
+    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+
 private:
     int res_;
+    Invoker *invoker_ = nullptr;
 };
 
 template <typename Condition, typename Handle>
-class RangedParallelFinishHandle : public FinishHandleBase {
+class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType =
@@ -77,15 +43,13 @@ public:
 
     void init(std::vector<Handle *> handles) {
         handles_ = std::move(handles);
+        invokers_.resize(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
             auto *handle = handles_[i];
-            handle->set_on_finish(
-                [](void *self, size_t no) {
-                    auto *this_ptr = static_cast<
-                        RangedParallelFinishHandle<Condition, Handle> *>(self);
-                    this_ptr->finish_(no);
-                },
-                this, i);
+            auto &invoker = invokers_[i];
+            invoker.self_ = this;
+            invoker.no_ = i;
+            handle->set_invoker(&invoker);
         }
         res_.first.resize(handles_.size());
         res_.second.resize(handles_.size());
@@ -101,6 +65,8 @@ public:
 
     ReturnType extract_result() { return std::move(res_); }
 
+    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+
 private:
     void finish_(size_t idx) {
         size_t no = finished_count_++;
@@ -110,7 +76,7 @@ private:
         results[idx] = handles_[idx]->extract_result();
         if (no == handles_.size() - 1) {
             // All finished
-            invoke();
+            (*invoker_)();
             return;
         }
 
@@ -124,11 +90,19 @@ private:
     }
 
 private:
+    struct FinishInvoker : public InvokerAdapter<FinishInvoker> {
+        void operator()() { self_->finish_(no_); }
+        RangedParallelFinishHandle *self_;
+        size_t no_;
+    };
+
     size_t finished_count_ = 0;
     size_t canceled_count_ = 0;
     std::vector<Handle *> handles_ = {};
+    std::vector<FinishInvoker> invokers_;
     Condition cancel_checker_ = {};
     ReturnType res_;
+    Invoker *invoker_ = nullptr;
 };
 
 struct WaitAllCancelCondition {
@@ -171,15 +145,14 @@ public:
     }
 };
 
-template <typename Condition, typename... Handles>
-class ParallelFinishHandle : public FinishHandleBase {
+template <typename Condition, typename... Handles> class ParallelFinishHandle {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
     template <typename... HandlePtr> void init(HandlePtr... handles) {
         handles_ = std::make_tuple(handles...);
-        foreach_set_on_finish_();
+        foreach_set_invoker_();
     }
 
     void cancel() {
@@ -191,19 +164,16 @@ public:
 
     ReturnType extract_result() { return std::move(res_); }
 
+    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+
 private:
-    template <size_t I = 0> void foreach_set_on_finish_() {
+    template <size_t I = 0> void foreach_set_invoker_() {
         if constexpr (I < sizeof...(Handles)) {
             auto *handle = std::get<I>(handles_);
-            handle->set_on_finish(
-                [](void *self, size_t no) {
-                    assert(no == I);
-                    auto *this_ptr = static_cast<
-                        ParallelFinishHandle<Condition, Handles...> *>(self);
-                    this_ptr->template finish_<I>();
-                },
-                this, I);
-            foreach_set_on_finish_<I + 1>();
+            auto &invoker = std::get<I>(invokers_);
+            invoker.self_ = this;
+            handle->set_invoker(&invoker);
+            foreach_set_invoker_<I + 1>();
         }
     }
 
@@ -224,7 +194,7 @@ private:
         std::get<Idx>(results) = std::get<Idx>(handles_)->extract_result();
         if (no == sizeof...(Handles) - 1) {
             // All finished
-            invoke();
+            (*invoker_)();
             return;
         }
 
@@ -235,11 +205,33 @@ private:
     }
 
 private:
+    template <size_t I>
+    struct FinishInvoker : public InvokerAdapter<FinishInvoker<I>> {
+        void operator()() { self_->template finish_<I>(); }
+        ParallelFinishHandle *self_;
+    };
+
+    template <typename... input_t>
+    using tuple_cat_t = decltype(std::tuple_cat(std::declval<input_t>()...));
+
+    template <size_t I, typename Arg, typename... Args> struct helper {
+        using type = tuple_cat_t<std::tuple<FinishInvoker<I>>,
+                                 typename helper<I + 1, Args...>::type>;
+    };
+
+    template <size_t I, typename Arg> struct helper<I, Arg> {
+        using type = std::tuple<FinishInvoker<I>>;
+    };
+
+    using InvokerTupleType = typename helper<0, Handles...>::type;
+
     size_t finished_count_ = 0;
     size_t canceled_count_ = 0;
     std::tuple<Handles *...> handles_;
+    InvokerTupleType invokers_;
     Condition cancel_checker_ = {};
     ReturnType res_;
+    Invoker *invoker_ = nullptr;
 };
 
 template <typename... Handles>
@@ -287,3 +279,5 @@ private:
 };
 
 } // namespace condy
+
+#include "condy/finish_handles.inl"

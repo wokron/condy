@@ -2,39 +2,34 @@
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
 #include <cstddef>
+#include <cstring>
 #include <doctest/doctest.h>
 #include <liburing.h>
 
 namespace {
 
 void event_loop(size_t &unfinished) {
-    auto &context = condy::Context::current();
-    auto ring = context.get_ring();
+    auto *ring = condy::Context::current().ring();
     while (unfinished > 0) {
-        io_uring_submit_and_wait(ring, 1);
-
-        io_uring_cqe *cqe;
-        io_uring_peek_cqe(ring, &cqe);
-        if (cqe == nullptr) {
-            continue;
-        }
-
-        auto handle_ptr =
-            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        if (handle_ptr) {
-            handle_ptr->invoke(cqe->res);
-        }
-
-        io_uring_cqe_seen(ring, cqe);
+        ring->submit();
+        ring->reap_completions([&](io_uring_cqe *cqe) {
+            auto handle_ptr = static_cast<condy::OpFinishHandle *>(
+                io_uring_cqe_get_data(cqe));
+            handle_ptr->set_result(cqe->res);
+            (*handle_ptr)();
+        });
     }
 }
 
 } // namespace
 
 TEST_CASE("test op_awaiter - basic routine") {
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
+    context.init(&ring);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -50,14 +45,18 @@ TEST_CASE("test op_awaiter - basic routine") {
 
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
+    REQUIRE(!ring.has_outstanding_ops());
 
     context.destroy();
 }
 
 TEST_CASE("test op_awaiter - multiple ops") {
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
+    context.init(&ring);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -74,14 +73,18 @@ TEST_CASE("test op_awaiter - multiple ops") {
 
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
+    REQUIRE(!ring.has_outstanding_ops());
 
     context.destroy();
 }
 
 TEST_CASE("test op_awaiter - concurrent op") {
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
+    context.init(&ring);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -108,9 +111,12 @@ TEST_CASE("test op_awaiter - concurrent op") {
 }
 
 TEST_CASE("test op_awaiter - cancel op") {
-    condy::SimpleStrategy strategy(8);
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&strategy, nullptr, nullptr);
+    context.init(&ring);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {

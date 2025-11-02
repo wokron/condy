@@ -2,7 +2,8 @@
 
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
-#include "condy/strategies.hpp"
+#include "condy/ring.hpp"
+#include "condy/context.hpp"
 #include <coroutine>
 #include <cstddef>
 #include <tuple>
@@ -28,16 +29,17 @@ public:
 
     void register_operation(unsigned int flags) {
         auto &context = Context::current();
-        auto ring = context.get_ring();
-        auto *sqe = context.get_strategy()->get_sqe(ring);
-        assert(sqe != nullptr);
-        std::apply(
-            [&](auto &&...args) {
-                prep_func_(sqe, std::forward<decltype(args)>(args)...);
+        auto *ring = context.ring();
+        ring->register_op(
+            [&](io_uring_sqe *sqe) {
+                std::apply(
+                    [&](auto &&...args) {
+                        prep_func_(sqe, std::forward<decltype(args)>(args)...);
+                    },
+                    args_);
+                io_uring_sqe_set_flags(sqe, flags);
             },
-            args_);
-        io_uring_sqe_set_data(sqe, &finish_handle_);
-        io_uring_sqe_set_flags(sqe, flags);
+            &finish_handle_);
     }
 
 public:
@@ -46,7 +48,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -73,7 +75,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 };
@@ -117,7 +119,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -155,16 +157,8 @@ public:
     using Base::Base;
 
     void register_operation(unsigned int flags) {
-        auto *ring = Context::current().get_ring();
-        if (io_uring_sq_space_left(ring) < Base::awaiters_.size()) {
-            io_uring_submit(ring);
-        }
-        // Check it again after submitting
-        if (io_uring_sq_space_left(ring) < Base::awaiters_.size()) {
-            throw std::runtime_error(
-                "Not enough space in submission queue for linked operations: " +
-                std::to_string(Base::awaiters_.size()) + " operations");
-        }
+        auto *ring = Context::current().ring();
+        ring->reserve_space(Base::awaiters_.size());
         for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
             Base::awaiters_[i].register_operation(flags | IOSQE_IO_LINK);
         }
@@ -174,7 +168,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 };
@@ -216,7 +210,7 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_on_finish(h);
+        finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
@@ -274,23 +268,15 @@ public:
     using Base::Base;
 
     void register_operation(unsigned int flags) {
-        auto *ring = Context::current().get_ring();
-        if (io_uring_sq_space_left(ring) < sizeof...(Awaiter)) {
-            io_uring_submit(ring);
-        }
-        // Check it again after submitting
-        if (io_uring_sq_space_left(ring) < sizeof...(Awaiter)) {
-            throw std::runtime_error(
-                "Not enough space in submission queue for linked operations: " +
-                std::to_string(sizeof...(Awaiter)) + " operations");
-        }
+        auto *ring = Context::current().ring();
+        ring->reserve_space(sizeof...(Awaiter));
         foreach_register_operation_(flags);
     }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         Base::init_finish_handle();
-        Base::finish_handle_.set_on_finish(h);
+        Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
