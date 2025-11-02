@@ -29,7 +29,12 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
+    bool is_stealable() const { return stealable_; }
+
+    void set_stealable(bool stealable) { stealable_ = stealable; }
+
 private:
+    bool stealable_ = true;
     int res_;
     Invoker *invoker_ = nullptr;
 };
@@ -40,6 +45,7 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
+    static constexpr bool is_stealable = Condition::is_stealable;
 
     void init(std::vector<Handle *> handles) {
         handles_ = std::move(handles);
@@ -109,12 +115,16 @@ struct WaitAllCancelCondition {
     template <typename... Args> bool operator()(Args &&...args) const {
         return false;
     }
+
+    static constexpr bool is_stealable = true;
 };
 
 struct WaitOneCancelCondition {
     template <typename... Args> bool operator()(Args &&...args) const {
         return true;
     }
+
+    static constexpr bool is_stealable = false;
 };
 
 template <typename Handle>
@@ -149,6 +159,7 @@ template <typename Condition, typename... Handles> class ParallelFinishHandle {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
+    static constexpr bool is_stealable = Condition::is_stealable;
 
     template <typename... HandlePtr> void init(HandlePtr... handles) {
         handles_ = std::make_tuple(handles...);

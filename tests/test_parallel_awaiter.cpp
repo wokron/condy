@@ -23,6 +23,9 @@ struct SimpleFinishHandle {
         registered_ = true;
     }
 
+    void set_stealable(bool stealable) { stealable_ = stealable; }
+
+    bool stealable_ = true;
     int res_;
     int cancelled_ = 0;
     bool registered_ = false;
@@ -46,8 +49,8 @@ public:
         return 0; // Do nothing
     }
 
-    void init_finish_handle() {
-        // Do nothing
+    void init_finish_handle(bool stealable = true) {
+        handle_ptr_->set_stealable(stealable);
     }
 
     void register_operation(unsigned int flags) {
@@ -409,4 +412,28 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
         h2->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
     }
+}
+
+TEST_CASE("test parallel_awaiter - stealable flag propagation") {
+    SimpleAwaiter a1, a2, a3, a4;
+    auto h1 = a1.handle_ptr_;
+    auto h2 = a2.handle_ptr_;
+    auto h3 = a3.handle_ptr_;
+    auto h4 = a4.handle_ptr_;
+    bool finished = false;
+
+    // (a1 || (a2 && a3)) && a4
+
+    using WaitAll = condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter>;
+    using WaitOne = condy::WaitOneAwaiter<WaitAll, SimpleAwaiter>;
+    using WaitAll2 = condy::WaitAllAwaiter<WaitOne, SimpleAwaiter>;
+    WaitAll awaiter_a2a3(a2, a3);
+    WaitOne awaiter_a1_a2a3(std::move(awaiter_a2a3), a1);
+    WaitAll2 awaiter(std::move(awaiter_a1_a2a3), a4);
+
+    awaiter.init_finish_handle();
+    REQUIRE(h1->stealable_ == false);
+    REQUIRE(h2->stealable_ == false);
+    REQUIRE(h3->stealable_ == false);
+    REQUIRE(h4->stealable_ == true);
 }
