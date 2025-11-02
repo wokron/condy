@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/finish_handles.hpp"
+#include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include "condy/shuffle_generator.hpp"
@@ -11,13 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <deque>
-#include <liburing.h>
-#include <liburing/io_uring.h>
 #include <mutex>
-#include <poll.h>
-#include <sys/eventfd.h>
-#include <sys/poll.h>
 
 namespace condy {
 
@@ -68,8 +63,9 @@ public:
 
     void schedule(WorkInvoker *work) override {
         std::lock_guard<std::mutex> lock(mutex_);
+        bool need_notify = global_queue_.empty();
         global_queue_.push_back(work);
-        if (global_queue_.size() == 1) {
+        if (need_notify) {
             cv_.notify_one();
         }
     }
@@ -177,38 +173,31 @@ private:
         if (local_queue_.empty()) {
             return nullptr;
         }
-        WorkInvoker *work = local_queue_.front();
-        local_queue_.pop_front();
-        return work;
+        return local_queue_.pop_front();
     }
 
     WorkInvoker *next_global_() {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (global_queue_.empty()) {
-            return nullptr;
-        }
-        WorkInvoker *work = global_queue_.front();
-        global_queue_.pop_front();
-        return work;
+        return global_queue_.pop_front();
     }
 
     WorkInvoker *next_global_flush_() {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (global_queue_.empty()) {
+        WorkInvoker *work = global_queue_.pop_front();
+        if (work == nullptr) {
             return nullptr;
         }
-        WorkInvoker *work = global_queue_.front();
-        global_queue_.pop_front();
         flush_global_();
         return work;
     }
 
     size_t flush_global_() {
         // NOTICE: mutex_ must be locked before calling this function
-        size_t total = global_queue_.size();
-        while (!global_queue_.empty()) {
-            local_queue_.push_back(global_queue_.front());
-            global_queue_.pop_front();
+        size_t total = 0;
+        WorkInvoker *work = nullptr;
+        while ((work = global_queue_.pop_front()) != nullptr) {
+            local_queue_.push_back(work);
+            total++;
         }
         return total;
     }
@@ -231,9 +220,11 @@ private:
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::deque<WorkInvoker *> global_queue_;
+    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
+        global_queue_;
 
-    std::deque<WorkInvoker *> local_queue_;
+    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
+        local_queue_;
 
     Ring ring_;
 
@@ -398,28 +389,26 @@ private:
         if (global_queue_.empty()) {
             return nullptr;
         }
-        WorkInvoker *work = global_queue_.front();
-        global_queue_.pop_front();
-        return work;
+        return global_queue_.pop_front();
     }
 
     WorkInvoker *next_global_flush_() {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (global_queue_.empty()) {
+        WorkInvoker *work = global_queue_.pop_front();
+        if (!work) {
             return nullptr;
         }
-        WorkInvoker *work = global_queue_.front();
-        global_queue_.pop_front();
         flush_global_();
         return work;
     }
 
     size_t flush_global_() {
         // NOTICE: mutex_ must be locked before calling this function
-        size_t total = global_queue_.size();
-        while (!global_queue_.empty()) {
-            data_->local_queue.push(global_queue_.front());
-            global_queue_.pop_front();
+        size_t total = 0;
+        WorkInvoker *work = nullptr;
+        while ((work = global_queue_.pop_front()) != nullptr) {
+            data_->local_queue.push(work);
+            total++;
         }
         return total;
     }
@@ -493,7 +482,8 @@ private:
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::deque<WorkInvoker *> global_queue_;
+    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
+        global_queue_;
 
     std::atomic_size_t blocking_threads_ = 0;
 
