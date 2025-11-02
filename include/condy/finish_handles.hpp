@@ -116,7 +116,8 @@ struct WaitAllCancelCondition {
         return false;
     }
 
-    static constexpr bool is_stealable = true;
+    // TODO: Should be true, if ParallelFinishHandle is thread safe
+    static constexpr bool is_stealable = false;
 };
 
 struct WaitOneCancelCondition {

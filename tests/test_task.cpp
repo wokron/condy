@@ -295,6 +295,7 @@ TEST_CASE("test task - spawn in multi thread runtime") {
         auto t = condy::co_spawn(func1(curr_id));
         REQUIRE(!t.is_remote_task());
         REQUIRE(!t.is_single_thread_task());
+        // TODO: What if other threads are all blocked? Here's potential deadlock.
         t.wait(); // Block current thread, so task must run in another thread
 
         REQUIRE(finished);

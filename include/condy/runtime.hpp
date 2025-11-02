@@ -358,7 +358,11 @@ private:
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         handle->set_result(cqe->res);
-        data_->local_queue.push(handle);
+        if (handle->is_stealable()) {
+            data_->local_queue.push(handle);
+        } else {
+            data_->no_steal_queue.push_back(handle);
+        }
     }
 
     WorkInvoker *next_() {
@@ -378,10 +382,11 @@ private:
     }
 
     WorkInvoker *next_local_() {
-        if (data_->local_queue.empty()) {
-            return nullptr;
+        WorkInvoker *work = data_->no_steal_queue.pop_front();
+        if (!work) {
+            work = data_->local_queue.pop();
         }
-        return data_->local_queue.pop();
+        return work;
     }
 
     WorkInvoker *next_global_() {
@@ -501,6 +506,8 @@ private:
         size_t thread_index;
         Ring ring;
         UnboundedTaskQueue<WorkInvoker *> local_queue{8};
+        IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
+            no_steal_queue;
         size_t pending_works = 0;
         size_t tick_count = 0;
         PCG32 pcg32;
