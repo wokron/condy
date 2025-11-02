@@ -15,11 +15,14 @@ template <typename T = void> class [[nodiscard]] Task {
 public:
     using PromiseType = typename Coro<T>::promise_type;
 
-    Task(std::coroutine_handle<PromiseType> h, bool remote_task, bool single_thread)
-        : handle_(h), remote_task_(remote_task), single_thread_(single_thread) {}
+    Task(std::coroutine_handle<PromiseType> h, bool remote_task,
+         bool single_thread)
+        : handle_(h), remote_task_(remote_task), single_thread_(single_thread) {
+    }
     Task(Task &&other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)),
-          remote_task_(other.remote_task_), single_thread_(other.single_thread_) {}
+          remote_task_(other.remote_task_),
+          single_thread_(other.single_thread_) {}
 
     Task(const Task &) = delete;
     Task &operator=(const Task &) = delete;
@@ -46,14 +49,19 @@ public:
     T wait();
 
 private:
+    static void wait_inner_(std::coroutine_handle<PromiseType> handle);
+
+private:
     std::coroutine_handle<PromiseType> handle_;
     bool remote_task_;
     bool single_thread_;
 };
 
-template <> inline void Task<void>::wait() {
-    if (is_single_thread_task() && !is_remote_task()) {
-        throw std::logic_error("Potential deadlock: cannot wait on a local single-threaded task.");
+template <typename T>
+void Task<T>::wait_inner_(std::coroutine_handle<PromiseType> handle) {
+    if (Context::current().runtime() != nullptr) {
+        throw std::logic_error("Potential deadlock: cannot wait on a task from "
+                               "within a runtime context.");
     }
     std::promise<void> prom;
     auto fut = prom.get_future();
@@ -66,11 +74,15 @@ template <> inline void Task<void>::wait() {
     };
 
     TaskWaiter waiter(prom);
-    auto handle = std::exchange(handle_, nullptr);
     if (handle.promise().register_task_await(&waiter)) {
         // Still not finished, wait
         fut.get();
     }
+}
+
+template <> inline void Task<void>::wait() {
+    auto handle = std::exchange(handle_, nullptr);
+    wait_inner_(handle);
     auto exception = handle.promise().exception();
     handle.destroy();
     if (exception) {
@@ -79,25 +91,8 @@ template <> inline void Task<void>::wait() {
 }
 
 template <typename T> T Task<T>::wait() {
-    if (is_single_thread_task() && !is_remote_task()) {
-        throw std::logic_error("Potential deadlock: cannot wait on a local single-threaded task.");
-    }
-    std::promise<void> prom;
-    auto fut = prom.get_future();
-    struct TaskWaiter : public InvokerAdapter<TaskWaiter> {
-        TaskWaiter(std::promise<void> &p) : prom_(p) {}
-
-        void operator()() { prom_.set_value(); }
-
-        std::promise<void> &prom_;
-    };
-
-    TaskWaiter waiter(prom);
     auto handle = std::exchange(handle_, nullptr);
-    if (handle.promise().register_task_await(&waiter)) {
-        // Still not finished, wait
-        fut.get();
-    }
+    wait_inner_(handle);
     auto exception = handle.promise().exception();
     if (exception) {
         handle.destroy();

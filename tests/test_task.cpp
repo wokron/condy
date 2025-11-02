@@ -1,6 +1,7 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/runtime.hpp"
 #include "condy/task.hpp"
+#include <chrono>
 #include <doctest/doctest.h>
 #include <thread>
 
@@ -284,19 +285,17 @@ TEST_CASE("test task - spawn in multi thread runtime") {
 
     bool finished = false;
 
-    auto func1 = [&](std::thread::id prev_id) -> condy::Coro<void> {
-        REQUIRE(std::this_thread::get_id() != prev_id);
+    auto func1 = [&]() -> condy::Coro<void> {
         co_await condy::make_op_awaiter(io_uring_prep_nop);
         finished = true;
     };
 
     auto func2 = [&]() -> condy::Coro<void> {
-        auto curr_id = std::this_thread::get_id();
-        auto t = condy::co_spawn(func1(curr_id));
+        auto t = condy::co_spawn(func1());
         REQUIRE(!t.is_remote_task());
         REQUIRE(!t.is_single_thread_task());
-        // TODO: What if other threads are all blocked? Here's potential deadlock.
-        t.wait(); // Block current thread, so task must run in another thread
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+        co_await std::move(t);
 
         REQUIRE(finished);
         co_return;

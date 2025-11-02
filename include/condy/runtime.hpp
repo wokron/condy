@@ -51,12 +51,14 @@ public:
 
 public:
     void cancel() override {
+        std::lock_guard<std::mutex> lock(mutex_);
         canceled_ = true;
         done_ = true;
         cv_.notify_all();
     }
 
     void done() override {
+        std::lock_guard<std::mutex> lock(mutex_);
         done_ = true;
         cv_.notify_all();
     }
@@ -215,7 +217,7 @@ private:
     }
 
 private:
-    std::atomic_bool done_ = false;
+    bool done_ = false;
     std::atomic_bool canceled_ = false;
 
     std::mutex mutex_;
@@ -237,6 +239,7 @@ private:
     size_t tick_count_ = 0;
 };
 
+// TODO: Potential deadlock, need to fix
 class MultiThreadRuntime : public IRuntime {
 public:
     MultiThreadRuntime(unsigned int ring_entries_per_thread, size_t num_threads)
@@ -244,7 +247,7 @@ public:
           num_threads_(num_threads),
           local_data_(std::make_unique<LocalData[]>(num_threads)),
           shuffle_gen_(num_threads) {
-
+        assert(num_threads_ >= 2);
         threads_.reserve(num_threads_);
         for (size_t i = 0; i < num_threads_; i++) {
             threads_.emplace_back([this, i]() { worker_loop_(i); });
@@ -347,6 +350,7 @@ private:
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
         self->data_->local_queue.push(work);
+        self->cv_.notify_one();
     }
 
     size_t flush_ring_() {
@@ -462,11 +466,7 @@ private:
                     return false;
                 }
                 // 4. No outstanding ops in the ring, we can block here safely.
-                cv_.wait(lock, [this]() {
-                    return !global_queue_.empty() || canceled_ ||
-                           (done_ && data_->pending_works == 0 &&
-                            blocking_threads_ == num_threads_);
-                });
+                cv_.wait(lock);
                 blocking_threads_--;
                 return true;
             }
