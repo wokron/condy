@@ -395,7 +395,12 @@ private:
         if (work) {
             return work;
         }
-        work = data_->local_queue.pop();
+        data_->local_tick_count++;
+        if (data_->local_tick_count % self_steal_interval_ == 0) {
+            work = data_->local_queue.steal();
+        } else {
+            work = data_->local_queue.pop();
+        }
         if (work) {
             return work;
         }
@@ -518,6 +523,7 @@ private:
 
     const size_t global_queue_interval_ = 31;
     const size_t event_interval_ = 61;
+    const size_t self_steal_interval_ = 7;
     unsigned int ring_entries_per_thread_;
 
     ShuffleGenerator shuffle_gen_;
@@ -535,6 +541,7 @@ private:
         IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
             no_steal_queue;
         size_t tick_count = 0;
+        size_t local_tick_count = 0;
         PCG32 pcg32;
     };
     std::unique_ptr<LocalData[]> local_data_;
