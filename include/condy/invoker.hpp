@@ -1,5 +1,7 @@
 #pragma once
 
+#include "condy/intrusive.hpp"
+
 namespace condy {
 
 class Invoker {
@@ -13,12 +15,19 @@ private:
     Func func_;
 };
 
-template <typename T> class InvokerAdapter : public Invoker {
+template <typename T, typename Invoker = Invoker>
+class InvokerAdapter : public Invoker {
 public:
     InvokerAdapter() : Invoker(&InvokerAdapter::invoke_) {}
 
 private:
     static void invoke_(void *self) { static_cast<T *>(self)->operator()(); }
+};
+
+class WorkInvoker : public Invoker {
+public:
+    using Invoker::Invoker;
+    SingleLinkEntry work_queue_entry_;
 };
 
 } // namespace condy

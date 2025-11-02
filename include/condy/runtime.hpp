@@ -29,7 +29,7 @@ public:
 
     virtual void wait() = 0;
 
-    virtual void schedule(Invoker *invoker) = 0;
+    virtual void schedule(WorkInvoker *work) = 0;
 
     virtual void pend_work() = 0;
 
@@ -66,9 +66,9 @@ public:
         cv_.notify_all();
     }
 
-    void schedule(Invoker *invoker) override {
+    void schedule(WorkInvoker *work) override {
         std::lock_guard<std::mutex> lock(mutex_);
-        global_queue_.push_back(invoker);
+        global_queue_.push_back(work);
         if (global_queue_.size() == 1) {
             cv_.notify_one();
         }
@@ -91,9 +91,9 @@ public:
                 flush_ring_();
             }
 
-            auto *invoker = next_();
-            if (invoker) {
-                (*invoker)();
+            auto *work = next_();
+            if (work) {
+                (*work)();
                 continue;
             }
 
@@ -112,9 +112,9 @@ public:
     bool is_single_thread() const override { return true; }
 
 private:
-    static void schedule_local_(IRuntime *runtime, Invoker *invoker) {
+    static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<SingleThreadRuntime *>(runtime);
-        self->local_queue_.push_back(invoker);
+        self->local_queue_.push_back(work);
     }
 
     bool wait_for_work_() {
@@ -157,50 +157,50 @@ private:
         return true;
     }
 
-    Invoker *next_() {
-        Invoker *invoker = nullptr;
+    WorkInvoker *next_() {
+        WorkInvoker *work = nullptr;
         if (tick_count_ % global_queue_interval_ == 0) {
-            invoker = next_global_();
-            if (!invoker) {
-                invoker = next_local_();
+            work = next_global_();
+            if (!work) {
+                work = next_local_();
             }
         } else {
-            invoker = next_local_();
-            if (!invoker) {
-                invoker = next_global_flush_();
+            work = next_local_();
+            if (!work) {
+                work = next_global_flush_();
             }
         }
-        return invoker;
+        return work;
     }
 
-    Invoker *next_local_() {
+    WorkInvoker *next_local_() {
         if (local_queue_.empty()) {
             return nullptr;
         }
-        Invoker *invoker = local_queue_.front();
+        WorkInvoker *work = local_queue_.front();
         local_queue_.pop_front();
-        return invoker;
+        return work;
     }
 
-    Invoker *next_global_() {
+    WorkInvoker *next_global_() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (global_queue_.empty()) {
             return nullptr;
         }
-        Invoker *invoker = global_queue_.front();
+        WorkInvoker *work = global_queue_.front();
         global_queue_.pop_front();
-        return invoker;
+        return work;
     }
 
-    Invoker *next_global_flush_() {
+    WorkInvoker *next_global_flush_() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (global_queue_.empty()) {
             return nullptr;
         }
-        Invoker *invoker = global_queue_.front();
+        WorkInvoker *work = global_queue_.front();
         global_queue_.pop_front();
         flush_global_();
-        return invoker;
+        return work;
     }
 
     size_t flush_global_() {
@@ -231,9 +231,9 @@ private:
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::deque<Invoker *> global_queue_;
+    std::deque<WorkInvoker *> global_queue_;
 
-    std::deque<Invoker *> local_queue_;
+    std::deque<WorkInvoker *> local_queue_;
 
     Ring ring_;
 
@@ -285,9 +285,9 @@ public:
         cv_.notify_all();
     }
 
-    void schedule(Invoker *invoker) override {
+    void schedule(WorkInvoker *work) override {
         std::lock_guard<std::mutex> lock(mutex_);
-        global_queue_.push_back(invoker);
+        global_queue_.push_back(work);
         cv_.notify_one();
     }
 
@@ -328,16 +328,16 @@ private:
                 flush_ring_();
             }
 
-            auto *invoker = next_();
-            if (invoker) {
-                (*invoker)();
+            auto *work = next_();
+            if (work) {
+                (*work)();
                 continue;
             }
 
             // TODO: Some work cannot be stolen, e.g., cancellable ops.
-            invoker = steal_work_();
-            if (invoker) {
-                (*invoker)();
+            work = steal_work_();
+            if (work) {
+                (*work)();
                 continue;
             }
 
@@ -353,9 +353,9 @@ private:
         }
     }
 
-    static void schedule_local_(IRuntime *runtime, Invoker *invoker) {
+    static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
-        self->data_->local_queue.push(invoker);
+        self->data_->local_queue.push(work);
     }
 
     size_t flush_ring_() {
@@ -370,48 +370,48 @@ private:
         data_->local_queue.push(handle);
     }
 
-    Invoker *next_() {
-        Invoker *invoker = nullptr;
+    WorkInvoker *next_() {
+        WorkInvoker *work = nullptr;
         if (data_->tick_count % global_queue_interval_ == 0) {
-            invoker = next_global_();
-            if (!invoker) {
-                invoker = next_local_();
+            work = next_global_();
+            if (!work) {
+                work = next_local_();
             }
         } else {
-            invoker = next_local_();
-            if (!invoker) {
-                invoker = next_global_flush_();
+            work = next_local_();
+            if (!work) {
+                work = next_global_flush_();
             }
         }
-        return invoker;
+        return work;
     }
 
-    Invoker *next_local_() {
+    WorkInvoker *next_local_() {
         if (data_->local_queue.empty()) {
             return nullptr;
         }
         return data_->local_queue.pop();
     }
 
-    Invoker *next_global_() {
+    WorkInvoker *next_global_() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (global_queue_.empty()) {
             return nullptr;
         }
-        Invoker *invoker = global_queue_.front();
+        WorkInvoker *work = global_queue_.front();
         global_queue_.pop_front();
-        return invoker;
+        return work;
     }
 
-    Invoker *next_global_flush_() {
+    WorkInvoker *next_global_flush_() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (global_queue_.empty()) {
             return nullptr;
         }
-        Invoker *invoker = global_queue_.front();
+        WorkInvoker *work = global_queue_.front();
         global_queue_.pop_front();
         flush_global_();
-        return invoker;
+        return work;
     }
 
     size_t flush_global_() {
@@ -424,21 +424,21 @@ private:
         return total;
     }
 
-    Invoker *steal_work_() {
-        Invoker *invoker = nullptr;
+    WorkInvoker *steal_work_() {
+        WorkInvoker *work = nullptr;
         auto r32 = data_->pcg32.next();
         shuffle_gen_.generate(r32, 0, num_threads_, [&, this](uint32_t victim) {
             if (victim == data_->thread_index) {
                 return true;
             }
             auto &victim_data = local_data_[victim];
-            invoker = victim_data.local_queue.steal();
-            if (invoker) {
+            work = victim_data.local_queue.steal();
+            if (work) {
                 return false; // Stop iteration
             }
             return true; // Continue iteration
         });
-        return invoker;
+        return work;
     }
 
     bool wait_for_work_() {
@@ -493,7 +493,7 @@ private:
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::deque<Invoker *> global_queue_;
+    std::deque<WorkInvoker *> global_queue_;
 
     std::atomic_size_t blocking_threads_ = 0;
 
@@ -510,7 +510,7 @@ private:
     struct LocalData {
         size_t thread_index;
         Ring ring;
-        UnboundedTaskQueue<Invoker *> local_queue{8};
+        UnboundedTaskQueue<WorkInvoker *> local_queue{8};
         size_t pending_works = 0;
         size_t tick_count = 0;
         PCG32 pcg32;

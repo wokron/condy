@@ -12,7 +12,7 @@
 
 namespace condy {
 
-class OpFinishHandle : public InvokerAdapter<OpFinishHandle> {
+class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
     DoubleLinkEntry link_; // For outstanding ops list
 

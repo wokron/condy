@@ -138,7 +138,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T>> {
 
     std::coroutine_handle<typename Coro<T>::promise_type> task_handle_;
     IRuntime *runtime_ = nullptr;
-    Invoker *caller_promise_ = nullptr;
+    WorkInvoker *caller_promise_ = nullptr;
 };
 
 template <> inline auto Task<void>::operator co_await() && {

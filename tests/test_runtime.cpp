@@ -1,5 +1,6 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/coro.hpp"
+#include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <chrono>
 #include <doctest/doctest.h>
@@ -13,7 +14,7 @@ TEST_CASE("test runtime - single thread no-op") {
 
 namespace {
 
-struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
+struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker, condy::WorkInvoker> {
     void operator()() { finished = true; }
     bool finished = false;
 };

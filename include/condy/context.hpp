@@ -7,8 +7,8 @@ namespace condy {
 
 struct Ring;
 struct IRuntime;
-struct Invoker;
-using ScheduleLocalFunc = void (*)(IRuntime *, Invoker *);
+struct WorkInvoker;
+using ScheduleLocalFunc = void (*)(IRuntime *, WorkInvoker *);
 
 class Context : public ThreadLocalSingleton<Context> {
 public:
@@ -28,10 +28,10 @@ public:
 
     IRuntime *runtime() { return runtime_; }
 
-    void schedule_local(Invoker *invoker) {
+    void schedule_local(WorkInvoker *work) {
         assert(runtime_ != nullptr);
         assert(schedule_local_ != nullptr);
-        schedule_local_(runtime_, invoker);
+        schedule_local_(runtime_, work);
     }
 
 private:

@@ -11,7 +11,7 @@
 namespace condy {
 
 template <typename Coro>
-class PromiseBase : public InvokerAdapter<PromiseBase<Coro>> {
+class PromiseBase : public InvokerAdapter<PromiseBase<Coro>, WorkInvoker> {
 public:
     using PromiseType = typename Coro::promise_type;
 
