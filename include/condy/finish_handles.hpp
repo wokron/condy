@@ -2,7 +2,9 @@
 
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
+#include "condy/uninitialized.hpp"
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
@@ -48,50 +50,56 @@ public:
     static constexpr bool is_stealable = Condition::is_stealable;
 
     void init(std::vector<Handle *> handles) {
+        finished_count_.emplace(0);
+        canceled_count_.emplace(0);
+        outstanding_count_.emplace(handles.size());
         handles_ = std::move(handles);
-        invokers_.resize(handles_.size());
+        child_invokers_.resize(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
             auto *handle = handles_[i];
-            auto &invoker = invokers_[i];
+            auto &invoker = child_invokers_[i];
             invoker.self_ = this;
             invoker.no_ = i;
             handle->set_invoker(&invoker);
         }
-        res_.first.resize(handles_.size());
-        res_.second.resize(handles_.size());
+        order_.resize(handles_.size());
     }
 
     void cancel() {
-        if (canceled_count_++ == 0) {
+        if (canceled_count_.get()++ == 0) {
             for (auto &handle : handles_) {
                 handle->cancel();
             }
         }
     }
 
-    ReturnType extract_result() { return std::move(res_); }
+    ReturnType extract_result() {
+        std::vector<ChildReturnType> result;
+        result.reserve(handles_.size());
+        for (size_t i = 0; i < handles_.size(); i++) {
+            result.push_back(handles_[i]->extract_result());
+        }
+        return std::make_pair(std::move(order_), std::move(result));
+    }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
 private:
     void finish_(size_t idx) {
-        size_t no = finished_count_++;
-        auto &order = res_.first;
-        auto &results = res_.second;
-        order[no] = idx;
-        results[idx] = handles_[idx]->extract_result();
-        if (no == handles_.size() - 1) {
-            // All finished
-            (*invoker_)();
-            return;
-        }
+        size_t no = finished_count_.get()++;
+        order_[no] = idx;
 
-        if (cancel_checker_(idx, results[idx]) && canceled_count_++ == 0) {
+        if (cancel_checker_(idx) && canceled_count_.get()++ == 0) {
             for (size_t i = 0; i < handles_.size(); i++) {
                 if (i != idx) {
                     handles_[i]->cancel();
                 }
             }
+        }
+
+        if (--outstanding_count_.get() == 0) {
+            // All finished or canceled
+            (*invoker_)();
         }
     }
 
@@ -102,12 +110,13 @@ private:
         size_t no_;
     };
 
-    size_t finished_count_ = 0;
-    size_t canceled_count_ = 0;
+    Uninitialized<std::atomic_size_t> finished_count_;
+    Uninitialized<std::atomic_size_t> outstanding_count_;
+    Uninitialized<std::atomic_size_t> canceled_count_;
     std::vector<Handle *> handles_ = {};
-    std::vector<FinishInvoker> invokers_;
+    std::vector<FinishInvoker> child_invokers_;
     Condition cancel_checker_ = {};
-    ReturnType res_;
+    std::vector<size_t> order_;
     Invoker *invoker_ = nullptr;
 };
 
@@ -116,8 +125,7 @@ struct WaitAllCancelCondition {
         return false;
     }
 
-    // TODO: Should be true, if ParallelFinishHandle is thread safe
-    static constexpr bool is_stealable = false;
+    static constexpr bool is_stealable = true;
 };
 
 struct WaitOneCancelCondition {
@@ -163,18 +171,28 @@ public:
     static constexpr bool is_stealable = Condition::is_stealable;
 
     template <typename... HandlePtr> void init(HandlePtr... handles) {
+        finished_count_.emplace(0);
+        outstanding_count_.emplace(sizeof...(Handles));
+        canceled_count_.emplace(0);
         handles_ = std::make_tuple(handles...);
         foreach_set_invoker_();
     }
 
     void cancel() {
-        if (canceled_count_++ == 0) {
+        if (canceled_count_.get()++ == 0) {
             constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
             foreach_call_cancel_<SkipIdx>();
         }
     }
 
-    ReturnType extract_result() { return std::move(res_); }
+    ReturnType extract_result() {
+        auto result = std::apply(
+            [this](auto *...handle_ptrs) {
+                return std::make_tuple(handle_ptrs->extract_result()...);
+            },
+            handles_);
+        return std::make_pair(std::move(order_), std::move(result));
+    }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
@@ -182,7 +200,7 @@ private:
     template <size_t I = 0> void foreach_set_invoker_() {
         if constexpr (I < sizeof...(Handles)) {
             auto *handle = std::get<I>(handles_);
-            auto &invoker = std::get<I>(invokers_);
+            auto &invoker = std::get<I>(child_invokers_);
             invoker.self_ = this;
             handle->set_invoker(&invoker);
             foreach_set_invoker_<I + 1>();
@@ -200,19 +218,16 @@ private:
     }
 
     template <size_t Idx> void finish_() {
-        size_t no = finished_count_++;
-        auto &[order, results] = res_;
-        order[no] = Idx;
-        std::get<Idx>(results) = std::get<Idx>(handles_)->extract_result();
-        if (no == sizeof...(Handles) - 1) {
-            // All finished
-            (*invoker_)();
-            return;
+        size_t no = finished_count_.get()++;
+        order_[no] = Idx;
+
+        if (cancel_checker_(Idx) && canceled_count_.get()++ == 0) {
+            foreach_call_cancel_<Idx>();
         }
 
-        if (cancel_checker_(Idx, std::get<Idx>(results)) &&
-            canceled_count_++ == 0) {
-            foreach_call_cancel_<Idx>();
+        if (--outstanding_count_.get() == 0) {
+            // All finished or canceled
+            (*invoker_)();
         }
     }
 
@@ -237,12 +252,13 @@ private:
 
     using InvokerTupleType = typename helper<0, Handles...>::type;
 
-    size_t finished_count_ = 0;
-    size_t canceled_count_ = 0;
+    Uninitialized<std::atomic_size_t> finished_count_;
+    Uninitialized<std::atomic_size_t> outstanding_count_;
+    Uninitialized<std::atomic_size_t> canceled_count_;
     std::tuple<Handles *...> handles_;
-    InvokerTupleType invokers_;
+    InvokerTupleType child_invokers_;
     Condition cancel_checker_ = {};
-    ReturnType res_;
+    std::array<size_t, sizeof...(Handles)> order_;
     Invoker *invoker_ = nullptr;
 };
 
