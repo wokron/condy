@@ -18,8 +18,6 @@ namespace condy {
 
 class IRuntime {
 public:
-    virtual void cancel() = 0;
-
     virtual void done() = 0;
 
     virtual void wait() = 0;
@@ -50,13 +48,6 @@ public:
     SingleThreadRuntime &operator=(SingleThreadRuntime &&) = delete;
 
 public:
-    void cancel() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        canceled_ = true;
-        done_ = true;
-        cv_.notify_all();
-    }
-
     void done() override {
         std::lock_guard<std::mutex> lock(mutex_);
         done_ = true;
@@ -82,7 +73,7 @@ public:
         Context::current().init(&ring_, this, schedule_local_);
         auto d = defer([]() { Context::current().destroy(); });
 
-        while (!canceled_) {
+        while (true) {
             tick_count_++;
 
             if (tick_count_ % event_interval_ == 0) {
@@ -99,11 +90,6 @@ public:
             if (!ok) {
                 break;
             }
-        }
-
-        if (canceled_) {
-            ring_.cancel_all_ops();
-            ring_.wait_all_completions([](auto) { /* No-op */ });
         }
     }
 
@@ -140,7 +126,7 @@ private:
                 }
                 // 4. No outstanding ops in the ring, we can block here safely.
                 cv_.wait(lock, [this]() {
-                    return !global_queue_.empty() || canceled_ ||
+                    return !global_queue_.empty() ||
                            (done_ && pending_works_ == 0);
                 });
                 return true;
@@ -218,7 +204,6 @@ private:
 
 private:
     bool done_ = false;
-    std::atomic_bool canceled_ = false;
 
     std::mutex mutex_;
     std::condition_variable cv_;
@@ -267,13 +252,6 @@ public:
     MultiThreadRuntime &operator=(MultiThreadRuntime &&) = delete;
 
 public:
-    void cancel() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        canceled_ = true;
-        done_ = true;
-        cv_.notify_all();
-    }
-
     void done() override {
         std::lock_guard<std::mutex> lock(mutex_);
         done_ = true;
@@ -315,7 +293,7 @@ private:
         Context::current().init(&data_->ring, this, schedule_local_);
         auto d = defer([]() { Context::current().destroy(); });
 
-        while (!canceled_) {
+        while (true) {
             data_->tick_count++;
 
             if (data_->tick_count % event_interval_ == 0) {
@@ -338,11 +316,6 @@ private:
             if (!ok) {
                 break;
             }
-        }
-
-        if (canceled_) {
-            data_->ring.cancel_all_ops();
-            data_->ring.wait_all_completions([](auto) { /* No-op */ });
         }
     }
 
@@ -515,7 +488,6 @@ private:
     std::mutex mutex_;
     std::condition_variable cv_;
     bool done_ = false;
-    std::atomic_bool canceled_ = false;
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
         global_queue_;
     std::atomic_size_t pending_works_ = 0;

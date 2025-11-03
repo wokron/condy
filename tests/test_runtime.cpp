@@ -14,7 +14,8 @@ TEST_CASE("test runtime - single thread no-op") {
 
 namespace {
 
-struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker, condy::WorkInvoker> {
+struct SetFinishInvoker
+    : public condy::InvokerAdapter<SetFinishInvoker, condy::WorkInvoker> {
     void operator()() { finished = true; }
     bool finished = false;
 };
@@ -181,31 +182,6 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     REQUIRE(finished);
 }
 
-TEST_CASE("test runtime - cancel single thread runtime") {
-    condy::SingleThreadRuntime runtime(8);
-
-    auto func = []() -> condy::Coro<void> {
-        while (true) {
-            __kernel_timespec ts{
-                .tv_sec = 60 * 60,
-                .tv_nsec = 0,
-            };
-            co_await condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        }
-    };
-
-    std::thread rt_thread([&runtime, &func]() {
-        auto coro = func();
-        auto h = coro.release();
-        runtime.schedule(&h.promise());
-        runtime.wait(); // Without done, would run indefinitely
-    });
-
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
-    runtime.cancel();
-    rt_thread.join(); // Now should exit cleanly
-}
-
 TEST_CASE("test runtime - multi thread schedule no-op") {
     condy::MultiThreadRuntime runtime(8, 4);
 
@@ -280,9 +256,8 @@ TEST_CASE("test runtime - multi thread schedule multiple coroutines") {
     runtime.done();
     runtime.wait();
 
-    REQUIRE(std::all_of(
-        finished_flags.begin(), finished_flags.end(),
-        [](int flag) { return flag == 1; }));
+    REQUIRE(std::all_of(finished_flags.begin(), finished_flags.end(),
+                        [](int flag) { return flag == 1; }));
 
     REQUIRE(thread_ids.size() > 1); // Ensure multiple threads were used
 }
@@ -371,27 +346,4 @@ TEST_CASE("test runtime - multi thread schedule coroutine with cancel") {
     runtime.wait();
 
     REQUIRE(finished);
-}
-
-// TODO: Memory leak here, need to fix
-TEST_CASE("test runtime - cancel multi thread runtime") {
-    condy::MultiThreadRuntime runtime(8, 4);
-
-    auto func = []() -> condy::Coro<void> {
-        while (true) {
-            __kernel_timespec ts{
-                .tv_sec = 60 * 60,
-                .tv_nsec = 0,
-            };
-            co_await condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        }
-    };
-
-    auto coro = func();
-    auto h = coro.release();
-    runtime.schedule(&h.promise());
-
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
-    runtime.cancel();
-    runtime.wait(); // Now should exit cleanly
 }

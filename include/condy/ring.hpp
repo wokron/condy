@@ -2,7 +2,6 @@
 
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
-#include "condy/intrusive.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -46,7 +45,7 @@ public:
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
         io_uring_sqe_set_data(sqe, handle);
-        outstanding_ops_.push_back(handle);
+        outstanding_ops_count_++;
         maybe_submit_();
     }
 
@@ -55,11 +54,6 @@ public:
         io_uring_prep_cancel(sqe, handle, 0);
         io_uring_sqe_set_data(sqe, IGNORE_DATA);
         maybe_submit_();
-    }
-
-    void cancel_all_ops() {
-        outstanding_ops_.for_each(
-            [this](OpFinishHandle *handle) { cancel_op(handle); });
     }
 
     void submit() {
@@ -95,7 +89,7 @@ public:
         return reaped;
     }
 
-    bool has_outstanding_ops() const { return !outstanding_ops_.empty(); }
+    bool has_outstanding_ops() const { return outstanding_ops_count_ > 0; }
 
     template <typename Func> size_t wait_all_completions(Func &&process_func) {
         size_t total_reaped = 0;
@@ -131,8 +125,7 @@ private:
             return false;
         }
         if (!unfinished) {
-            OpFinishHandle *handle = static_cast<OpFinishHandle *>(data);
-            outstanding_ops_.remove(handle);
+            outstanding_ops_count_--;
         }
         process_func(cqe);
         io_uring_cqe_seen(&ring_, cqe);
@@ -168,8 +161,7 @@ public:
 private:
     bool initialized_ = false;
     io_uring ring_;
-    IntrusiveDoubleList<OpFinishHandle, &OpFinishHandle::link_>
-        outstanding_ops_;
+    size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
 
