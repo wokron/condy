@@ -1,10 +1,12 @@
 #pragma once
 
+#include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
+#include "condy/runtime_options.hpp"
 #include "condy/shuffle_generator.hpp"
 #include "condy/utils.hpp"
 #include "condy/wsqueue.hpp"
@@ -37,11 +39,55 @@ using WorkListQueue =
 
 class SingleThreadRuntime : public IRuntime {
 public:
-    SingleThreadRuntime(unsigned int ring_entries) {
-        // TODO: Make params configurable
+    SingleThreadRuntime(const SingleThreadOptions &options) {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
+
+        size_t ring_entries = options.sq_size_;
+
+        params.flags |= IORING_SETUP_CLAMP;
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+        params.flags |= IORING_SETUP_SINGLE_ISSUER;
+#endif
+
+        if (options.cq_size_ != ring_entries * 2) {
+            params.flags |= IORING_SETUP_CQSIZE;
+            params.cq_entries = options.cq_size_;
+        }
+
+        if (options.enable_sqpoll_) {
+            params.flags |= IORING_SETUP_SQPOLL;
+            params.sq_thread_idle = options.sqpoll_idle_time_ms_;
+        }
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+        if (options.enable_defer_taskrun_) {
+            params.flags |= IORING_SETUP_DEFER_TASKRUN;
+        }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
+        if (options.enable_coop_taskrun_) {
+            params.flags |= IORING_SETUP_COOP_TASKRUN;
+        }
+#endif
+
+        if (options.enable_iopoll_) {
+            params.flags |= IORING_SETUP_IOPOLL;
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+            if (options.iopoll_hybrid_) {
+                params.flags |= IORING_SETUP_HYBRID_IOPOLL;
+            }
+#endif
+        }
         ring_.init(ring_entries, &params);
+        ring_.set_submit_batch_size(options.submit_batch_size_);
+
+        global_queue_interval_ = options.global_queue_interval_;
+        event_interval_ = options.event_interval_;
+
+        idle_time_us_ = options.idle_time_us_;
     }
 
     ~SingleThreadRuntime() { ring_.destroy(); }
@@ -140,7 +186,7 @@ private:
         // 5. Now we have no work for now, but there's some outstanding ops in
         // the ring. We wait them with a timeout.
         ring_.reap_completions([this](io_uring_cqe *cqe) { process_cqe_(cqe); },
-                               1000); // 1ms // TODO: Make timeout configurable
+                               idle_time_us_);
 
         return true;
     }
@@ -221,9 +267,11 @@ private:
     // to the runtime, so the runtime should not exit even if done_ is set.
     size_t pending_works_ = 0;
 
-    const size_t global_queue_interval_ = 31;
-    const size_t event_interval_ = 61;
     size_t tick_count_ = 0;
+
+    size_t global_queue_interval_ = 31;
+    size_t event_interval_ = 61;
+    size_t idle_time_us_ = 1000000;
 };
 
 class MultiThreadRuntime : public IRuntime {

@@ -5,8 +5,15 @@
 #include <doctest/doctest.h>
 #include <thread>
 
+namespace {
+
+condy::SingleThreadOptions options =
+    condy::SingleThreadOptions().sq_size(8).cq_size(16);
+
+}
+
 TEST_CASE("test task - local spawn and await") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
@@ -30,7 +37,7 @@ TEST_CASE("test task - local spawn and await") {
 }
 
 TEST_CASE("test task - remote spawn and await") {
-    condy::SingleThreadRuntime runtime1(8), runtime2(8);
+    condy::SingleThreadRuntime runtime1(options), runtime2(options);
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
@@ -59,7 +66,7 @@ TEST_CASE("test task - remote spawn and await") {
 }
 
 TEST_CASE("test task - remote spawn and wait 1") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
@@ -78,7 +85,7 @@ TEST_CASE("test task - remote spawn and wait 1") {
 }
 
 TEST_CASE("test task - remote spawn and wait 2") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
@@ -98,7 +105,7 @@ TEST_CASE("test task - remote spawn and wait 2") {
 }
 
 TEST_CASE("test task - launch multiple tasks") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
 
     bool finished = false;
 
@@ -130,7 +137,7 @@ TEST_CASE("test task - launch multiple tasks") {
 }
 
 TEST_CASE("test task - return value") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
 
     bool finished = false;
 
@@ -161,7 +168,7 @@ TEST_CASE("test task - return value") {
 }
 
 TEST_CASE("test task - return value with wait") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
 
     bool finished = false;
 
@@ -187,7 +194,7 @@ TEST_CASE("test task - return value with wait") {
 }
 
 TEST_CASE("test task - exception propagation") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
 
     auto func = [&]() -> condy::Coro<void> {
         co_await condy::make_op_awaiter(io_uring_prep_nop);
@@ -209,7 +216,7 @@ TEST_CASE("test task - exception propagation") {
 }
 
 TEST_CASE("test task - run in different thread") {
-    condy::SingleThreadRuntime runtime1(8), runtime2(8);
+    condy::SingleThreadRuntime runtime1(options), runtime2(options);
 
     bool finished1 = false, finished2 = false, task_finished = false;
 
@@ -256,7 +263,7 @@ TEST_CASE("test task - run in different thread") {
 }
 
 TEST_CASE("test task - detach") {
-    condy::SingleThreadRuntime runtime(8);
+    condy::SingleThreadRuntime runtime(options);
 
     bool finished = false;
 
