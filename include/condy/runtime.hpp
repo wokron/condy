@@ -43,14 +43,12 @@ public:
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
 
-        size_t ring_entries = options.sq_size_;
-
         params.flags |= IORING_SETUP_CLAMP;
-
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         params.flags |= IORING_SETUP_SINGLE_ISSUER;
 #endif
 
+        size_t ring_entries = options.sq_size_;
         if (options.cq_size_ != ring_entries * 2) {
             params.flags |= IORING_SETUP_CQSIZE;
             params.cq_entries = options.cq_size_;
@@ -276,13 +274,75 @@ private:
 
 class MultiThreadRuntime : public IRuntime {
 public:
-    MultiThreadRuntime(unsigned int ring_entries_per_thread, size_t num_threads)
-        : ring_entries_per_thread_(ring_entries_per_thread),
-          num_threads_(num_threads),
-          local_data_(std::make_unique<LocalData[]>(num_threads)),
-          shuffle_gen_(num_threads) {
-        assert(num_threads_ >= 2);
-        threads_.reserve(num_threads_);
+    MultiThreadRuntime(const MultiThreadOptions &options)
+        : shuffle_gen_(options.num_threads_),
+          local_data_(std::make_unique<LocalData[]>(options.num_threads_)) {
+        io_uring_params params;
+        std::memset(&params, 0, sizeof(params));
+
+        params.flags |= IORING_SETUP_CLAMP;
+
+        size_t ring_entries = options.sq_size_;
+        if (options.cq_size_ != ring_entries * 2) {
+            params.flags |= IORING_SETUP_CQSIZE;
+            params.cq_entries = options.cq_size_;
+        }
+
+        if (options.enable_sqpoll_) {
+            params.flags |= IORING_SETUP_SQPOLL;
+            params.sq_thread_idle = options.sqpoll_idle_time_ms_;
+        }
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+        if (options.enable_defer_taskrun_) {
+            params.flags |= IORING_SETUP_DEFER_TASKRUN;
+        }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
+        if (options.enable_coop_taskrun_) {
+            params.flags |= IORING_SETUP_COOP_TASKRUN;
+        }
+#endif
+
+        if (options.enable_iopoll_) {
+            params.flags |= IORING_SETUP_IOPOLL;
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+            if (options.iopoll_hybrid_) {
+                params.flags |= IORING_SETUP_HYBRID_IOPOLL;
+            }
+#endif
+        }
+
+        PCG32 base_pcg32(options.random_seed_);
+
+        auto init_ring = [&](Ring &ring) {
+            ring.init(ring_entries, &params);
+            ring.set_submit_batch_size(options.submit_batch_size_);
+            ring.set_use_mutex(true);
+        };
+
+        auto init_data = [&](size_t index, LocalData &data) {
+            init_ring(data.ring);
+            data.thread_index = index;
+            data.pcg32 = PCG32(base_pcg32.next());
+        };
+
+        init_data(0, local_data_[0]);
+
+        params.flags |= IORING_SETUP_ATTACH_WQ;
+        params.wq_fd = local_data_[0].ring.ring_fd();
+
+        for (size_t i = 1; i < options.num_threads_; i++) {
+            init_data(i, local_data_[i]);
+        }
+
+        num_threads_ = options.num_threads_;
+        global_queue_interval_ = options.global_queue_interval_;
+        event_interval_ = options.event_interval_;
+        self_steal_interval_ = options.self_steal_interval_;
+        idle_time_us_ = options.idle_time_us_;
+
         for (size_t i = 0; i < num_threads_; i++) {
             threads_.emplace_back([this, i]() { worker_loop_(i); });
         }
@@ -331,15 +391,6 @@ public:
 private:
     void worker_loop_(size_t index) {
         data_ = &local_data_[index];
-        data_->thread_index = index;
-        data_->pcg32 = PCG32(static_cast<uint64_t>(
-            std::hash<std::thread::id>()(std::this_thread::get_id())));
-
-        // TODO: Make params configurable
-        io_uring_params params;
-        std::memset(&params, 0, sizeof(params));
-        data_->ring.init(ring_entries_per_thread_, &params);
-        data_->ring.set_use_mutex(true);
 
         Context::current().init(&data_->ring, this, schedule_local_);
         auto d = defer([]() { Context::current().reset(); });
@@ -522,8 +573,7 @@ private:
         // 5. Now we have no work for now, but there's some outstanding ops in
         // the ring. We wait them with a timeout.
         data_->ring.reap_completions(
-            [this](io_uring_cqe *cqe) { process_cqe_(cqe); },
-            1000); // 1ms // TODO: Make timeout configurable
+            [this](io_uring_cqe *cqe) { process_cqe_(cqe); }, idle_time_us_);
 
         return true;
     }
@@ -536,10 +586,10 @@ private:
     std::atomic_size_t pending_works_ = 0;
     size_t blocking_threads_ = 0;
 
-    const size_t global_queue_interval_ = 31;
-    const size_t event_interval_ = 61;
-    const size_t self_steal_interval_ = 7;
-    unsigned int ring_entries_per_thread_;
+    size_t global_queue_interval_ = 31;
+    size_t event_interval_ = 61;
+    size_t self_steal_interval_ = 7;
+    size_t idle_time_us_ = 1000000;
 
     ShuffleGenerator shuffle_gen_;
 
@@ -556,9 +606,9 @@ private:
         size_t local_tick_count = 0;
         PCG32 pcg32;
     };
-    std::unique_ptr<LocalData[]> local_data_;
+    std::unique_ptr<LocalData[]> local_data_ = nullptr;
 
-    inline static thread_local LocalData *data_;
+    inline static thread_local LocalData *data_ = nullptr;
 };
 
 } // namespace condy

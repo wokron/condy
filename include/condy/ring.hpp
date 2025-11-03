@@ -125,6 +125,8 @@ public:
 
     void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
 
+    int ring_fd() const { return ring_.ring_fd; }
+
 private:
     template <typename Func>
     bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {

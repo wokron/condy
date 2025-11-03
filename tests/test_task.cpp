@@ -1,5 +1,6 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/runtime.hpp"
+#include "condy/runtime_options.hpp"
 #include "condy/task.hpp"
 #include <chrono>
 #include <doctest/doctest.h>
@@ -10,7 +11,12 @@ namespace {
 condy::SingleThreadOptions options =
     condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
-}
+condy::MultiThreadOptions options2 = condy::MultiThreadOptions()
+                                         .num_threads(4)
+                                         .sq_size(8)
+                                         .cq_size(16)
+                                         .random_seed(42);
+} // namespace
 
 TEST_CASE("test task - local spawn and await") {
     condy::SingleThreadRuntime runtime(options);
@@ -288,7 +294,7 @@ TEST_CASE("test task - detach") {
 }
 
 TEST_CASE("test task - spawn in multi thread runtime") {
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     bool finished = false;
 

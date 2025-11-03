@@ -95,8 +95,12 @@ class MultiThreadOptions {
 public:
     using Self = MultiThreadOptions;
 
-    Self &threads_num(size_t v) {
-        threads_num_ = v;
+    Self &num_threads(size_t v) {
+        if (v < 2) {
+            throw std::invalid_argument(
+                "threads_num must be at least 2 for MultiThreadRuntime");
+        }
+        num_threads_ = v;
         return *this;
     }
 
@@ -175,7 +179,7 @@ public:
     }
 
 private:
-    size_t threads_num_ = std::thread::hardware_concurrency();
+    size_t num_threads_ = std::thread::hardware_concurrency();
     size_t global_queue_interval_ = 61;
     size_t event_interval_ = 61;
     size_t self_steal_interval_ = 13;

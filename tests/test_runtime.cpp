@@ -19,6 +19,12 @@ struct SetFinishInvoker
 condy::SingleThreadOptions options =
     condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
+condy::MultiThreadOptions options2 = condy::MultiThreadOptions()
+                                         .num_threads(4)
+                                         .sq_size(8)
+                                         .cq_size(16)
+                                         .random_seed(42);
+
 } // namespace
 
 TEST_CASE("test runtime - single thread no-op") {
@@ -188,7 +194,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
 }
 
 TEST_CASE("test runtime - multi thread schedule no-op") {
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     SetFinishInvoker invoker;
     runtime.schedule(&invoker);
@@ -199,7 +205,7 @@ TEST_CASE("test runtime - multi thread schedule no-op") {
 }
 
 TEST_CASE("test runtime - multi thread schedule multiple no-op") {
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     const int num_invokers = 20;
     std::vector<SetFinishInvoker> invokers(num_invokers);
@@ -215,7 +221,7 @@ TEST_CASE("test runtime - multi thread schedule multiple no-op") {
 }
 
 TEST_CASE("test runtime - multi thread schedule coroutine") {
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     bool finished = false;
     auto func = [&]() -> condy::Coro<void> {
@@ -234,7 +240,7 @@ TEST_CASE("test runtime - multi thread schedule coroutine") {
 }
 
 TEST_CASE("test runtime - multi thread schedule multiple coroutines") {
-    condy::MultiThreadRuntime runtime(8, 2);
+    condy::MultiThreadRuntime runtime(options2);
 
     std::mutex mu;
     std::unordered_set<std::thread::id> thread_ids;
@@ -268,7 +274,7 @@ TEST_CASE("test runtime - multi thread schedule multiple coroutines") {
 }
 
 TEST_CASE("test runtime - multi thread schedule coroutines with operation") {
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     auto func = [](int &flag) -> condy::Coro<void> {
         co_await condy::make_op_awaiter(io_uring_prep_nop);
@@ -298,7 +304,7 @@ TEST_CASE("test runtime - multi thread schedule coroutines with operation") {
 TEST_CASE("test runtime - multi thread schedule coroutines with parallel "
           "operation") {
     using condy::operators::operator>>;
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     auto func = [](int &flag) -> condy::Coro<void> {
         co_await (condy::make_op_awaiter(io_uring_prep_nop) >>
@@ -329,7 +335,7 @@ TEST_CASE("test runtime - multi thread schedule coroutines with parallel "
 TEST_CASE("test runtime - multi thread schedule coroutine with cancel") {
     using condy::operators::operator||;
 
-    condy::MultiThreadRuntime runtime(8, 4);
+    condy::MultiThreadRuntime runtime(options2);
 
     bool finished = false;
     auto func = [&]() -> condy::Coro<void> {
@@ -355,7 +361,12 @@ TEST_CASE("test runtime - multi thread schedule coroutine with cancel") {
 
 TEST_CASE(
     "test runtime - multi thread schedule high concurrency with cancelation") {
-    condy::MultiThreadRuntime runtime(64, 8);
+    auto options = condy::MultiThreadOptions()
+                       .num_threads(8)
+                       .sq_size(64)
+                       .cq_size(128)
+                       .random_seed(1234);
+    condy::MultiThreadRuntime runtime(options);
 
     const int num_ops = 100;
 
