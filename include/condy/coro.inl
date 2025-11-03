@@ -2,7 +2,6 @@
 
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
-#include "condy/spin_lock.hpp"
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
@@ -114,7 +113,7 @@ public:
     }
 
 protected:
-    MaybeMutex<SpinLock> mutex_;
+    MaybeMutex<std::mutex> mutex_;
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;

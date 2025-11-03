@@ -61,7 +61,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
     REQUIRE(invoker.finished);
     REQUIRE(handle.extract_result() == 42);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test op_finish_handle - concurrent ops") {
@@ -93,7 +93,7 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     REQUIRE(!ring.has_outstanding_ops());
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test op_finish_handle - cancel op") {
@@ -139,5 +139,5 @@ TEST_CASE("test op_finish_handle - cancel op") {
     REQUIRE(std::get<0>(results) == -ECANCELED);
     REQUIRE(std::get<1>(results) == 0);
 
-    context.destroy();
+    context.reset();
 }

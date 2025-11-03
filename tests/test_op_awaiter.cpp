@@ -47,7 +47,7 @@ TEST_CASE("test op_awaiter - basic routine") {
     REQUIRE(unfinished == 0);
     REQUIRE(!ring.has_outstanding_ops());
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test op_awaiter - multiple ops") {
@@ -75,7 +75,7 @@ TEST_CASE("test op_awaiter - multiple ops") {
     REQUIRE(unfinished == 0);
     REQUIRE(!ring.has_outstanding_ops());
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test op_awaiter - concurrent op") {
@@ -107,7 +107,7 @@ TEST_CASE("test op_awaiter - concurrent op") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test op_awaiter - cancel op") {
@@ -145,5 +145,5 @@ TEST_CASE("test op_awaiter - cancel op") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }

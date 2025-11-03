@@ -50,7 +50,7 @@ TEST_CASE("test awaiter_operations - test make_op_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_all_awaiter") {
@@ -83,7 +83,7 @@ TEST_CASE("test awaiter_operations - test make_all_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_one_awaiter") {
@@ -118,7 +118,7 @@ TEST_CASE("test awaiter_operations - test make_one_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
@@ -153,7 +153,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
@@ -196,7 +196,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test &&") {
@@ -229,7 +229,7 @@ TEST_CASE("test awaiter_operations - test &&") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test ||") {
@@ -263,7 +263,7 @@ TEST_CASE("test awaiter_operations - test ||") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - mixed && and ||") {
@@ -300,7 +300,7 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - ranged +=") {
@@ -336,7 +336,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_link_awaiter") {
@@ -373,7 +373,7 @@ TEST_CASE("test awaiter_operations - test make_link_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test >>") {
@@ -410,7 +410,7 @@ TEST_CASE("test awaiter_operations - test >>") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
@@ -437,7 +437,7 @@ TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test ~") {
@@ -466,7 +466,7 @@ TEST_CASE("test awaiter_operations - test ~") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }
 
 TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
@@ -501,5 +501,5 @@ TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
 
-    context.destroy();
+    context.reset();
 }

@@ -7,7 +7,7 @@
 
 namespace condy {
 
-// Borrowed from
+// Adapted from Eigen's NonBlockingThreadPool
 // https://gitlab.com/libeigen/eigen/-/blob/master/Eigen/src/ThreadPool/NonBlockingThreadPool.h
 
 class PCG32 {

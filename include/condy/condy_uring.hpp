@@ -24,22 +24,3 @@
     (major > IO_URING_VERSION_MAJOR ||                                         \
      (major == IO_URING_VERSION_MAJOR && minor > IO_URING_VERSION_MINOR))
 #endif
-
-// Version independent wrappers
-
-inline int condy_submit_and_wait_timeout(struct io_uring *ring,
-                                         struct io_uring_cqe **cqe_ptr,
-                                         unsigned wait_nr,
-                                         struct __kernel_timespec *ts,
-                                         sigset_t *sigmask) {
-#if IO_URING_CHECK_VERSION(2, 1)
-    return io_uring_submit_and_wait_timeout(ring, cqe_ptr, wait_nr, ts,
-                                            sigmask);
-#else
-    if (ts == nullptr) {
-        return io_uring_submit_and_wait(ring, wait_nr);
-    }
-    io_uring_submit(ring);
-    return io_uring_wait_cqes(ring, cqe_ptr, wait_nr, ts, sigmask);
-#endif
-}

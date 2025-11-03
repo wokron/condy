@@ -18,7 +18,7 @@ public:
         runtime_ = runtime;
         schedule_local_ = schedule_local;
     }
-    void destroy() {
+    void reset() {
         ring_ = nullptr;
         runtime_ = nullptr;
         schedule_local_ = nullptr;

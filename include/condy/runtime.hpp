@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/context.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
@@ -30,6 +31,9 @@ public:
 
     virtual bool is_single_thread() const = 0;
 };
+
+using WorkListQueue =
+    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
 class SingleThreadRuntime : public IRuntime {
 public:
@@ -71,7 +75,7 @@ public:
         // In SingleThreadRuntime, wait is the place to run the event loop.
 
         Context::current().init(&ring_, this, schedule_local_);
-        auto d = defer([]() { Context::current().destroy(); });
+        auto d = defer([]() { Context::current().reset(); });
 
         while (true) {
             tick_count_++;
@@ -207,11 +211,9 @@ private:
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
-        global_queue_;
+    WorkListQueue global_queue_;
 
-    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
-        local_queue_;
+    WorkListQueue local_queue_;
 
     Ring ring_;
 
@@ -292,7 +294,7 @@ private:
         data_->ring.set_use_mutex(true);
 
         Context::current().init(&data_->ring, this, schedule_local_);
-        auto d = defer([]() { Context::current().destroy(); });
+        auto d = defer([]() { Context::current().reset(); });
 
         while (true) {
             data_->tick_count++;
@@ -482,8 +484,7 @@ private:
     std::mutex mutex_;
     std::condition_variable cv_;
     bool done_ = false;
-    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
-        global_queue_;
+    WorkListQueue global_queue_;
     std::atomic_size_t pending_works_ = 0;
     size_t blocking_threads_ = 0;
 
@@ -502,8 +503,7 @@ private:
         size_t thread_index;
         Ring ring;
         BoundedTaskQueue<WorkInvoker *, 8> local_queue;
-        IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
-            extended_queue;
+        WorkListQueue extended_queue;
         size_t tick_count = 0;
         size_t local_tick_count = 0;
         PCG32 pcg32;
