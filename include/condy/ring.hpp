@@ -2,6 +2,8 @@
 
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/utils.hpp"
+#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -40,8 +42,11 @@ public:
         }
     }
 
+    void set_use_mutex(bool use_mutex) { sq_mutex_.set_use_mutex(use_mutex); }
+
     template <typename Func>
     void register_op(Func &&prep_func, OpFinishHandle *handle) {
+        std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
         io_uring_sqe_set_data(sqe, handle);
@@ -50,6 +55,7 @@ public:
     }
 
     void cancel_op(OpFinishHandle *handle) {
+        std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         io_uring_prep_cancel(sqe, handle, 0);
         io_uring_sqe_set_data(sqe, IGNORE_DATA);
@@ -57,6 +63,7 @@ public:
     }
 
     void submit() {
+        std::lock_guard lock(sq_mutex_);
         unsubmitted_count_ = 0;
         io_uring_submit(&ring_);
     }
@@ -103,13 +110,15 @@ public:
     }
 
     void reserve_space(size_t n) {
+        std::lock_guard lock(sq_mutex_);
         size_t space_left;
         do {
             space_left = io_uring_sq_space_left(&ring_);
             if (space_left >= n) {
                 return;
             }
-            submit();
+            unsubmitted_count_ = 0;
+            io_uring_submit(&ring_);
         } while (1);
     }
 
@@ -159,9 +168,11 @@ public:
     inline static void *const IGNORE_DATA = reinterpret_cast<void *>(0x1);
 
 private:
+    // SQ may be accessed from multiple threads, so protect it
+    MaybeMutex<std::mutex> sq_mutex_;
     bool initialized_ = false;
     io_uring ring_;
-    size_t outstanding_ops_count_ = 0;
+    std::atomic_size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
 

@@ -25,13 +25,12 @@ public:
 public:
     HandleType *get_handle() { return &finish_handle_; }
 
-    void init_finish_handle(bool stealable = true) {
-        finish_handle_.set_stealable(stealable);
-    }
+    void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int flags) {
         auto &context = Context::current();
         auto *ring = context.ring();
+        finish_handle_.set_ring(ring);
         ring->register_op(
             [&](io_uring_sqe *sqe) {
                 std::apply(
@@ -98,12 +97,12 @@ public:
 public:
     HandleType *get_handle() { return &finish_handle_; }
 
-    void init_finish_handle(bool stealable = true) {
+    void init_finish_handle() {
         using ChildHandle = typename Awaiter::HandleType;
         std::vector<ChildHandle *> handles;
         handles.reserve(awaiters_.size());
         for (auto &awaiter : awaiters_) {
-            awaiter.init_finish_handle(HandleType::is_stealable && stealable);
+            awaiter.init_finish_handle();
             handles.push_back(awaiter.get_handle());
         }
         finish_handle_.init(std::move(handles));
@@ -190,8 +189,8 @@ public:
 public:
     HandleType *get_handle() { return &finish_handle_; }
 
-    void init_finish_handle(bool stealable = true) {
-        auto handles = foreach_init_finish_handle_(stealable);
+    void init_finish_handle() {
+        auto handles = foreach_init_finish_handle_();
         static_assert(std::tuple_size<decltype(handles)>::value ==
                           sizeof...(Awaiters),
                       "Number of handles must match number of awaiters");
@@ -224,13 +223,12 @@ public:
     auto awaiters() && { return std::move(awaiters_); }
 
 private:
-    template <size_t Idx = 0> auto foreach_init_finish_handle_(bool stealable) {
+    template <size_t Idx = 0> auto foreach_init_finish_handle_() {
         if constexpr (Idx < sizeof...(Awaiters)) {
-            std::get<Idx>(awaiters_).init_finish_handle(
-                HandleType::is_stealable && stealable);
+            std::get<Idx>(awaiters_).init_finish_handle();
             return std::tuple_cat(
                 std::make_tuple(std::get<Idx>(awaiters_).get_handle()),
-                foreach_init_finish_handle_<Idx + 1>(stealable));
+                foreach_init_finish_handle_<Idx + 1>());
         } else {
             return std::tuple<>();
         }

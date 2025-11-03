@@ -7,8 +7,8 @@
 namespace condy {
 
 inline void OpFinishHandle::cancel() {
-    auto ring = Context::current().ring();
-    ring->cancel_op(this);
+    assert(ring_ != nullptr);
+    ring_->cancel_op(this);
 }
 
 } // namespace condy

@@ -289,6 +289,7 @@ private:
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
         data_->ring.init(ring_entries_per_thread_, &params);
+        data_->ring.set_use_mutex(true);
 
         Context::current().init(&data_->ring, this, schedule_local_);
         auto d = defer([]() { Context::current().destroy(); });
@@ -338,12 +339,8 @@ private:
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         handle->set_result(cqe->res);
-        if (handle->is_stealable()) {
-            if (!data_->local_queue.try_push(handle)) {
-                data_->extended_queue.push_back(handle);
-            }
-        } else {
-            data_->no_steal_queue.push_back(handle);
+        if (!data_->local_queue.try_push(handle)) {
+            data_->extended_queue.push_back(handle);
         }
     }
 
@@ -364,10 +361,7 @@ private:
     }
 
     WorkInvoker *next_local_() {
-        WorkInvoker *work = data_->no_steal_queue.pop_front();
-        if (work) {
-            return work;
-        }
+        WorkInvoker *work;
         data_->local_tick_count++;
         if (data_->local_tick_count % self_steal_interval_ == 0) {
             work = data_->local_queue.steal();
@@ -510,8 +504,6 @@ private:
         BoundedTaskQueue<WorkInvoker *, 8> local_queue;
         IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
             extended_queue;
-        IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>
-            no_steal_queue;
         size_t tick_count = 0;
         size_t local_tick_count = 0;
         PCG32 pcg32;

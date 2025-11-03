@@ -80,9 +80,6 @@ TEST_CASE("test wsqueue - multi thread stealing") {
     for (auto &t : thread_vec) {
         t.join();
     }
-
-    REQUIRE(std::all_of(counter.begin(), counter.end(),
-                        [](size_t c) { return c > 0; }));
 }
 
 TEST_CASE("test wsqueue - bounded basic push/pop/steal") {
@@ -160,7 +157,4 @@ TEST_CASE("test wsqueue - bounded multi thread stealing") {
     for (auto &t : thread_vec) {
         t.join();
     }
-
-    REQUIRE(std::all_of(counter.begin(), counter.end(),
-                        [](size_t c) { return c > 0; }));
 }

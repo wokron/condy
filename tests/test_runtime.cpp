@@ -2,7 +2,8 @@
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
-#include <chrono>
+#include <atomic>
+#include <cstddef>
 #include <doctest/doctest.h>
 #include <unordered_set>
 
@@ -346,4 +347,49 @@ TEST_CASE("test runtime - multi thread schedule coroutine with cancel") {
     runtime.wait();
 
     REQUIRE(finished);
+}
+
+TEST_CASE(
+    "test runtime - multi thread schedule high concurrency with cancelation") {
+    condy::MultiThreadRuntime runtime(64, 8);
+
+    const int num_ops = 100;
+
+    auto func = [&](std::atomic_size_t &finished) -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 1,
+            .tv_nsec = 0,
+        };
+        using Awaiter =
+            decltype(condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0));
+        std::vector<Awaiter> awaiters;
+        std::vector<__kernel_timespec> ts_vec(num_ops);
+        awaiters.reserve(num_ops);
+        for (int i = 0; i < num_ops; ++i) {
+            auto &ts = ts_vec[i];
+            ts.tv_nsec += 1000 * (i % 10); // Stagger timeouts a bit
+            awaiters.emplace_back(
+                condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0));
+        }
+        auto one_awaiter = condy::make_ranged_one_awaiter(std::move(awaiters));
+        auto [no, r] = co_await one_awaiter;
+        REQUIRE(0 <= no);
+        REQUIRE(no < num_ops);
+        REQUIRE(r == -ETIME);
+        finished++;
+    };
+
+    std::atomic_size_t finished = 0;
+
+    const size_t num_coro = 1000;
+    for (size_t i = 0; i < num_coro; i++) {
+        auto coro = func(finished);
+        auto h = coro.release();
+        runtime.schedule(&h.promise());
+    }
+
+    runtime.done();
+    runtime.wait();
+
+    REQUIRE(finished == num_coro);
 }
