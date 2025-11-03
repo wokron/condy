@@ -139,17 +139,21 @@ private:
     Uninitialized<T> value_;
 };
 
+template <typename PromiseType> struct CoroAwaiterBase {
+    bool await_ready() const noexcept { return false; }
+
+    std::coroutine_handle<PromiseType>
+    await_suspend(std::coroutine_handle<> caller_handle) noexcept {
+        handle_.promise().set_auto_destroy(false);
+        handle_.promise().set_caller_handle(caller_handle);
+        return handle_;
+    }
+
+    std::coroutine_handle<PromiseType> handle_;
+};
+
 template <> inline auto Coro<void>::operator co_await() && {
-    struct CoroAwaiter {
-        bool await_ready() const noexcept { return false; }
-
-        std::coroutine_handle<promise_type>
-        await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            handle_.promise().set_auto_destroy(false);
-            handle_.promise().set_caller_handle(caller_handle);
-            return handle_;
-        }
-
+    struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
         void await_resume() {
             auto exception = handle_.promise().exception();
             handle_.destroy();
@@ -157,35 +161,23 @@ template <> inline auto Coro<void>::operator co_await() && {
                 std::rethrow_exception(exception);
             }
         }
-
-        std::coroutine_handle<promise_type> handle_;
     };
     return CoroAwaiter{release()};
 }
 
 template <typename T> inline auto Coro<T>::operator co_await() && {
-    struct CoroAwaiter {
-        bool await_ready() const noexcept { return false; }
-
-        std::coroutine_handle<promise_type>
-        await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-            handle_.promise().set_auto_destroy(false);
-            handle_.promise().set_caller_handle(caller_handle);
-            return handle_;
-        }
-
+    struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
+        using Base = CoroAwaiterBase<promise_type>;
         T await_resume() {
-            auto exception = handle_.promise().exception();
+            auto exception = Base::handle_.promise().exception();
             if (exception) {
-                handle_.destroy();
+                Base::handle_.destroy();
                 std::rethrow_exception(exception);
             }
-            T value = std::move(handle_.promise()).value();
-            handle_.destroy();
+            T value = std::move(Base::handle_.promise()).value();
+            Base::handle_.destroy();
             return value;
         }
-
-        std::coroutine_handle<promise_type> handle_;
     };
     return CoroAwaiter{release()};
 }
