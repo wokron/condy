@@ -83,7 +83,7 @@ void Task<T>::wait_inner_(std::coroutine_handle<PromiseType> handle) {
 template <> inline void Task<void>::wait() {
     auto handle = std::exchange(handle_, nullptr);
     wait_inner_(handle);
-    auto exception = handle.promise().exception();
+    auto exception = std::move(handle.promise()).exception();
     handle.destroy();
     if (exception) {
         std::rethrow_exception(exception);
@@ -93,7 +93,7 @@ template <> inline void Task<void>::wait() {
 template <typename T> T Task<T>::wait() {
     auto handle = std::exchange(handle_, nullptr);
     wait_inner_(handle);
-    auto exception = handle.promise().exception();
+    auto exception = std::move(handle.promise()).exception();
     if (exception) {
         handle.destroy();
         std::rethrow_exception(exception);
@@ -142,7 +142,7 @@ template <> inline auto Task<void>::operator co_await() && {
 
         void await_resume() {
             Context::current().runtime()->resume_work();
-            auto exception = task_handle_.promise().exception();
+            auto exception = std::move(task_handle_.promise()).exception();
             task_handle_.destroy();
             if (exception) {
                 std::rethrow_exception(exception);
@@ -161,7 +161,8 @@ template <typename T> inline auto Task<T>::operator co_await() && {
 
         T await_resume() {
             Context::current().runtime()->resume_work();
-            auto exception = Base::task_handle_.promise().exception();
+            auto exception =
+                std::move(Base::task_handle_.promise()).exception();
             if (exception) {
                 Base::task_handle_.destroy();
                 std::rethrow_exception(exception);

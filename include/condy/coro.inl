@@ -5,6 +5,7 @@
 #include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
+#include <exception>
 #include <mutex>
 
 namespace condy {
@@ -13,6 +14,12 @@ template <typename Coro>
 class PromiseBase : public InvokerAdapter<PromiseBase<Coro>, WorkInvoker> {
 public:
     using PromiseType = typename Coro::promise_type;
+
+    ~PromiseBase() {
+        if (exception_) {
+            std::terminate(); // Unhandled exception in detached coroutine!!!
+        }
+    }
 
     Coro get_return_object() {
         return Coro{std::coroutine_handle<PromiseType>::from_promise(
@@ -104,7 +111,10 @@ public:
         mutex_.set_use_mutex(use_mutex);
     }
 
-    std::exception_ptr exception() const noexcept { return exception_; }
+    std::exception_ptr &exception() & noexcept { return exception_; }
+    std::exception_ptr &&exception() && noexcept {
+        return std::move(exception_);
+    }
 
     void operator()() {
         auto h = std::coroutine_handle<PromiseType>::from_promise(
@@ -155,7 +165,7 @@ template <typename PromiseType> struct CoroAwaiterBase {
 template <> inline auto Coro<void>::operator co_await() && {
     struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
         void await_resume() {
-            auto exception = handle_.promise().exception();
+            auto exception = std::move(handle_.promise()).exception();
             handle_.destroy();
             if (exception) {
                 std::rethrow_exception(exception);
@@ -169,7 +179,7 @@ template <typename T> inline auto Coro<T>::operator co_await() && {
     struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
         using Base = CoroAwaiterBase<promise_type>;
         T await_resume() {
-            auto exception = Base::handle_.promise().exception();
+            auto exception = std::move(Base::handle_.promise()).exception();
             if (exception) {
                 Base::handle_.destroy();
                 std::rethrow_exception(exception);

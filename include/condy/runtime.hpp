@@ -84,7 +84,6 @@ public:
 
         global_queue_interval_ = options.global_queue_interval_;
         event_interval_ = options.event_interval_;
-
         idle_time_us_ = options.idle_time_us_;
     }
 
@@ -267,6 +266,7 @@ private:
 
     size_t tick_count_ = 0;
 
+    // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
     size_t idle_time_us_ = 1000000;
@@ -586,12 +586,13 @@ private:
     std::atomic_size_t pending_works_ = 0;
     size_t blocking_threads_ = 0;
 
+    ShuffleGenerator shuffle_gen_;
+
+    // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
     size_t self_steal_interval_ = 7;
     size_t idle_time_us_ = 1000000;
-
-    ShuffleGenerator shuffle_gen_;
 
 private:
     size_t num_threads_;
