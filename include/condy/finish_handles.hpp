@@ -1,7 +1,7 @@
 #pragma once
 
-#include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
+#include "condy/ring.hpp"
 #include "condy/uninitialized.hpp"
 #include <array>
 #include <atomic>
@@ -18,12 +18,12 @@ struct Ring;
 
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
-    DoubleLinkEntry link_; // For outstanding ops list
-
-public:
     using ReturnType = int;
 
-    void cancel();
+    void cancel() {
+        assert(ring_ != nullptr);
+        ring_->cancel_op(this);
+    }
 
     void set_result(int res) { res_ = res; }
 
@@ -301,5 +301,3 @@ private:
 };
 
 } // namespace condy
-
-#include "condy/finish_handles.inl"

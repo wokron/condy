@@ -1,7 +1,6 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
-#include "condy/finish_handles.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
 #include <cassert>
@@ -11,6 +10,8 @@
 #include <sys/eventfd.h>
 
 namespace condy {
+
+struct OpFinishHandle;
 
 class Ring {
 public:
