@@ -1,2 +1,5 @@
-add_executable(echo_server echo_server.cpp)
-target_link_libraries(echo_server PRIVATE condy uring)
+add_executable(echo-server echo-server.cpp)
+target_link_libraries(echo-server PRIVATE condy uring)
+
+add_executable(condy-cp condy-cp.cpp)
+target_link_libraries(condy-cp PRIVATE condy uring)
