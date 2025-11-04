@@ -1,2 +1,2 @@
-add_executable(hello hello.cpp)
-target_link_libraries(hello PRIVATE condy)
+add_executable(echo_server echo_server.cpp)
+target_link_libraries(echo_server PRIVATE condy uring)
