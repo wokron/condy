@@ -97,7 +97,7 @@ public:
 public:
     void done() override {
         std::lock_guard<std::mutex> lock(mutex_);
-        done_ = true;
+        pending_works_--;
         cv_.notify_all();
     }
 
@@ -166,15 +166,14 @@ private:
             }
 
             if (!ring_.has_outstanding_ops()) {
-                if (done_ && pending_works_ == 0) {
-                    // 3. If done_ is set and there is no more works, we can
+                if (pending_works_ == 0) {
+                    // 3. If there is no more works, we can
                     // exit.
                     return false;
                 }
                 // 4. No outstanding ops in the ring, we can block here safely.
                 cv_.wait(lock, [this]() {
-                    return !global_queue_.empty() ||
-                           (done_ && pending_works_ == 0);
+                    return !global_queue_.empty() || pending_works_ == 0;
                 });
                 return true;
             }
@@ -250,8 +249,6 @@ private:
     }
 
 private:
-    bool done_ = false;
-
     std::mutex mutex_;
     std::condition_variable cv_;
     WorkListQueue global_queue_;
@@ -260,9 +257,8 @@ private:
 
     Ring ring_;
 
-    // When pending_works_ > 0, it means there are some works going to be posted
-    // to the runtime, so the runtime should not exit even if done_ is set.
-    size_t pending_works_ = 0;
+    // Initialized to 1 to prevent premature exit
+    size_t pending_works_ = 1;
 
     size_t tick_count_ = 0;
 
@@ -364,7 +360,7 @@ public:
 public:
     void done() override {
         std::lock_guard<std::mutex> lock(mutex_);
-        done_ = true;
+        pending_works_--;
         cv_.notify_all();
     }
 
@@ -554,10 +550,8 @@ private:
 
             if (!data_->ring.has_outstanding_ops()) {
                 blocking_threads_++;
-                if (done_ && pending_works_ == 0 &&
-                    blocking_threads_ == num_threads_) {
-                    // 3. If done_ is set and there is no more works, we can
-                    // exit.
+                if (pending_works_ == 0 && blocking_threads_ == num_threads_) {
+                    // 3. If there is no more works, we can exit.
                     cv_.notify_all();
                     return false;
                 }
@@ -579,11 +573,10 @@ private:
 private:
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool done_ = false;
     WorkListQueue global_queue_;
-    std::atomic_size_t pending_works_ = 0;
+    // Initialized to 1 to prevent premature exit
+    std::atomic_size_t pending_works_ = 1;
     size_t blocking_threads_ = 0;
-
     ShuffleGenerator shuffle_gen_;
 
     // Configuration parameters
