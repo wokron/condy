@@ -145,18 +145,26 @@ private:
     }
 
     io_uring_sqe *get_sqe_() {
+        int r;
         io_uring_sqe *sqe;
         do {
             sqe = io_uring_get_sqe(&ring_);
             if (sqe) {
                 break;
             }
-            if (!sqpoll_mode_) {
-                io_uring_submit(&ring_);
-            } else {
-                io_uring_sqring_wait(&ring_);
+            r = io_uring_submit(&ring_);
+            if (r < 0) {
+                throw std::runtime_error("io_uring_submit failed: " +
+                                         std::string(strerror(-r)));
             }
             unsubmitted_count_ = 0;
+            if (sqpoll_mode_) {
+                r = io_uring_sqring_wait(&ring_);
+                if (r < 0) {
+                    throw std::runtime_error("io_uring_sqring_wait failed: " +
+                                             std::string(strerror(-r)));
+                }
+            }
         } while (1);
         return sqe;
     }
