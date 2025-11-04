@@ -15,6 +15,10 @@ struct DoubleLinkEntry {
 #ifndef NDEBUG
     void *owner = nullptr;
 #endif
+
+    bool no_linked() const noexcept {
+        return next == nullptr && prev == nullptr;
+    }
 };
 
 template <typename T, SingleLinkEntry T::*Member> class IntrusiveSingleList {
@@ -124,13 +128,16 @@ public:
         return reinterpret_cast<T *>(container_of_(entry));
     }
 
-    void remove(T *item) noexcept {
+    bool remove(T *item) noexcept {
         assert(item != nullptr);
         DoubleLinkEntry *entry = &(item->*Member);
 #ifndef NDEBUG
         assert(entry->owner == this);
         entry->owner = nullptr;
 #endif
+        if (entry->no_linked() && head_ != entry) {
+            return false;
+        }
         if (entry->prev) {
             entry->prev->next = entry->next;
         } else {
@@ -145,6 +152,7 @@ public:
         }
         entry->next = nullptr;
         entry->prev = nullptr;
+        return true;
     }
 
     template <typename Func> void for_each(Func &&func) noexcept {
