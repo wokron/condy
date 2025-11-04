@@ -1,5 +1,3 @@
-#include "condy/coro.hpp"
-#include "condy/strategies.hpp"
 #include <condy.hpp>
 #include <iostream>
 #include <vector>
@@ -31,8 +29,8 @@ condy::Coro<void> spawn_tasks(size_t task_count) {
 int main() {
     const size_t task_count = 1'000'000;
 
-    condy::EventLoop<condy::SimpleStrategy> loop(8);
-    loop.run(spawn_tasks(task_count));
+    condy::SingleThreadRuntime runtime;
+    condy::sync_wait(runtime, spawn_tasks(task_count));
 
     return 0;
 }

@@ -426,8 +426,6 @@ private:
         if (!self->data_->local_queue.try_push(work)) {
             self->data_->extended_queue.push_back(work);
             self->cv_.notify_all();
-        } else {
-            self->cv_.notify_one();
         }
     }
 
