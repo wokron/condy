@@ -193,7 +193,7 @@ private:
     std::optional<T> try_pop_inner_() {
         if (full_inner_() && !push_awaiters_.empty()) {
             auto *push_handle = push_awaiters_.pop_front();
-            T &item = push_handle->get_item();
+            T item = std::move(push_handle->get_item());
             schedule_(push_handle);
             T result = pop_inner_();
             push_inner_(std::move(item));
