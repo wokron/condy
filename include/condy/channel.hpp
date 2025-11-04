@@ -97,7 +97,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         if (!push_awaiters_.empty() || !pop_awaiters_.empty()) {
             // There are still awaiters, this is likely a programming error
-            std::terminate();
+            panic_on("Channel destroyed with pending awaiters");
         }
     }
 

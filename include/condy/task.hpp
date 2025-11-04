@@ -30,7 +30,7 @@ public:
 
     ~Task() {
         if (handle_) {
-            std::terminate();
+            panic_on("Task destroyed without being awaited");
         }
     }
 

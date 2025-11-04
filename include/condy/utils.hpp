@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdlib>
+#include <exception>
 #include <functional>
+#include <iostream>
 #include <utility>
 
 namespace condy {
@@ -53,5 +56,15 @@ public:
 private:
     bool use_mutex_ = false;
 };
+
+inline void panic_on(const char *msg) noexcept {
+    std::cerr << "Panic: " << msg << std::endl;
+#ifndef CRASH_TEST
+    std::terminate();
+#else
+    // Ctest cannot handle SIGABRT, so we use exit here
+    std::exit(EXIT_FAILURE);
+#endif
+}
 
 } // namespace condy

@@ -17,7 +17,7 @@ public:
 
     ~PromiseBase() {
         if (exception_) {
-            std::terminate(); // Unhandled exception in detached coroutine!!!
+            panic_on("Unhandled exception in detached coroutine!!!");
         }
     }
 
