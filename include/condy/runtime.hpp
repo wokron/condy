@@ -39,7 +39,7 @@ using WorkListQueue =
 
 class SingleThreadRuntime : public IRuntime {
 public:
-    SingleThreadRuntime(const SingleThreadOptions &options) {
+    SingleThreadRuntime(const SingleThreadOptions &options = {}) {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
 
@@ -274,7 +274,7 @@ private:
 
 class MultiThreadRuntime : public IRuntime {
 public:
-    MultiThreadRuntime(const MultiThreadOptions &options)
+    MultiThreadRuntime(const MultiThreadOptions &options = {})
         : shuffle_gen_(options.num_threads_),
           local_data_(std::make_unique<LocalData[]>(options.num_threads_)) {
         io_uring_params params;
