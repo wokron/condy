@@ -39,6 +39,21 @@ public:
         }
     }
 
+    void push_back(IntrusiveSingleList &other) noexcept {
+        if (other.empty()) {
+            return;
+        }
+        if (empty()) {
+            head_ = other.head_;
+            tail_ = other.tail_;
+        } else {
+            tail_->next = other.head_;
+            tail_ = other.tail_;
+        }
+        other.head_ = nullptr;
+        other.tail_ = nullptr;
+    }
+
     bool empty() const noexcept { return head_ == nullptr; }
 
     T *pop_front() noexcept {
@@ -52,6 +67,30 @@ public:
         }
         entry->next = nullptr;
         return reinterpret_cast<T *>(container_of_(entry));
+    }
+
+    IntrusiveSingleList pop_front(size_t max_count) noexcept {
+        if (empty() || max_count == 0) {
+            return IntrusiveSingleList();
+        }
+        IntrusiveSingleList batch;
+        SingleLinkEntry *current = head_->next;
+        SingleLinkEntry *prev = head_;
+
+        while (current && max_count > 1) {
+            prev = current;
+            current = current->next;
+            max_count--;
+        }
+
+        batch.head_ = head_;
+        batch.tail_ = prev;
+        head_ = current;
+        if (!head_) {
+            tail_ = nullptr;
+        }
+        batch.tail_->next = nullptr;
+        return batch;
     }
 
     T *front() noexcept {

@@ -39,6 +39,41 @@ TEST_CASE("test intrusive - single list") {
     REQUIRE(popped->value == 3);
 
     REQUIRE(list.empty());
+
+    list.push_back(&item1);
+    list.push_back(&item2);
+    list.push_back(&item3);
+
+    auto batch1 = list.pop_front(0);
+    REQUIRE(batch1.empty());
+
+    auto batch2 = list.pop_front(2);
+    REQUIRE(!batch2.empty());
+    REQUIRE(batch2.pop_front()->value == 1);
+    REQUIRE(batch2.pop_front()->value == 2);
+    REQUIRE(batch2.pop_front() == nullptr);
+
+    auto batch3 = list.pop_front(2);
+    REQUIRE(!batch3.empty());
+    REQUIRE(batch3.pop_front()->value == 3);
+    REQUIRE(batch3.pop_front() == nullptr);
+
+    auto batch4 = list.pop_front(2);
+    REQUIRE(batch4.empty());
+
+    IntrusiveSingleList<Item, &Item::link> list2;
+    list2.push_back(&item1);
+    list2.push_back(&item2);
+
+    list.push_back(&item3);
+    list.push_back(list2);
+    REQUIRE(list2.empty());
+    REQUIRE(!list.empty());
+
+    REQUIRE(list.pop_front()->value == 3);
+    REQUIRE(list.pop_front()->value == 1);
+    REQUIRE(list.pop_front()->value == 2);
+    REQUIRE(list.pop_front() == nullptr);
 }
 
 TEST_CASE("test intrusive - double list") {

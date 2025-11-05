@@ -158,8 +158,9 @@ private:
 
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            auto flushed = flush_global_();
-            if (flushed > 0) {
+            bool flushed = !global_queue_.empty();
+            local_queue_.push_back(global_queue_);
+            if (flushed) {
                 // 2. If we got some new work from the global queue, return
                 // immediately.
                 return true;
@@ -221,19 +222,8 @@ private:
         if (work == nullptr) {
             return nullptr;
         }
-        flush_global_();
+        local_queue_.push_back(global_queue_);
         return work;
-    }
-
-    size_t flush_global_() {
-        // NOTICE: mutex_ must be locked before calling this function
-        size_t total = 0;
-        WorkInvoker *work = nullptr;
-        while ((work = global_queue_.pop_front()) != nullptr) {
-            local_queue_.push_back(work);
-            total++;
-        }
-        return total;
     }
 
     size_t flush_ring_() {
@@ -478,12 +468,25 @@ private:
     }
 
     WorkInvoker *next_global_flush_() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        WorkInvoker *work = global_queue_.pop_front();
-        if (!work) {
+        WorkListQueue batch;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            batch = global_queue_.pop_front(64);
+        }
+
+        WorkInvoker *work = batch.pop_front();
+        if (work == nullptr) {
             return nullptr;
         }
-        flush_global_();
+
+        WorkInvoker *next = nullptr;
+        while ((next = batch.front()) != nullptr &&
+               data_->local_queue.try_push(next)) {
+            auto *tmp = batch.pop_front();
+            assert(tmp == next);
+        }
+
+        data_->extended_queue.push_back(batch);
         return work;
     }
 
@@ -541,8 +544,19 @@ private:
 
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            auto flushed = flush_global_();
-            if (flushed > 0) {
+
+            if (!global_queue_.empty()) {
+                auto batch = global_queue_.pop_front(64);
+                lock.unlock();
+
+                WorkInvoker *work = nullptr;
+                while ((work = batch.front()) != nullptr &&
+                       data_->local_queue.try_push(work)) {
+                    auto *tmp = batch.pop_front();
+                    assert(tmp == work);
+                }
+                data_->extended_queue.push_back(batch);
+
                 // 2. If we got some new work from the global queue, return
                 // immediately.
                 return true;
