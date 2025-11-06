@@ -480,13 +480,16 @@ private:
         }
 
         WorkInvoker *next = nullptr;
-        while ((next = batch.front()) != nullptr &&
-               data_->local_queue.try_push(next)) {
-            auto *tmp = batch.pop_front();
-            assert(tmp == next);
-        }
 
-        data_->extended_queue.push_back(batch);
+        while ((next = batch.pop_front()) != nullptr &&
+               data_->local_queue.try_push(next))
+            ;
+
+        if (next != nullptr) {
+            data_->extended_queue.push_back(next);
+            data_->extended_queue.push_back(batch);
+        }
+        assert(batch.empty());
         return work;
     }
 
@@ -495,26 +498,14 @@ private:
         if (!work) {
             return nullptr;
         }
-        WorkInvoker *next_work;
-        while ((next_work = data_->extended_queue.front()) != nullptr &&
-               data_->local_queue.try_push(next_work)) {
-            auto *tmp = data_->extended_queue.pop_front();
-            assert(tmp == next_work);
+        WorkInvoker *next_work = nullptr;
+        while ((next_work = data_->extended_queue.pop_front()) != nullptr &&
+               data_->local_queue.try_push(next_work))
+            ;
+        if (next_work != nullptr) {
+            data_->extended_queue.push_front(next_work);
         }
         return work;
-    }
-
-    size_t flush_global_() {
-        // NOTICE: mutex_ must be locked before calling this function
-        size_t total = 0;
-        WorkInvoker *work = nullptr;
-        while ((work = global_queue_.front()) != nullptr &&
-               data_->local_queue.try_push(work)) {
-            auto *tmp = global_queue_.pop_front();
-            assert(tmp == work);
-            total++;
-        }
-        return total;
     }
 
     WorkInvoker *steal_work_() {
@@ -550,12 +541,14 @@ private:
                 lock.unlock();
 
                 WorkInvoker *work = nullptr;
-                while ((work = batch.front()) != nullptr &&
-                       data_->local_queue.try_push(work)) {
-                    auto *tmp = batch.pop_front();
-                    assert(tmp == work);
+                while ((work = batch.pop_front()) != nullptr &&
+                       data_->local_queue.try_push(work))
+                    ;
+                if (work != nullptr) {
+                    data_->extended_queue.push_back(work);
+                    data_->extended_queue.push_back(batch);
                 }
-                data_->extended_queue.push_back(batch);
+                assert(batch.empty());
 
                 // 2. If we got some new work from the global queue, return
                 // immediately.

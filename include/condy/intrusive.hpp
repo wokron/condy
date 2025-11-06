@@ -93,11 +93,17 @@ public:
         return batch;
     }
 
-    T *front() noexcept {
+    void push_front(T *item) noexcept {
+        assert(item != nullptr);
+        SingleLinkEntry *entry = &(item->*Member);
+        assert(entry->next == nullptr);
         if (empty()) {
-            return nullptr;
+            head_ = entry;
+            tail_ = entry;
+        } else {
+            entry->next = head_;
+            head_ = entry;
         }
-        return reinterpret_cast<T *>(container_of_(head_));
     }
 
     template <typename Func> void for_each(Func &&func) noexcept {
