@@ -119,6 +119,11 @@ public:
         return *this;
     }
 
+    Self &local_queue_capacity(size_t v) {
+        local_queue_capacity_ = v;
+        return *this;
+    }
+
     Self &submit_batch_size(size_t v) {
         submit_batch_size_ = v;
         return *this;
@@ -173,6 +178,7 @@ private:
     size_t global_queue_interval_ = 61;
     size_t event_interval_ = 61;
     size_t idle_time_us_ = 1000000;
+    size_t local_queue_capacity_ = 256;
     size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
     size_t sqpoll_idle_time_ms_ = 1000;

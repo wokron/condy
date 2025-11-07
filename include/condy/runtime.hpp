@@ -7,7 +7,6 @@
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
-#include "condy/shuffle_generator.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
 #include <condition_variable>
@@ -321,6 +320,7 @@ public:
         global_queue_interval_ = options.global_queue_interval_;
         event_interval_ = options.event_interval_;
         idle_time_us_ = options.idle_time_us_;
+        local_queue_capacity_ = options.local_queue_capacity_;
 
         for (size_t i = 0; i < num_threads_; i++) {
             threads_.emplace_back([this, i]() { worker_loop_(i); });
@@ -349,8 +349,11 @@ public:
 
     void schedule(WorkInvoker *work) override {
         std::lock_guard<std::mutex> lock(mutex_);
+        bool need_notify = global_queue_.empty();
         global_queue_.push_back(work);
-        cv_.notify_one();
+        if (need_notify) {
+            cv_.notify_one();
+        }
     }
 
     void pend_work() override { pending_works_++; }
@@ -397,11 +400,22 @@ private:
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
         self->data_->local_queue.push_back(work);
+        self->maybe_overflow_();
     }
 
-    void push_local_(WorkInvoker *work) {
-        // TODO: Overflow if there are too many local works
-        data_->local_queue.push_back(work);
+    void maybe_overflow_() {
+        auto curr_size = data_->local_queue.size();
+        if (curr_size > local_queue_capacity_) {
+            auto batch = data_->local_queue.pop_front(curr_size / 2);
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                bool need_notify = global_queue_.empty();
+                global_queue_.push_back(std::move(batch));
+                if (need_notify) {
+                    cv_.notify_all();
+                }
+            }
+        }
     }
 
     size_t flush_ring_() {
@@ -413,7 +427,8 @@ private:
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         handle->set_result(cqe->res);
-        push_local_(handle);
+        data_->local_queue.push_back(handle);
+        maybe_overflow_();
     }
 
     WorkInvoker *next_() {
@@ -438,7 +453,9 @@ private:
         WorkListQueue batch;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            size_t batch_size = 64; // TODO: Adjust at runtime
+            size_t batch_size =
+                1 + std::min(global_queue_.size() / num_threads_,
+                             local_queue_capacity_ - data_->local_queue.size());
             batch = global_queue_.pop_front(batch_size);
         }
 
@@ -448,6 +465,7 @@ private:
         }
 
         data_->local_queue.push_back(std::move(batch));
+        assert(data_->local_queue.size() <= local_queue_capacity_);
         return work;
     }
 
@@ -463,11 +481,15 @@ private:
             std::unique_lock<std::mutex> lock(mutex_);
 
             if (!global_queue_.empty()) {
-                size_t batch_size = 64; // TODO: Adjust at runtime
+                assert(data_->local_queue.empty());
+                size_t batch_size =
+                    std::min(global_queue_.size() / num_threads_ + 1,
+                             local_queue_capacity_);
                 auto batch = global_queue_.pop_front(batch_size);
                 lock.unlock();
 
                 data_->local_queue.push_back(std::move(batch));
+                assert(data_->local_queue.size() <= local_queue_capacity_);
 
                 // 2. If we got some new work from the global queue, return
                 // immediately.
@@ -512,6 +534,7 @@ private:
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
     size_t idle_time_us_ = 1000000;
+    size_t local_queue_capacity_ = 256;
 
 private:
     size_t num_threads_;
