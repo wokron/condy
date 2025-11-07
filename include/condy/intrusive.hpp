@@ -110,20 +110,6 @@ public:
         return batch;
     }
 
-    void push_front(T *item) noexcept {
-        assert(item != nullptr);
-        SingleLinkEntry *entry = &(item->*Member);
-        assert(entry->next == nullptr);
-        if (empty()) {
-            head_ = entry;
-            tail_ = entry;
-        } else {
-            entry->next = head_;
-            head_ = entry;
-        }
-        size_++;
-    }
-
     size_t size() const noexcept { return size_; }
 
 private:

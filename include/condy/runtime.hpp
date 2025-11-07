@@ -87,7 +87,7 @@ public:
     void done() override {
         std::lock_guard<std::mutex> lock(mutex_);
         pending_works_--;
-        cv_.notify_all();
+        cv_.notify_one();
     }
 
     void schedule(WorkInvoker *work) override {
@@ -332,11 +332,8 @@ public:
 
     void schedule(WorkInvoker *work) override {
         std::lock_guard<std::mutex> lock(mutex_);
-        bool need_notify = global_queue_.empty();
         global_queue_.push_back(work);
-        if (need_notify) {
-            cv_.notify_one();
-        }
+        cv_.notify_one();
     }
 
     void pend_work() override { pending_works_++; }
@@ -389,14 +386,12 @@ private:
     void maybe_overflow_() {
         auto curr_size = data_->local_queue.size();
         if (curr_size > local_queue_capacity_) {
+            assert(curr_size == local_queue_capacity_ + 1);
             auto batch = data_->local_queue.pop_front(curr_size / 2);
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                bool need_notify = global_queue_.empty();
                 global_queue_.push_back(std::move(batch));
-                if (need_notify) {
-                    cv_.notify_all();
-                }
+                cv_.notify_one();
             }
         }
     }
@@ -434,19 +429,18 @@ private:
 
     WorkInvoker *next_global_flush_() {
         WorkListQueue batch;
+        size_t batch_limit;
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            batch_limit =
+                std::min(local_queue_capacity_ - data_->local_queue.size(),
+                         local_queue_capacity_ / 2);
             size_t batch_size =
-                1 + std::min(global_queue_.size() / num_threads_,
-                             local_queue_capacity_ - data_->local_queue.size());
-            batch = global_queue_.pop_front(batch_size);
+                std::min(global_queue_.size() / num_threads_ + 1, batch_limit);
+            batch = global_queue_.pop_front(std::max<size_t>(1, batch_size));
         }
 
         WorkInvoker *work = batch.pop_front();
-        if (work == nullptr) {
-            return nullptr;
-        }
-
         data_->local_queue.push_back(std::move(batch));
         assert(data_->local_queue.size() <= local_queue_capacity_);
         return work;
@@ -467,7 +461,7 @@ private:
                 assert(data_->local_queue.empty());
                 size_t batch_size =
                     std::min(global_queue_.size() / num_threads_ + 1,
-                             local_queue_capacity_);
+                             local_queue_capacity_ / 2);
                 auto batch = global_queue_.pop_front(batch_size);
                 lock.unlock();
 
