@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <utility>
 
 namespace condy {
 
@@ -15,15 +16,26 @@ struct DoubleLinkEntry {
 #ifndef NDEBUG
     void *owner = nullptr;
 #endif
-
-    bool no_linked() const noexcept {
-        return next == nullptr && prev == nullptr;
-    }
 };
 
 template <typename T, SingleLinkEntry T::*Member> class IntrusiveSingleList {
 public:
-    IntrusiveSingleList() : head_(nullptr) {}
+    IntrusiveSingleList() = default;
+    IntrusiveSingleList(IntrusiveSingleList &&other) noexcept
+        : head_(std::exchange(other.head_, nullptr)),
+          tail_(std::exchange(other.tail_, nullptr)),
+          size_(std::exchange(other.size_, 0)) {}
+    IntrusiveSingleList &operator=(IntrusiveSingleList &&other) noexcept {
+        if (this != &other) {
+            head_ = std::exchange(other.head_, nullptr);
+            tail_ = std::exchange(other.tail_, nullptr);
+            size_ = std::exchange(other.size_, 0);
+        }
+        return *this;
+    }
+
+    IntrusiveSingleList(const IntrusiveSingleList &) = delete;
+    IntrusiveSingleList &operator=(const IntrusiveSingleList &) = delete;
 
     void push_back(T *item) noexcept {
         assert(item != nullptr);
@@ -37,9 +49,10 @@ public:
             tail_->next = entry;
             tail_ = entry;
         }
+        size_++;
     }
 
-    void push_back(IntrusiveSingleList &other) noexcept {
+    void push_back(IntrusiveSingleList other) noexcept {
         if (other.empty()) {
             return;
         }
@@ -50,8 +63,7 @@ public:
             tail_->next = other.head_;
             tail_ = other.tail_;
         }
-        other.head_ = nullptr;
-        other.tail_ = nullptr;
+        size_ += other.size_;
     }
 
     bool empty() const noexcept { return head_ == nullptr; }
@@ -66,6 +78,7 @@ public:
             tail_ = nullptr;
         }
         entry->next = nullptr;
+        size_--;
         return reinterpret_cast<T *>(container_of_(entry));
     }
 
@@ -77,15 +90,19 @@ public:
         SingleLinkEntry *current = head_->next;
         SingleLinkEntry *prev = head_;
 
+        size_t batch_size = 1;
         while (current && max_count > 1) {
             prev = current;
             current = current->next;
             max_count--;
+            batch_size++;
         }
 
         batch.head_ = head_;
         batch.tail_ = prev;
+        batch.size_ = batch_size;
         head_ = current;
+        size_ -= batch_size;
         if (!head_) {
             tail_ = nullptr;
         }
@@ -104,16 +121,10 @@ public:
             entry->next = head_;
             head_ = entry;
         }
+        size_++;
     }
 
-    template <typename Func> void for_each(Func &&func) noexcept {
-        SingleLinkEntry *current = head_;
-        while (current) {
-            T *item = container_of_(current);
-            func(item);
-            current = current->next;
-        }
-    }
+    size_t size() const noexcept { return size_; }
 
 private:
     static T *container_of_(SingleLinkEntry *entry) noexcept {
@@ -126,11 +137,12 @@ private:
 private:
     SingleLinkEntry *head_ = nullptr;
     SingleLinkEntry *tail_ = nullptr;
+    size_t size_ = 0;
 };
 
 template <typename T, DoubleLinkEntry T::*Member> class IntrusiveDoubleList {
 public:
-    IntrusiveDoubleList() : head_(nullptr), tail_(nullptr) {}
+    IntrusiveDoubleList() = default;
 
     void push_back(T *item) noexcept {
         assert(item != nullptr);
@@ -180,7 +192,8 @@ public:
         assert(entry->owner == this);
         entry->owner = nullptr;
 #endif
-        if (entry->no_linked() && head_ != entry) {
+        if (entry->prev == nullptr && entry->next == nullptr &&
+            head_ != entry) {
             return false;
         }
         if (entry->prev) {

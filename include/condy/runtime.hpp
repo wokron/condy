@@ -159,7 +159,7 @@ private:
         {
             std::unique_lock<std::mutex> lock(mutex_);
             bool flushed = !global_queue_.empty();
-            local_queue_.push_back(global_queue_);
+            local_queue_.push_back(std::move(global_queue_));
             if (flushed) {
                 // 2. If we got some new work from the global queue, return
                 // immediately.
@@ -222,7 +222,7 @@ private:
         if (work == nullptr) {
             return nullptr;
         }
-        local_queue_.push_back(global_queue_);
+        local_queue_.push_back(std::move(global_queue_));
         return work;
     }
 
@@ -487,7 +487,7 @@ private:
 
         if (next != nullptr) {
             data_->extended_queue.push_back(next);
-            data_->extended_queue.push_back(batch);
+            data_->extended_queue.push_back(std::move(batch));
         }
         assert(batch.empty());
         return work;
@@ -546,7 +546,7 @@ private:
                     ;
                 if (work != nullptr) {
                     data_->extended_queue.push_back(work);
-                    data_->extended_queue.push_back(batch);
+                    data_->extended_queue.push_back(std::move(batch));
                 }
                 assert(batch.empty());
 
