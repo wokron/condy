@@ -68,14 +68,6 @@ public:
         }
 #endif
 
-        if (options.enable_iopoll_) {
-            params.flags |= IORING_SETUP_IOPOLL;
-#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
-            if (options.iopoll_hybrid_) {
-                params.flags |= IORING_SETUP_HYBRID_IOPOLL;
-            }
-#endif
-        }
         ring_.init(ring_entries, &params);
         ring_.set_submit_batch_size(options.submit_batch_size_);
 
@@ -286,15 +278,6 @@ public:
             params.flags |= IORING_SETUP_COOP_TASKRUN;
         }
 #endif
-
-        if (options.enable_iopoll_) {
-            params.flags |= IORING_SETUP_IOPOLL;
-#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
-            if (options.iopoll_hybrid_) {
-                params.flags |= IORING_SETUP_HYBRID_IOPOLL;
-            }
-#endif
-        }
 
         auto init_ring = [&](Ring &ring) {
             ring.init(ring_entries, &params);

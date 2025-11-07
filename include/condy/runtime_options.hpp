@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <thread>
 
 namespace condy {
@@ -68,12 +67,6 @@ public:
         return *this;
     }
 
-    Self &enable_iopoll(bool hybrid = false) {
-        enable_iopoll_ = true;
-        iopoll_hybrid_ = hybrid;
-        return *this;
-    }
-
 protected:
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
@@ -85,8 +78,6 @@ protected:
     size_t sq_size_ = 128;
     size_t cq_size_ = 1024;
     bool enable_coop_taskrun_ = false;
-    bool enable_iopoll_ = false;
-    bool iopoll_hybrid_ = false;
 
     friend class SingleThreadRuntime;
 };
@@ -167,12 +158,6 @@ public:
         return *this;
     }
 
-    Self &enable_iopoll(bool hybrid = false) {
-        enable_iopoll_ = true;
-        iopoll_hybrid_ = hybrid;
-        return *this;
-    }
-
 private:
     size_t num_threads_ = std::thread::hardware_concurrency();
     size_t global_queue_interval_ = 61;
@@ -186,8 +171,6 @@ private:
     size_t sq_size_ = 128;
     size_t cq_size_ = 1024;
     bool enable_coop_taskrun_ = false;
-    bool enable_iopoll_ = false;
-    bool iopoll_hybrid_ = false;
 
     friend class MultiThreadRuntime;
 };
