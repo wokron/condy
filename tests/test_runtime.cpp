@@ -19,11 +19,8 @@ struct SetFinishInvoker
 condy::SingleThreadOptions options =
     condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
-condy::MultiThreadOptions options2 = condy::MultiThreadOptions()
-                                         .num_threads(4)
-                                         .sq_size(8)
-                                         .cq_size(16)
-                                         .random_seed(42);
+condy::MultiThreadOptions options2 =
+    condy::MultiThreadOptions().num_threads(4).sq_size(8).cq_size(16);
 
 } // namespace
 
@@ -361,11 +358,8 @@ TEST_CASE("test runtime - multi thread schedule coroutine with cancel") {
 
 TEST_CASE(
     "test runtime - multi thread schedule high concurrency with cancelation") {
-    auto options = condy::MultiThreadOptions()
-                       .num_threads(8)
-                       .sq_size(64)
-                       .cq_size(128)
-                       .random_seed(1234);
+    auto options =
+        condy::MultiThreadOptions().num_threads(8).sq_size(64).cq_size(128);
     condy::MultiThreadRuntime runtime(options);
 
     const int num_ops = 100;

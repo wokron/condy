@@ -11,11 +11,8 @@ namespace {
 condy::SingleThreadOptions options =
     condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
-condy::MultiThreadOptions options2 = condy::MultiThreadOptions()
-                                         .num_threads(4)
-                                         .sq_size(8)
-                                         .cq_size(16)
-                                         .random_seed(42);
+condy::MultiThreadOptions options2 =
+    condy::MultiThreadOptions().num_threads(4).sq_size(8).cq_size(16);
 } // namespace
 
 TEST_CASE("test task - local spawn and await") {

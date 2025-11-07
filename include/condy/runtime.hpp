@@ -9,11 +9,9 @@
 #include "condy/runtime_options.hpp"
 #include "condy/shuffle_generator.hpp"
 #include "condy/utils.hpp"
-#include "condy/wsqueue.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <mutex>
 
@@ -261,8 +259,7 @@ private:
 class MultiThreadRuntime : public IRuntime {
 public:
     MultiThreadRuntime(const MultiThreadOptions &options = {})
-        : shuffle_gen_(options.num_threads_),
-          local_data_(std::make_unique<LocalData[]>(options.num_threads_)) {
+        : local_data_(std::make_unique<LocalData[]>(options.num_threads_)) {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
 
@@ -300,8 +297,6 @@ public:
 #endif
         }
 
-        PCG32 base_pcg32(options.random_seed_);
-
         auto init_ring = [&](Ring &ring) {
             ring.init(ring_entries, &params);
             ring.set_submit_batch_size(options.submit_batch_size_);
@@ -311,7 +306,6 @@ public:
         auto init_data = [&](size_t index, LocalData &data) {
             init_ring(data.ring);
             data.thread_index = index;
-            data.pcg32 = PCG32(base_pcg32.next());
         };
 
         init_data(0, local_data_[0]);
@@ -326,7 +320,6 @@ public:
         num_threads_ = options.num_threads_;
         global_queue_interval_ = options.global_queue_interval_;
         event_interval_ = options.event_interval_;
-        self_steal_interval_ = options.self_steal_interval_;
         idle_time_us_ = options.idle_time_us_;
 
         for (size_t i = 0; i < num_threads_; i++) {
@@ -394,12 +387,6 @@ private:
                 continue;
             }
 
-            work = steal_work_();
-            if (work) {
-                (*work)();
-                continue;
-            }
-
             bool ok = wait_for_work_();
             if (!ok) {
                 break;
@@ -409,10 +396,12 @@ private:
 
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
-        if (!self->data_->local_queue.try_push(work)) {
-            self->data_->extended_queue.push_back(work);
-            self->cv_.notify_all();
-        }
+        self->data_->local_queue.push_back(work);
+    }
+
+    void push_local_(WorkInvoker *work) {
+        // TODO: Overflow if there are too many local works
+        data_->local_queue.push_back(work);
     }
 
     size_t flush_ring_() {
@@ -424,15 +413,13 @@ private:
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         handle->set_result(cqe->res);
-        if (!data_->local_queue.try_push(handle)) {
-            data_->extended_queue.push_back(handle);
-        }
+        push_local_(handle);
     }
 
     WorkInvoker *next_() {
         WorkInvoker *work = nullptr;
         if (data_->tick_count % global_queue_interval_ == 0) {
-            work = next_global_();
+            work = next_global_flush_();
             if (!work) {
                 work = next_local_();
             }
@@ -445,33 +432,14 @@ private:
         return work;
     }
 
-    WorkInvoker *next_local_() {
-        WorkInvoker *work;
-        data_->local_tick_count++;
-        if (data_->local_tick_count % self_steal_interval_ == 0) {
-            work = data_->local_queue.steal();
-        } else {
-            work = data_->local_queue.pop();
-        }
-        if (work) {
-            return work;
-        }
-        return next_extended_flush_();
-    }
-
-    WorkInvoker *next_global_() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (global_queue_.empty()) {
-            return nullptr;
-        }
-        return global_queue_.pop_front();
-    }
+    WorkInvoker *next_local_() { return data_->local_queue.pop_front(); }
 
     WorkInvoker *next_global_flush_() {
         WorkListQueue batch;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            batch = global_queue_.pop_front(64);
+            size_t batch_size = 64; // TODO: Adjust at runtime
+            batch = global_queue_.pop_front(batch_size);
         }
 
         WorkInvoker *work = batch.pop_front();
@@ -479,49 +447,7 @@ private:
             return nullptr;
         }
 
-        WorkInvoker *next = nullptr;
-
-        while ((next = batch.pop_front()) != nullptr &&
-               data_->local_queue.try_push(next))
-            ;
-
-        if (next != nullptr) {
-            data_->extended_queue.push_back(next);
-            data_->extended_queue.push_back(std::move(batch));
-        }
-        assert(batch.empty());
-        return work;
-    }
-
-    WorkInvoker *next_extended_flush_() {
-        WorkInvoker *work = data_->extended_queue.pop_front();
-        if (!work) {
-            return nullptr;
-        }
-        WorkInvoker *next_work = nullptr;
-        while ((next_work = data_->extended_queue.pop_front()) != nullptr &&
-               data_->local_queue.try_push(next_work))
-            ;
-        if (next_work != nullptr) {
-            data_->extended_queue.push_front(next_work);
-        }
-        return work;
-    }
-
-    WorkInvoker *steal_work_() {
-        WorkInvoker *work = nullptr;
-        auto r32 = data_->pcg32.next();
-        shuffle_gen_.generate(r32, 0, num_threads_, [&, this](uint32_t victim) {
-            if (victim == data_->thread_index) {
-                return true;
-            }
-            auto &victim_data = local_data_[victim];
-            work = victim_data.local_queue.steal();
-            if (work) {
-                return false; // Stop iteration
-            }
-            return true; // Continue iteration
-        });
+        data_->local_queue.push_back(std::move(batch));
         return work;
     }
 
@@ -537,18 +463,11 @@ private:
             std::unique_lock<std::mutex> lock(mutex_);
 
             if (!global_queue_.empty()) {
-                auto batch = global_queue_.pop_front(64);
+                size_t batch_size = 64; // TODO: Adjust at runtime
+                auto batch = global_queue_.pop_front(batch_size);
                 lock.unlock();
 
-                WorkInvoker *work = nullptr;
-                while ((work = batch.pop_front()) != nullptr &&
-                       data_->local_queue.try_push(work))
-                    ;
-                if (work != nullptr) {
-                    data_->extended_queue.push_back(work);
-                    data_->extended_queue.push_back(std::move(batch));
-                }
-                assert(batch.empty());
+                data_->local_queue.push_back(std::move(batch));
 
                 // 2. If we got some new work from the global queue, return
                 // immediately.
@@ -563,7 +482,11 @@ private:
                     return false;
                 }
                 // 4. No outstanding ops in the ring, we can block here safely.
-                cv_.wait(lock);
+                cv_.wait(lock, [this]() {
+                    return !global_queue_.empty() ||
+                           (pending_works_ == 0 &&
+                            blocking_threads_ == num_threads_);
+                });
                 blocking_threads_--;
                 return true;
             }
@@ -584,12 +507,10 @@ private:
     // Initialized to 1 to prevent premature exit
     std::atomic_size_t pending_works_ = 1;
     size_t blocking_threads_ = 0;
-    ShuffleGenerator shuffle_gen_;
 
     // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
-    size_t self_steal_interval_ = 7;
     size_t idle_time_us_ = 1000000;
 
 private:
@@ -599,11 +520,8 @@ private:
     struct LocalData {
         size_t thread_index;
         Ring ring;
-        BoundedTaskQueue<WorkInvoker *, 8> local_queue;
-        WorkListQueue extended_queue;
+        WorkListQueue local_queue;
         size_t tick_count = 0;
-        size_t local_tick_count = 0;
-        PCG32 pcg32;
     };
     std::unique_ptr<LocalData[]> local_data_ = nullptr;
 

@@ -114,16 +114,6 @@ public:
         return *this;
     }
 
-    Self &self_steal_interval(size_t v) {
-        self_steal_interval_ = v;
-        return *this;
-    }
-
-    Self &random_seed(uint64_t v) {
-        random_seed_ = v;
-        return *this;
-    }
-
     Self &idle_time_us(size_t v) {
         idle_time_us_ = v;
         return *this;
@@ -182,8 +172,6 @@ private:
     size_t num_threads_ = std::thread::hardware_concurrency();
     size_t global_queue_interval_ = 61;
     size_t event_interval_ = 61;
-    size_t self_steal_interval_ = 13;
-    uint64_t random_seed_ = 42;
     size_t idle_time_us_ = 1000000;
     size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
