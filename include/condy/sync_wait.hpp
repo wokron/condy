@@ -7,15 +7,15 @@
 
 namespace condy {
 
-template <typename Runtime, typename T>
-T sync_wait(Runtime &runtime, Coro<T> coro) {
+template <typename Runtime, typename T, typename Allocator>
+T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     auto t = co_spawn(runtime, std::move(coro));
     runtime.done();
     runtime.wait();
     return t.wait();
 }
 
-template <typename T> T sync_wait(Coro<T> coro) {
+template <typename T, typename Allocator> T sync_wait(Coro<T, Allocator> coro) {
     condy::SingleThreadRuntime runtime;
     return sync_wait(runtime, std::move(coro));
 }

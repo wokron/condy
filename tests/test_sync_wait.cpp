@@ -30,3 +30,39 @@ TEST_CASE("test sync_wait - without runtime") {
     REQUIRE(result == 42);
     REQUIRE(finished);
 }
+
+TEST_CASE("test sync_wait - exception handling") {
+    struct MyException : public std::exception {
+        const char *what() const noexcept override {
+            return "MyException occurred";
+        }
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        throw MyException{};
+        co_return;
+    };
+
+    try {
+        condy::sync_wait(func());
+        REQUIRE(false); // Should not reach here
+    } catch (const MyException &e) {
+        REQUIRE(std::string(e.what()) == "MyException occurred");
+    }
+}
+
+TEST_CASE("test sync_wait - with allocator") {
+    bool finished = false;
+
+    auto func = [&](auto &) -> condy::pmr::Coro<int> {
+        finished = true;
+        co_return 42;
+    };
+
+    std::pmr::monotonic_buffer_resource pool;
+    std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
+
+    auto result = condy::sync_wait(func(allocator));
+    REQUIRE(result == 42);
+    REQUIRE(finished);
+}
