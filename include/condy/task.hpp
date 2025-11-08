@@ -219,4 +219,11 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     return {handle, true, runtime.is_single_thread()};
 }
 
+namespace pmr {
+
+template <typename T>
+using Task = condy::Task<T, std::pmr::polymorphic_allocator<std::byte>>;
+
+}
+
 } // namespace condy

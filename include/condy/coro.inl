@@ -14,10 +14,20 @@ template <typename...> struct always_false {
     static constexpr bool value = false;
 };
 
+template <typename Allocator, typename... Args>
+struct first_is_not_allocator : public std::true_type {};
+
+template <typename Allocator, typename Arg, typename... Args>
+struct first_is_not_allocator<Allocator, Arg, Args...> {
+    static constexpr bool value =
+        !std::is_same_v<std::remove_cvref_t<Arg>, Allocator>;
+};
+
 template <typename Promise, typename Allocator>
 class BindAllocator : public Promise {
 public:
     template <typename... Args>
+        requires(first_is_not_allocator<Allocator, Args...>::value)
     static void *operator new(size_t size, Args &&...args) {
         // If user didn't provide a signature like (Allocator&, ...), the
         // compiler will fall back to ::new, we don't want that.
