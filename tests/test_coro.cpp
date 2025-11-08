@@ -1,4 +1,5 @@
 #include <condy/coro.hpp>
+#include <cstddef>
 #include <doctest/doctest.h>
 #include <memory>
 #include <string>
@@ -206,5 +207,54 @@ TEST_CASE("test coro - return no default constructible type") {
     REQUIRE(!finished);
 
     coro.release().resume();
+    REQUIRE(finished);
+}
+
+TEST_CASE("test coro - custom allocator") {
+    struct CustomAllocator {
+        using value_type = char;
+
+        value_type *allocate(size_t size) {
+            allocated_size = size;
+            allocated = true;
+            return reinterpret_cast<value_type *>(::malloc(size));
+        }
+
+        void deallocate(value_type *ptr, size_t size) {
+            REQUIRE(size == allocated_size);
+            ::free(ptr);
+        }
+
+        size_t allocated_size = 0;
+        bool allocated = false;
+    };
+
+    bool finished = false;
+
+    auto func = [&](auto &) -> condy::Coro<void, CustomAllocator> {
+        finished = true;
+        co_return;
+    };
+
+    CustomAllocator allocator;
+    auto coro1 = func(allocator);
+    coro1.release().resume();
+    REQUIRE(finished);
+    REQUIRE(allocator.allocated);
+}
+
+TEST_CASE("test coro - pmr allocator") {
+    std::pmr::monotonic_buffer_resource pool;
+    std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
+
+    bool finished = false;
+
+    auto func = [&](auto &) -> condy::pmr::Coro<void> {
+        finished = true;
+        co_return;
+    };
+
+    auto coro1 = func(allocator);
+    coro1.release().resume();
     REQUIRE(finished);
 }

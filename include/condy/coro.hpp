@@ -1,14 +1,14 @@
 #pragma once
 
 #include <coroutine>
-#include <memory>
+#include <memory_resource>
 #include <utility>
 
 namespace condy {
 
 template <typename T, typename Allocator> class Promise;
 
-template <typename T = void, typename Allocator = std::allocator<char>>
+template <typename T = void, typename Allocator = void>
 class [[nodiscard]] Coro {
 public:
     using promise_type = Promise<T, Allocator>;
@@ -36,6 +36,13 @@ public:
 private:
     std::coroutine_handle<promise_type> handle_;
 };
+
+namespace pmr {
+
+template <typename T = void>
+using Coro = condy::Coro<T, std::pmr::polymorphic_allocator<std::byte>>;
+
+}
 
 } // namespace condy
 

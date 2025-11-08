@@ -10,11 +10,62 @@
 
 namespace condy {
 
-template <typename T, typename Allocator>
-class PromiseBase
-    : public InvokerAdapter<PromiseBase<T, Allocator>, WorkInvoker> {
+template <typename...> struct always_false {
+    static constexpr bool value = false;
+};
+
+template <typename Promise, typename Allocator>
+class BindAllocator : public Promise {
 public:
-    using PromiseType = typename Coro<T, Allocator>::promise_type;
+    template <typename... Args>
+    static void *operator new(size_t size, Args &&...args) {
+        // If user didn't provide a signature like (Allocator&, ...), the
+        // compiler will fall back to ::new, we don't want that.
+        static_assert(always_false<Args...>::value,
+                      "Invalid arguments for allocator-bound coroutine");
+    }
+
+    template <typename... Args>
+    static void *operator new(size_t size, Allocator &alloc, const Args &...) {
+        size_t allocator_offset =
+            (size + alignof(Allocator) - 1) & ~(alignof(Allocator) - 1);
+        size_t total_size = allocator_offset + sizeof(Allocator);
+
+        Pointer mem = alloc.allocate(total_size);
+        try {
+            new (mem + allocator_offset) Allocator(alloc);
+        } catch (...) {
+            alloc.deallocate(mem, total_size);
+            throw;
+        }
+        return mem;
+    }
+
+    void operator delete(void *ptr, size_t size) noexcept {
+        size_t allocator_offset =
+            (size + alignof(Allocator) - 1) & ~(alignof(Allocator) - 1);
+        size_t total_size = allocator_offset + sizeof(Allocator);
+        Pointer mem = static_cast<Pointer>(ptr);
+        Allocator &alloc =
+            *reinterpret_cast<Allocator *>(mem + allocator_offset);
+        Allocator alloc_copy = std::move(alloc);
+        alloc.~Allocator();
+        alloc_copy.deallocate(mem, total_size);
+    }
+
+private:
+    using Pointer = typename std::allocator_traits<Allocator>::pointer;
+    using T = std::remove_pointer_t<Pointer>;
+    static_assert(sizeof(T) == 1, "Allocator pointer must point to byte type");
+};
+
+template <typename Promise>
+class BindAllocator<Promise, void> : public Promise {};
+
+template <typename Coro>
+class PromiseBase : public InvokerAdapter<PromiseBase<Coro>, WorkInvoker> {
+public:
+    using PromiseType = typename Coro::promise_type;
 
     ~PromiseBase() {
         if (exception_) {
@@ -22,10 +73,9 @@ public:
         }
     }
 
-    Coro<T, Allocator> get_return_object() {
-        return Coro<T, Allocator>{
-            std::coroutine_handle<PromiseType>::from_promise(
-                static_cast<PromiseType &>(*this))};
+    Coro get_return_object() {
+        return Coro{std::coroutine_handle<PromiseType>::from_promise(
+            static_cast<PromiseType &>(*this))};
     }
 
     std::suspend_always initial_suspend() noexcept { return {}; }
@@ -135,13 +185,15 @@ protected:
 };
 
 template <typename Allocator>
-class Promise<void, Allocator> : public PromiseBase<void, Allocator> {
+class Promise<void, Allocator>
+    : public BindAllocator<PromiseBase<Coro<void, Allocator>>, Allocator> {
 public:
     void return_void() noexcept {}
 };
 
 template <typename T, typename Allocator>
-class Promise : public PromiseBase<T, Allocator> {
+class Promise
+    : public BindAllocator<PromiseBase<Coro<T, Allocator>>, Allocator> {
 public:
     void return_value(T value) { value_.emplace(std::move(value)); }
 
