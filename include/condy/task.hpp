@@ -11,24 +11,24 @@
 
 namespace condy {
 
-template <typename T = void> class [[nodiscard]] Task {
+template <typename T = void, typename Allocator = void> class TaskBase {
 public:
-    using PromiseType = typename Coro<T>::promise_type;
+    using PromiseType = typename Coro<T, Allocator>::promise_type;
 
-    Task(std::coroutine_handle<PromiseType> h, bool remote_task,
-         bool single_thread)
+    TaskBase(std::coroutine_handle<PromiseType> h, bool remote_task,
+             bool single_thread)
         : handle_(h), remote_task_(remote_task), single_thread_(single_thread) {
     }
-    Task(Task &&other) noexcept
+    TaskBase(TaskBase &&other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)),
           remote_task_(other.remote_task_),
           single_thread_(other.single_thread_) {}
 
-    Task(const Task &) = delete;
-    Task &operator=(const Task &) = delete;
-    Task &operator=(Task &&other) = delete;
+    TaskBase(const TaskBase &) = delete;
+    TaskBase &operator=(const TaskBase &) = delete;
+    TaskBase &operator=(TaskBase &&other) = delete;
 
-    ~Task() {
+    ~TaskBase() {
         if (handle_) {
             panic_on("Task destroyed without being awaited");
         }
@@ -46,19 +46,18 @@ public:
 
     bool is_single_thread_task() const noexcept { return single_thread_; }
 
-    T wait();
-
-private:
+protected:
     static void wait_inner_(std::coroutine_handle<PromiseType> handle);
 
-private:
+protected:
     std::coroutine_handle<PromiseType> handle_;
     bool remote_task_;
     bool single_thread_;
 };
 
-template <typename T>
-void Task<T>::wait_inner_(std::coroutine_handle<PromiseType> handle) {
+template <typename T, typename Allocator>
+void TaskBase<T, Allocator>::wait_inner_(
+    std::coroutine_handle<PromiseType> handle) {
     if (Context::current().runtime() != nullptr) {
         throw std::logic_error("Potential deadlock: cannot wait on a task from "
                                "within a runtime context.");
@@ -80,33 +79,48 @@ void Task<T>::wait_inner_(std::coroutine_handle<PromiseType> handle) {
     }
 }
 
-template <> inline void Task<void>::wait() {
-    auto handle = std::exchange(handle_, nullptr);
-    wait_inner_(handle);
-    auto exception = std::move(handle.promise()).exception();
-    handle.destroy();
-    if (exception) {
-        std::rethrow_exception(exception);
-    }
-}
+template <typename T = void, typename Allocator = void>
+class [[nodiscard]] Task : public TaskBase<T, Allocator> {
+public:
+    using Base = TaskBase<T, Allocator>;
+    using Base::Base;
 
-template <typename T> T Task<T>::wait() {
-    auto handle = std::exchange(handle_, nullptr);
-    wait_inner_(handle);
-    auto exception = std::move(handle.promise()).exception();
-    if (exception) {
+    T wait() {
+        auto handle = std::exchange(Base::handle_, nullptr);
+        Base::wait_inner_(handle);
+        auto exception = std::move(handle.promise()).exception();
+        if (exception) {
+            handle.destroy();
+            std::rethrow_exception(exception);
+        }
+        T value = std::move(handle.promise()).value();
         handle.destroy();
-        std::rethrow_exception(exception);
+        return std::move(value);
     }
-    T value = std::move(handle.promise()).value();
-    handle.destroy();
-    return std::move(value);
-}
+};
 
-template <typename T>
-struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T>> {
+template <typename Allocator>
+class [[nodiscard]] Task<void, Allocator> : public TaskBase<void, Allocator> {
+public:
+    using Base = TaskBase<void, Allocator>;
+    using Base::Base;
+
+    void wait() {
+        auto handle = std::exchange(Base::handle_, nullptr);
+        Base::wait_inner_(handle);
+        auto exception = std::move(handle.promise()).exception();
+        handle.destroy();
+        if (exception) {
+            std::rethrow_exception(exception);
+        }
+    }
+};
+
+template <typename T, typename Allocator>
+struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
     TaskAwaiterBase(
-        std::coroutine_handle<typename Coro<T>::promise_type> task_handle,
+        std::coroutine_handle<typename Coro<T, Allocator>::promise_type>
+            task_handle,
         IRuntime *runtime)
         : task_handle_(task_handle), runtime_(runtime) {}
 
@@ -131,53 +145,54 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T>> {
         runtime_->schedule(caller_promise_);
     }
 
-    std::coroutine_handle<typename Coro<T>::promise_type> task_handle_;
+    std::coroutine_handle<typename Coro<T, Allocator>::promise_type>
+        task_handle_;
     IRuntime *runtime_ = nullptr;
     WorkInvoker *caller_promise_ = nullptr;
 };
 
-template <> inline auto Task<void>::operator co_await() && {
-    struct TaskAwaiter : public TaskAwaiterBase<void> {
-        using TaskAwaiterBase<void>::TaskAwaiterBase;
+template <typename T, typename Allocator>
+struct TaskAwaiter : public TaskAwaiterBase<T, Allocator> {
+    using Base = TaskAwaiterBase<T, Allocator>;
+    using Base::Base;
 
-        void await_resume() {
-            Context::current().runtime()->resume_work();
-            auto exception = std::move(task_handle_.promise()).exception();
-            task_handle_.destroy();
-            if (exception) {
-                std::rethrow_exception(exception);
-            }
-        }
-    };
-
-    return TaskAwaiter(std::exchange(handle_, nullptr),
-                       remote_task_ ? Context::current().runtime() : nullptr);
-}
-
-template <typename T> inline auto Task<T>::operator co_await() && {
-    struct TaskAwaiter : public TaskAwaiterBase<T> {
-        using Base = TaskAwaiterBase<T>;
-        using Base::Base;
-
-        T await_resume() {
-            Context::current().runtime()->resume_work();
-            auto exception =
-                std::move(Base::task_handle_.promise()).exception();
-            if (exception) {
-                Base::task_handle_.destroy();
-                std::rethrow_exception(exception);
-            }
-            T value = std::move(Base::task_handle_.promise()).value();
+    T await_resume() {
+        Context::current().runtime()->resume_work();
+        auto exception = std::move(Base::task_handle_.promise()).exception();
+        if (exception) {
             Base::task_handle_.destroy();
-            return value;
+            std::rethrow_exception(exception);
         }
-    };
+        T value = std::move(Base::task_handle_.promise()).value();
+        Base::task_handle_.destroy();
+        return value;
+    }
+};
 
-    return TaskAwaiter(std::exchange(handle_, nullptr),
-                       remote_task_ ? Context::current().runtime() : nullptr);
+template <typename Allocator>
+struct TaskAwaiter<void, Allocator> : public TaskAwaiterBase<void, Allocator> {
+    using Base = TaskAwaiterBase<void, Allocator>;
+    using Base::Base;
+
+    void await_resume() {
+        Context::current().runtime()->resume_work();
+        auto exception = std::move(Base::task_handle_.promise()).exception();
+        Base::task_handle_.destroy();
+        if (exception) {
+            std::rethrow_exception(exception);
+        }
+    }
+};
+
+template <typename T, typename Allocator>
+inline auto TaskBase<T, Allocator>::operator co_await() && {
+    return TaskAwaiter<T, Allocator>(std::exchange(handle_, nullptr),
+                                     remote_task_ ? Context::current().runtime()
+                                                  : nullptr);
 }
 
-template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
+template <typename T, typename Allocator>
+inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
     auto handle = coro.release();
     auto &promise = handle.promise();
     promise.set_auto_destroy(false);
@@ -189,8 +204,8 @@ template <typename T> inline Task<T> co_spawn(Coro<T> coro) {
     return {handle, false, Context::current().runtime()->is_single_thread()};
 }
 
-template <typename T, typename Runtime>
-inline Task<T> co_spawn(Runtime &runtime, Coro<T> coro) {
+template <typename T, typename Allocator, typename Runtime>
+inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     if (static_cast<IRuntime *>(&runtime) == Context::current().runtime()) {
         return co_spawn(std::move(coro));
     }

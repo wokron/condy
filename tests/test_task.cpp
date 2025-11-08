@@ -318,3 +318,45 @@ TEST_CASE("test task - spawn in multi thread runtime") {
 
     REQUIRE(finished);
 }
+
+TEST_CASE("test task - spawn task with custom allocator") {
+    struct CustomAllocator {
+        using value_type = char;
+        value_type *allocate(size_t size) {
+            allocated_size = size;
+            allocated = true;
+            return reinterpret_cast<value_type *>(::malloc(size));
+        }
+        void deallocate(value_type *ptr, size_t size) {
+            REQUIRE(size == allocated_size);
+            ::free(ptr);
+        }
+        size_t allocated_size = 0;
+        bool allocated = false;
+    };
+
+    CustomAllocator allocator;
+
+    condy::SingleThreadRuntime runtime(options);
+    bool finished = false;
+
+    auto func = [&](auto &) -> condy::Coro<void, CustomAllocator> {
+        finished = true;
+        co_return;
+    };
+
+    auto main = [&]() -> condy::Coro<void> {
+        auto task = condy::co_spawn(func(allocator));
+        co_await std::move(task);
+    };
+
+    auto coro = main();
+    auto h = coro.release();
+
+    runtime.schedule(&h.promise());
+    runtime.done();
+    runtime.wait();
+
+    REQUIRE(finished);
+    REQUIRE(allocator.allocated);
+}
