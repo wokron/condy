@@ -6,3 +6,6 @@ target_link_libraries(condy-cp PRIVATE condy uring)
 
 add_executable(cancel-tasks cancel-tasks.cpp)
 target_link_libraries(cancel-tasks PRIVATE condy uring)
+
+add_executable(custom-allocator custom-allocator.cpp)
+target_link_libraries(custom-allocator PRIVATE condy uring)
