@@ -258,3 +258,59 @@ TEST_CASE("test coro - pmr allocator") {
     coro1.release().resume();
     REQUIRE(finished);
 }
+
+TEST_CASE("test coro - different allocators") {
+    struct AllocatorA {
+        using value_type = char;
+        value_type *allocate(size_t size) {
+            allocated_size = size;
+            allocated = true;
+            return reinterpret_cast<value_type *>(::malloc(size));
+        }
+        void deallocate(value_type *ptr, size_t size) {
+            REQUIRE(size == allocated_size);
+            ::free(ptr);
+        }
+        size_t allocated_size = 0;
+        bool allocated = false;
+    };
+
+    struct AllocatorB {
+        using value_type = char;
+        value_type *allocate(size_t size) {
+            allocated_size = size;
+            allocated = true;
+            return reinterpret_cast<value_type *>(::malloc(size));
+        }
+        void deallocate(value_type *ptr, size_t size) {
+            REQUIRE(size == allocated_size);
+            ::free(ptr);
+        }
+        size_t allocated_size = 0;
+        bool allocated = false;
+    };
+
+    bool finished1 = false;
+    bool finished2 = false;
+
+    AllocatorA allocatorA;
+    AllocatorB allocatorB;
+
+    auto func1 = [&](auto &) -> condy::Coro<void, AllocatorA> {
+        finished1 = true;
+        co_return;
+    };
+
+    auto func2 = [&](auto &) -> condy::Coro<void, AllocatorB> {
+        finished2 = true;
+        co_await func1(allocatorA);
+        co_return;
+    };
+
+    auto coro1 = func2(allocatorB);
+    coro1.release().resume();
+    REQUIRE(finished1);
+    REQUIRE(finished2);
+    REQUIRE(allocatorA.allocated);
+    REQUIRE(allocatorB.allocated);
+}

@@ -217,35 +217,38 @@ template <typename PromiseType> struct CoroAwaiterBase {
     std::coroutine_handle<PromiseType> handle_;
 };
 
-template <> inline auto Coro<void>::operator co_await() && {
-    struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
-        void await_resume() {
-            auto exception = std::move(handle_.promise()).exception();
-            handle_.destroy();
-            if (exception) {
-                std::rethrow_exception(exception);
-            }
+template <typename T, typename Allocator>
+struct CoroAwaiter
+    : public CoroAwaiterBase<typename Coro<T, Allocator>::promise_type> {
+    using Base = CoroAwaiterBase<typename Coro<T, Allocator>::promise_type>;
+    T await_resume() {
+        auto exception = std::move(Base::handle_.promise()).exception();
+        if (exception) {
+            Base::handle_.destroy();
+            std::rethrow_exception(exception);
         }
-    };
-    return CoroAwaiter{release()};
-}
+        T value = std::move(Base::handle_.promise()).value();
+        Base::handle_.destroy();
+        return value;
+    }
+};
+
+template <typename Allocator>
+struct CoroAwaiter<void, Allocator>
+    : public CoroAwaiterBase<typename Coro<void, Allocator>::promise_type> {
+    using Base = CoroAwaiterBase<typename Coro<void, Allocator>::promise_type>;
+    void await_resume() {
+        auto exception = std::move(Base::handle_.promise()).exception();
+        Base::handle_.destroy();
+        if (exception) {
+            std::rethrow_exception(exception);
+        }
+    }
+};
 
 template <typename T, typename Allocator>
 inline auto Coro<T, Allocator>::operator co_await() && {
-    struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
-        using Base = CoroAwaiterBase<promise_type>;
-        T await_resume() {
-            auto exception = std::move(Base::handle_.promise()).exception();
-            if (exception) {
-                Base::handle_.destroy();
-                std::rethrow_exception(exception);
-            }
-            T value = std::move(Base::handle_.promise()).value();
-            Base::handle_.destroy();
-            return value;
-        }
-    };
-    return CoroAwaiter{release()};
+    return CoroAwaiter<T, Allocator>{release()};
 }
 
 } // namespace condy
