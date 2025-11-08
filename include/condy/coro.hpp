@@ -1,13 +1,17 @@
 #pragma once
 
 #include <coroutine>
+#include <memory>
 #include <utility>
 
 namespace condy {
 
-template <typename T = void> class [[nodiscard]] Coro {
+template <typename T, typename Allocator> class Promise;
+
+template <typename T = void, typename Allocator = std::allocator<char>>
+class [[nodiscard]] Coro {
 public:
-    struct promise_type;
+    using promise_type = Promise<T, Allocator>;
 
     Coro(std::coroutine_handle<promise_type> h) : handle_(h) {}
     Coro(Coro &&other) noexcept : handle_(other.release()) {}

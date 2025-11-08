@@ -10,10 +10,11 @@
 
 namespace condy {
 
-template <typename Coro>
-class PromiseBase : public InvokerAdapter<PromiseBase<Coro>, WorkInvoker> {
+template <typename T, typename Allocator>
+class PromiseBase
+    : public InvokerAdapter<PromiseBase<T, Allocator>, WorkInvoker> {
 public:
-    using PromiseType = typename Coro::promise_type;
+    using PromiseType = typename Coro<T, Allocator>::promise_type;
 
     ~PromiseBase() {
         if (exception_) {
@@ -21,9 +22,10 @@ public:
         }
     }
 
-    Coro get_return_object() {
-        return Coro{std::coroutine_handle<PromiseType>::from_promise(
-            static_cast<PromiseType &>(*this))};
+    Coro<T, Allocator> get_return_object() {
+        return Coro<T, Allocator>{
+            std::coroutine_handle<PromiseType>::from_promise(
+                static_cast<PromiseType &>(*this))};
     }
 
     std::suspend_always initial_suspend() noexcept { return {}; }
@@ -132,13 +134,14 @@ protected:
     std::exception_ptr exception_;
 };
 
-template <> class Coro<void>::promise_type : public PromiseBase<Coro<void>> {
+template <typename Allocator>
+class Promise<void, Allocator> : public PromiseBase<void, Allocator> {
 public:
     void return_void() noexcept {}
 };
 
-template <typename T>
-class Coro<T>::promise_type : public PromiseBase<Coro<T>> {
+template <typename T, typename Allocator>
+class Promise : public PromiseBase<T, Allocator> {
 public:
     void return_value(T value) { value_.emplace(std::move(value)); }
 
@@ -175,7 +178,8 @@ template <> inline auto Coro<void>::operator co_await() && {
     return CoroAwaiter{release()};
 }
 
-template <typename T> inline auto Coro<T>::operator co_await() && {
+template <typename T, typename Allocator>
+inline auto Coro<T, Allocator>::operator co_await() && {
     struct CoroAwaiter : public CoroAwaiterBase<promise_type> {
         using Base = CoroAwaiterBase<promise_type>;
         T await_resume() {
