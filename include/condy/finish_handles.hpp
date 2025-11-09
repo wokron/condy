@@ -2,7 +2,7 @@
 
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
-#include "condy/uninitialized.hpp"
+#include "condy/utils.hpp"
 #include <array>
 #include <atomic>
 #include <cstddef>

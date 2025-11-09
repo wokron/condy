@@ -2,7 +2,6 @@
 
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
-#include "condy/uninitialized.hpp"
 #include "condy/utils.hpp"
 #include <coroutine>
 #include <exception>

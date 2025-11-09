@@ -18,7 +18,6 @@
 #include "condy/singleton.hpp"          // IWYU pragma: export
 #include "condy/sync_wait.hpp"          // IWYU pragma: export
 #include "condy/task.hpp"               // IWYU pragma: export
-#include "condy/uninitialized.hpp"      // IWYU pragma: export
 #include "condy/utils.hpp"              // IWYU pragma: export
 #include "condy/version.hpp"            // IWYU pragma: export
 #include "condy/wsqueue.hpp"            // IWYU pragma: export
