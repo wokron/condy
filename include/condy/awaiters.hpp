@@ -10,17 +10,19 @@
 
 namespace condy {
 
-template <typename Func, typename... Args> class [[nodiscard]] OpAwaiter {
+template <typename Handle, typename Func, typename... Args>
+class OpAwaiterBase {
 public:
-    using HandleType = OpFinishHandle;
+    using HandleType = Handle;
 
-    OpAwaiter(Func func, Args... args)
-        : prep_func_(func), args_(std::make_tuple(std::move(args)...)) {}
-    OpAwaiter(OpAwaiter &&) = default;
+    OpAwaiterBase(HandleType handle, Func func, Args... args)
+        : finish_handle_(std::move(handle)), prep_func_(func),
+          args_(std::make_tuple(std::move(args)...)) {}
+    OpAwaiterBase(OpAwaiterBase &&) = default;
 
-    OpAwaiter(const OpAwaiter &) = delete;
-    OpAwaiter &operator=(const OpAwaiter &) = delete;
-    OpAwaiter &operator=(OpAwaiter &&) = delete;
+    OpAwaiterBase(const OpAwaiterBase &) = delete;
+    OpAwaiterBase &operator=(const OpAwaiterBase &) = delete;
+    OpAwaiterBase &operator=(OpAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -58,7 +60,28 @@ public:
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
-    OpFinishHandle finish_handle_;
+    Handle finish_handle_;
+};
+
+template <typename Func, typename... Args>
+class [[nodiscard]] OpAwaiter
+    : public OpAwaiterBase<OpFinishHandle, Func, Args...> {
+public:
+    using Base = OpAwaiterBase<OpFinishHandle, Func, Args...>;
+    OpAwaiter(Func func, Args... args)
+        : Base(OpFinishHandle(), func, args...) {}
+};
+
+template <typename MultiShotFunc, typename Func, typename... Args>
+class [[nodiscard]] MultiShotOpAwaiter
+    : public OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func,
+                           Args...> {
+public:
+    using Base =
+        OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func, Args...>;
+    MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func, Args... args)
+        : Base(MultiShotOpFinishHandle<MultiShotFunc>(multishot_func), func,
+               args...) {}
 };
 
 template <typename Func, typename... Args>

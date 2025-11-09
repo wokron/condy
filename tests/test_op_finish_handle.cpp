@@ -1,5 +1,6 @@
 #include "condy/context.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/invoker.hpp"
 #include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
@@ -140,4 +141,34 @@ TEST_CASE("test op_finish_handle - cancel op") {
     REQUIRE(std::get<1>(results) == 0);
 
     context.reset();
+}
+
+namespace {
+
+struct SetFinishWorkInvoker
+    : public condy::InvokerAdapter<SetFinishWorkInvoker, condy::WorkInvoker> {
+    void operator()() { finished = true; }
+    bool finished = false;
+    int result = -1;
+};
+
+} // namespace
+
+TEST_CASE("test op_finish_handle - multishot op") {
+    SetFinishWorkInvoker invoker;
+
+    auto func = [&](int res) -> condy::WorkInvoker * {
+        invoker.result = res;
+        return &invoker;
+    };
+
+    condy::MultiShotOpFinishHandle<decltype(func)> handle(func);
+    REQUIRE(!invoker.finished);
+    auto *work_invoker = handle.multishot(1);
+    REQUIRE(work_invoker == &invoker);
+    REQUIRE(!invoker.finished);
+    REQUIRE(invoker.result == 1);
+    (*work_invoker)();
+    REQUIRE(invoker.finished);
+    REQUIRE(invoker.result == 1);
 }

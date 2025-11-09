@@ -19,6 +19,10 @@ struct Ring;
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
     using ReturnType = int;
+    using MultiShotFunc = WorkInvoker *(*)(void *, int);
+
+    OpFinishHandle() = default;
+    OpFinishHandle(MultiShotFunc func) : func_(func) {}
 
     void cancel() {
         assert(ring_ != nullptr);
@@ -35,10 +39,32 @@ public:
 
     void set_ring(Ring *ring) { ring_ = ring; }
 
+    WorkInvoker *multishot(int res) {
+        assert(func_ != nullptr);
+        return func_(this, res);
+    }
+
 private:
+    MultiShotFunc func_ = nullptr;
     Ring *ring_ = nullptr;
     int res_;
     Invoker *invoker_ = nullptr;
+};
+
+template <typename HandleFunc>
+class MultiShotOpFinishHandle : public OpFinishHandle {
+public:
+    MultiShotOpFinishHandle(HandleFunc func)
+        : OpFinishHandle(invoke_multishot_), func_(func) {}
+
+private:
+    static WorkInvoker *invoke_multishot_(void *data, int res) {
+        auto *self = static_cast<MultiShotOpFinishHandle<HandleFunc> *>(data);
+        return self->func_(res);
+    }
+
+private:
+    HandleFunc func_;
 };
 
 template <typename Condition, typename Handle>

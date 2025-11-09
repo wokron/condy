@@ -10,6 +10,28 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
         std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
+template <typename MultiShotFunc, typename Func, typename... Args>
+auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
+                               Args &&...args) {
+    return MultiShotOpAwaiter<std::decay_t<MultiShotFunc>, std::decay_t<Func>,
+                              std::decay_t<Args>...>(
+        std::forward<MultiShotFunc>(multishot_func), std::forward<Func>(func),
+        std::forward<Args>(args)...);
+}
+
+template <typename CoroFunc, typename Func, typename... Args>
+auto make_multishot_op_awaiter_coro(CoroFunc &&coro_func, Func &&func,
+                                    Args &&...args) {
+    auto multishot_func = [coro_func = std::forward<CoroFunc>(coro_func)](
+                              int res) mutable -> WorkInvoker * {
+        auto coro = coro_func(res);
+        return &coro.release().promise();
+    };
+    return make_multishot_op_awaiter(std::move(multishot_func),
+                                     std::forward<Func>(func),
+                                     std::forward<Args>(args)...);
+}
+
 template <typename Func, typename... Args>
 auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
     return DrainedOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(

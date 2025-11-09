@@ -228,6 +228,11 @@ private:
     void process_cqe_(io_uring_cqe *cqe) {
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        if (cqe->flags & IORING_CQE_F_MORE) {
+            auto *work = handle->multishot(cqe->res);
+            local_queue_.push_back(work);
+            return;
+        }
         handle->set_result(cqe->res);
         local_queue_.push_back(handle);
     }
@@ -249,7 +254,7 @@ private:
     // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000000;
+    size_t idle_time_us_ = 1000;
 };
 
 class MultiThreadRuntime : public IRuntime {
@@ -409,6 +414,12 @@ private:
     void process_cqe_(io_uring_cqe *cqe) {
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        if (cqe->flags & IORING_CQE_F_MORE) {
+            auto *work = handle->multishot(cqe->res);
+            data_->local_queue.push_back(work);
+            maybe_overflow_();
+            return;
+        }
         handle->set_result(cqe->res);
         data_->local_queue.push_back(handle);
         maybe_overflow_();
@@ -515,7 +526,7 @@ private:
     // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000000;
+    size_t idle_time_us_ = 1000;
     size_t local_queue_capacity_ = 256;
 
 private:

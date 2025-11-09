@@ -7,14 +7,14 @@ namespace condy {
 
 inline auto async_splice(int fd_in, int64_t off_in, int fd_out, int64_t off_out,
                          unsigned int nbytes, unsigned int splice_flags) {
-    return make_op_awaiter(io_uring_prep_splice, fd_in, off_in, fd_out,
-                            off_out, nbytes, splice_flags);
+    return make_op_awaiter(io_uring_prep_splice, fd_in, off_in, fd_out, off_out,
+                           nbytes, splice_flags);
 }
 
 inline auto async_tee(int fd_in, int fd_out, unsigned int nbytes,
                       unsigned int splice_flags) {
     return make_op_awaiter(io_uring_prep_tee, fd_in, fd_out, nbytes,
-                            splice_flags);
+                           splice_flags);
 }
 
 inline auto async_readv(int fd, const struct iovec *iovecs, unsigned nr_vecs,
@@ -77,7 +77,7 @@ inline auto async_write(int fd, const void *buf, size_t nbytes, off_t offset) {
 inline auto async_statx(int dfd, const char *path, int flags, unsigned int mask,
                         struct statx *statxbuf) {
     return make_op_awaiter(io_uring_prep_statx, dfd, path, flags, mask,
-                            statxbuf);
+                           statxbuf);
 }
 
 inline auto async_fadvise(int fd, off_t offset, off_t len, int advice) {
@@ -111,13 +111,13 @@ inline auto async_unlinkat(int dfd, const char *path, int flags) {
 inline auto async_renameat(int olddfd, const char *oldpath, int newdfd,
                            const char *newpath) {
     return make_op_awaiter(io_uring_prep_renameat, olddfd, oldpath, newdfd,
-                            newpath);
+                           newpath);
 }
 
 inline auto async_sync_file_range(int fd, off64_t offset, off64_t nbytes,
                                   unsigned int flags) {
     return make_op_awaiter(io_uring_prep_sync_file_range, fd, offset, nbytes,
-                            flags);
+                           flags);
 }
 
 inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
@@ -126,14 +126,26 @@ inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
 
 inline auto async_symlinkat(const char *target, int newdirfd,
                             const char *linkpath) {
-    return make_op_awaiter(io_uring_prep_symlinkat, target, newdirfd,
-                            linkpath);
+    return make_op_awaiter(io_uring_prep_symlinkat, target, newdirfd, linkpath);
 }
 
 inline auto async_linkat(int olddirfd, const char *oldpath, int newdirfd,
                          const char *newpath, int flags) {
     return make_op_awaiter(io_uring_prep_linkat, olddirfd, oldpath, newdirfd,
-                            newpath, flags);
+                           newpath, flags);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
+
+template <typename CoroFunc>
+inline auto async_multishot_accept(int fd, struct sockaddr *addr,
+                                   socklen_t *addrlen, int flags,
+                                   CoroFunc &&coro_func) {
+    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
+                                          io_uring_prep_multishot_accept, fd,
+                                          addr, addrlen, flags);
+}
+
+#endif
 
 } // namespace condy

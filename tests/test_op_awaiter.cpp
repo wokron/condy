@@ -147,3 +147,62 @@ TEST_CASE("test op_awaiter - cancel op") {
 
     context.reset();
 }
+
+namespace {
+
+void mock_multishot_event_loop(size_t &unfinished) {
+    auto *ring = condy::Context::current().ring();
+    while (unfinished > 0) {
+        ring->submit();
+        ring->reap_completions([&](io_uring_cqe *cqe) {
+            auto handle_ptr = static_cast<condy::OpFinishHandle *>(
+                io_uring_cqe_get_data(cqe));
+            handle_ptr->set_result(cqe->res);
+            auto *work = handle_ptr->multishot(42);
+            (*work)();
+            (*handle_ptr)();
+        });
+    }
+}
+
+} // namespace
+
+TEST_CASE("test op_awaiter - multishot op") {
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::Context::current();
+    context.init(&ring);
+
+    bool handle_called = false;
+    auto handle_multishot = [&](int res) -> condy::Coro<void> {
+        REQUIRE(res == 42);
+        handle_called = true;
+        co_return;
+    };
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro<void> {
+        co_await condy::make_multishot_op_awaiter(
+            [&](int res) {
+                auto coro = handle_multishot(res);
+                return &coro.release().promise();
+            },
+            io_uring_prep_nop);
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 1);
+
+    mock_multishot_event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+    REQUIRE(!ring.has_outstanding_ops());
+    REQUIRE(handle_called == true);
+
+    context.reset();
+}

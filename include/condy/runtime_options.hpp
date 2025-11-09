@@ -70,7 +70,7 @@ public:
 protected:
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000000;
+    size_t idle_time_us_ = 1000;
     size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
     size_t sqpoll_idle_time_ms_ = 1000;
@@ -162,7 +162,7 @@ private:
     size_t num_threads_ = std::thread::hardware_concurrency();
     size_t global_queue_interval_ = 61;
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000000;
+    size_t idle_time_us_ = 1000;
     size_t local_queue_capacity_ = 256;
     size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
