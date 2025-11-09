@@ -51,6 +51,7 @@ inline auto async_poll_add(int fd, unsigned int poll_events) {
     return make_op_awaiter(io_uring_prep_poll_add, fd, poll_events);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 template <typename CoroFunc>
 inline auto async_poll_multishot(int fd, unsigned int poll_events,
                                  CoroFunc &&coro_func) {
@@ -58,16 +59,21 @@ inline auto async_poll_multishot(int fd, unsigned int poll_events,
                                           io_uring_prep_poll_multishot, fd,
                                           poll_events);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_poll_remove(uint64_t user_data) {
     return make_op_awaiter(io_uring_prep_poll_remove, user_data);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_poll_update(uint64_t old_user_data, uint64_t new_user_data,
                               unsigned int poll_events, unsigned int flags) {
     return make_op_awaiter(io_uring_prep_poll_update, old_user_data,
                            new_user_data, poll_events, flags);
 }
+#endif
 
 inline auto async_fsync(int fd, unsigned int fsync_flags) {
     return make_op_awaiter(io_uring_prep_fsync, fd, fsync_flags);
@@ -93,11 +99,13 @@ inline auto async_accept(int sockfd, sockaddr *addr, socklen_t *addrlen,
     return make_op_awaiter(io_uring_prep_accept, sockfd, addr, addrlen, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_accept_direct(int sockfd, sockaddr *addr, socklen_t *addrlen,
                                 int flags, unsigned int file_index) {
     return make_op_awaiter(io_uring_prep_accept_direct, sockfd, addr, addrlen,
                            flags, file_index);
 }
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 template <typename CoroFunc>
@@ -151,11 +159,13 @@ inline auto async_openat(int dfd, const char *path, int flags, mode_t mode) {
     return make_op_awaiter(io_uring_prep_openat, dfd, path, flags, mode);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_openat_direct(int dfd, const char *path, int flags,
                                 mode_t mode, unsigned file_index) {
     return make_op_awaiter(io_uring_prep_openat_direct, dfd, path, flags, mode,
                            file_index);
 }
+#endif
 
 inline auto async_close(int fd) {
     return make_op_awaiter(io_uring_prep_close, fd);
@@ -201,11 +211,13 @@ inline auto async_openat2(int dfd, const char *path, struct open_how *how) {
     return make_op_awaiter(io_uring_prep_openat2, dfd, path, how);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_openat2_direct(int dfd, const char *path,
                                  struct open_how *how, unsigned file_index) {
     return make_op_awaiter(io_uring_prep_openat2_direct, dfd, path, how,
                            file_index);
 }
+#endif
 
 inline auto async_epoll_ctl(int epfd, int fd, int op, struct epoll_event *ev) {
     return make_op_awaiter(io_uring_prep_epoll_ctl, epfd, fd, op, ev);
@@ -253,9 +265,11 @@ inline auto async_sync_file_range(int fd, off64_t offset, off64_t nbytes,
                            flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
     return make_op_awaiter(io_uring_prep_mkdirat, dfd, path, mode);
 }
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_mkdir(const char *path, mode_t mode) {
@@ -263,10 +277,12 @@ inline auto async_mkdir(const char *path, mode_t mode) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_symlinkat(const char *target, int newdirfd,
                             const char *linkpath) {
     return make_op_awaiter(io_uring_prep_symlinkat, target, newdirfd, linkpath);
 }
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_symlink(const char *target, const char *linkpath) {
@@ -274,11 +290,13 @@ inline auto async_symlink(const char *target, const char *linkpath) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
 inline auto async_linkat(int olddirfd, const char *oldpath, int newdirfd,
                          const char *newpath, int flags) {
     return make_op_awaiter(io_uring_prep_linkat, olddirfd, oldpath, newdirfd,
                            newpath, flags);
 }
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_link(const char *oldpath, const char *newpath, int flags) {

@@ -130,12 +130,16 @@ public:
 private:
     template <typename Func>
     bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {
-        bool unfinished = cqe->flags & IORING_CQE_F_MORE;
         void *data = io_uring_cqe_get_data(cqe);
         if (data == IGNORE_DATA) {
             io_uring_cqe_seen(&ring_, cqe);
             return false;
         }
+#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
+        bool unfinished = cqe->flags & IORING_CQE_F_MORE;
+#else
+        bool unfinished = false;
+#endif
         if (!unfinished) {
             outstanding_ops_count_--;
         }

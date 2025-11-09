@@ -16,7 +16,8 @@ set(LIBURING_SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing)
 add_custom_target(
     build_uring
     ALL
-    COMMAND $(MAKE) library
+    COMMAND ./configure --cc=gcc --cxx=g++
+    COMMAND $(MAKE) -C src
     WORKING_DIRECTORY ${LIBURING_SOURCE_DIR}
 )
 add_library(uring STATIC IMPORTED GLOBAL)
