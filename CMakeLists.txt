@@ -16,7 +16,7 @@ set(LIBURING_SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing)
 add_custom_target(
     build_uring
     ALL
-    COMMAND ./configure --cc=gcc --cxx=g++
+    COMMAND ./configure --cc=${CMAKE_C_COMPILER} --cxx=${CMAKE_CXX_COMPILER}
     COMMAND $(MAKE) -C src
     WORKING_DIRECTORY ${LIBURING_SOURCE_DIR}
 )
