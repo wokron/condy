@@ -125,7 +125,7 @@ public:
 
     void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
 
-    int ring_fd() const { return ring_.ring_fd; }
+    io_uring *ring() { return &ring_; }
 
 private:
     template <typename Func>

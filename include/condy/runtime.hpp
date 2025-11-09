@@ -43,6 +43,7 @@ public:
         params.flags |= IORING_SETUP_CLAMP;
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         params.flags |= IORING_SETUP_SINGLE_ISSUER;
+        params.flags |= IORING_SETUP_R_DISABLED;
 #endif
 
         size_t ring_entries = options.sq_size_;
@@ -105,6 +106,10 @@ public:
 
     void wait() override {
         // In SingleThreadRuntime, wait is the place to run the event loop.
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+        io_uring_enable_rings(ring_.ring());
+#endif
 
         Context::current().init(&ring_, this, schedule_local_);
         auto d = defer([]() { Context::current().reset(); });
@@ -293,7 +298,7 @@ public:
         init_data(0, local_data_[0]);
 
         params.flags |= IORING_SETUP_ATTACH_WQ;
-        params.wq_fd = local_data_[0].ring.ring_fd();
+        params.wq_fd = local_data_[0].ring.ring()->ring_fd;
 
         for (size_t i = 1; i < options.num_threads_; i++) {
             init_data(i, local_data_[i]);
