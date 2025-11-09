@@ -22,16 +22,41 @@ inline auto async_readv(int fd, const struct iovec *iovecs, unsigned nr_vecs,
     return make_op_awaiter(io_uring_prep_readv, fd, iovecs, nr_vecs, offset);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_readv2(int fd, const struct iovec *iovecs, unsigned nr_vecs,
+                         off_t offset, int flags) {
+    return make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs, offset,
+                           flags);
+}
+#endif
+
 inline auto async_read_fixed(int fd, void *buf, unsigned nbytes, off_t offset,
                              int buf_index) {
     return make_op_awaiter(io_uring_prep_read_fixed, fd, buf, nbytes, offset,
                            buf_index);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+inline auto async_readv_fixed(int fd, const struct iovec *iovecs,
+                              unsigned nr_vecs, off_t offset, int flags,
+                              int buf_index) {
+    return make_op_awaiter(io_uring_prep_readv_fixed, fd, iovecs, nr_vecs,
+                           offset, flags, buf_index);
+}
+#endif
+
 inline auto async_writev(int fd, const struct iovec *iovecs, unsigned nr_vecs,
                          off_t offset) {
     return make_op_awaiter(io_uring_prep_writev, fd, iovecs, nr_vecs, offset);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_writev2(int fd, const struct iovec *iovecs, unsigned nr_vecs,
+                          off_t offset, int flags) {
+    return make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs, offset,
+                           flags);
+}
+#endif
 
 inline auto async_write_fixed(int fd, const void *buf, unsigned nbytes,
                               off_t offset, int buf_index) {
@@ -39,9 +64,28 @@ inline auto async_write_fixed(int fd, const void *buf, unsigned nbytes,
                            buf_index);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+inline auto async_writev_fixed(int fd, const struct iovec *iovecs,
+                               unsigned nr_vecs, off_t offset, int flags,
+                               int buf_index) {
+    return make_op_awaiter(io_uring_prep_writev_fixed, fd, iovecs, nr_vecs,
+                           offset, flags, buf_index);
+}
+#endif
+
 inline auto async_recvmsg(int fd, struct msghdr *msg, unsigned flags) {
     return make_op_awaiter(io_uring_prep_recvmsg, fd, msg, flags);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+template <typename CoroFunc>
+inline auto async_recvmsg_multishot(int fd, struct msghdr *msg, unsigned flags,
+                                    CoroFunc &&coro_func) {
+    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
+                                          io_uring_prep_recvmsg_multishot, fd,
+                                          msg, flags);
+}
+#endif
 
 inline auto async_sendmsg(int fd, const struct msghdr *msg, unsigned flags) {
     return make_op_awaiter(io_uring_prep_sendmsg, fd, msg, flags);
@@ -129,6 +173,12 @@ inline auto async_multishot_accept_direct(int fd, struct sockaddr *addr,
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_cancel64(uint64_t user_data, int flags) {
+    return make_op_awaiter(io_uring_prep_cancel64, user_data, flags);
+}
+#endif
+
 inline auto async_cancel(void *user_data, int flags) {
     return make_op_awaiter(io_uring_prep_cancel, user_data, flags);
 }
@@ -146,6 +196,26 @@ inline auto async_link_timeout(__kernel_timespec *ts, unsigned flags) {
 inline auto async_connect(int sockfd, const sockaddr *addr, socklen_t addrlen) {
     return make_op_awaiter(io_uring_prep_connect, sockfd, addr, addrlen);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_bind(int fd, struct sockaddr *addr, socklen_t addrlen) {
+    return make_op_awaiter(io_uring_prep_bind, fd, addr, addrlen);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_listen(int fd, int backlog) {
+    return make_op_awaiter(io_uring_prep_listen, fd, backlog);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+inline auto async_epoll_wait(int epfd, struct epoll_event *events,
+                             unsigned int maxevents, int timeout) {
+    return make_op_awaiter(io_uring_prep_epoll_wait, epfd, events, maxevents,
+                           timeout);
+}
+#endif
 
 inline auto async_files_update(int *fds, unsigned nr_fds, int offset) {
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
@@ -167,6 +237,20 @@ inline auto async_openat_direct(int dfd, const char *path, int flags,
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+inline auto async_open(const char *path, int flags, mode_t mode) {
+    return make_op_awaiter(io_uring_prep_open, path, flags, mode);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+inline auto async_open_direct(const char *path, int flags, mode_t mode,
+                              unsigned file_index) {
+    return make_op_awaiter(io_uring_prep_open_direct, path, flags, mode,
+                           file_index);
+}
+#endif
+
 inline auto async_close(int fd) {
     return make_op_awaiter(io_uring_prep_close, fd);
 }
@@ -180,6 +264,14 @@ inline auto async_close_direct(unsigned file_index) {
 inline auto async_read(int fd, void *buf, size_t nbytes, off_t offset) {
     return make_op_awaiter(io_uring_prep_read, fd, buf, nbytes, offset);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_read_multishot(int fd, size_t nbytes, off_t offset,
+                                 int buf_group) {
+    return make_op_awaiter(io_uring_prep_read_multishot, fd, nbytes, offset,
+                           buf_group);
+}
+#endif
 
 inline auto async_write(int fd, const void *buf, size_t nbytes, off_t offset) {
     return make_op_awaiter(io_uring_prep_write, fd, buf, nbytes, offset);
@@ -199,13 +291,87 @@ inline auto async_madvise(void *addr, size_t length, int advice) {
     return make_op_awaiter(io_uring_prep_madvise, addr, length, advice);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_fadvise64(int fd, uint64_t offset, uint32_t len, int advice) {
+    return make_op_awaiter(io_uring_prep_fadvise64, fd, offset, len, advice);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_madvise64(void *addr, off_t length, int advice) {
+    return make_op_awaiter(io_uring_prep_madvise64, addr, length, advice);
+}
+#endif
+
 inline auto async_send(int sockfd, const void *buf, size_t len, int flags) {
     return make_op_awaiter(io_uring_prep_send, sockfd, buf, len, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_send_bundle(int sockfd, const void *buf, size_t len,
+                              int flags) {
+    return make_op_awaiter(io_uring_prep_send_bundle, sockfd, buf, len, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
+inline auto async_sendto(int sockfd, const void *buf, size_t len, int flags,
+                         const struct sockaddr *dest_addr, socklen_t addrlen) {
+    return make_op_awaiter(io_uring_prep_sendto, sockfd, buf, len, flags,
+                           dest_addr, addrlen);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_send_zc(int sockfd, const void *buf, size_t len, int flags) {
+    return make_op_awaiter(io_uring_prep_send_zc, sockfd, buf, len, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_send_zc_fixed(int sockfd, const void *buf, size_t len,
+                                int flags, unsigned buf_index) {
+    return make_op_awaiter(io_uring_prep_send_zc_fixed, sockfd, buf, len, flags,
+                           buf_index);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_sendmsg_zc(int fd, const struct msghdr *msg, unsigned flags) {
+    return make_op_awaiter(io_uring_prep_sendmsg_zc, fd, msg, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+inline auto async_sendmsg_zc_fixed(int fd, const struct msghdr *msg,
+                                   unsigned flags, unsigned buf_index) {
+    return make_op_awaiter(io_uring_prep_sendmsg_zc_fixed, fd, msg, flags,
+                           buf_index);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+inline auto async_send_set_addr(int sockfd, const void *buf, size_t len,
+                                const struct sockaddr *addr, socklen_t addrlen,
+                                int flags) {
+    return make_op_awaiter(io_uring_prep_send_set_addr, sockfd, buf, len, addr,
+                           addrlen, flags);
+}
+#endif
+
 inline auto async_recv(int sockfd, void *buf, size_t len, int flags) {
     return make_op_awaiter(io_uring_prep_recv, sockfd, buf, len, flags);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+template <typename CoroFunc>
+inline auto async_recv_multishot(int sockfd, void *buf, size_t len, int flags,
+                                 CoroFunc &&coro_func) {
+    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
+                                          io_uring_prep_recv_multishot, sockfd,
+                                          buf, len, flags);
+}
+#endif
 
 inline auto async_openat2(int dfd, const char *path, struct open_how *how) {
     return make_op_awaiter(io_uring_prep_openat2, dfd, path, how);
@@ -304,10 +470,37 @@ inline auto async_link(const char *oldpath, const char *newpath, int flags) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
+inline auto async_msg_ring_cqe_flags(int fd, unsigned int len, uint64_t data,
+                                     unsigned int flags,
+                                     unsigned int cqe_flags) {
+    return make_op_awaiter(io_uring_prep_msg_ring_cqe_flags, fd, len, data,
+                           flags, cqe_flags);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_msg_ring(int fd, unsigned int len, uint64_t data,
                            unsigned int flags) {
     return make_op_awaiter(io_uring_prep_msg_ring, fd, len, data, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
+inline auto async_msg_ring_fd(int fd, unsigned int len, uint64_t data,
+                              unsigned int flags, unsigned int cqe_flags,
+                              unsigned int file_index) {
+    return make_op_awaiter(io_uring_prep_msg_ring_fd, fd, len, data, flags,
+                           cqe_flags, file_index);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
+inline auto async_msg_ring_fd_alloc(int fd, unsigned int len, uint64_t data,
+                                    unsigned int flags,
+                                    unsigned int cqe_flags) {
+    return make_op_awaiter(io_uring_prep_msg_ring_fd_alloc, fd, len, data,
+                           flags, cqe_flags);
 }
 #endif
 
@@ -360,6 +553,75 @@ inline auto async_socket_direct_alloc(int domain, int type, int protocol,
                                       unsigned int flags) {
     return make_op_awaiter(io_uring_prep_socket_direct_alloc, domain, type,
                            protocol, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
+inline auto async_cmd_sock(int cmd_op, int sockfd, int level, int optname,
+                           void *optval, int optlen) {
+    return make_op_awaiter(io_uring_prep_cmd_sock, sockfd, cmd_op, level,
+                           optname, optval, optlen);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_waitid(idtype_t idtype, id_t id, siginfo_t *infop,
+                         int options, unsigned int flags) {
+    return make_op_awaiter(io_uring_prep_waitid, idtype, id, infop, options,
+                           flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_futex_wake(int *uaddr, int nr_wake, unsigned int flags) {
+    return make_op_awaiter(io_uring_prep_futex_wake, uaddr, nr_wake, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_futex_wait(int *uaddr, int val, __kernel_timespec *timeout,
+                             unsigned int flags) {
+    return make_op_awaiter(io_uring_prep_futex_wait, uaddr, val, timeout,
+                           flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_futex_waitv(futex_waitv *futex, uint32_t nr_futex,
+                              unsigned int flags) {
+    return make_op_awaiter(io_uring_prep_futex_waitv, futex, nr_futex, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_fixed_fd_install(int fd, unsigned int flags) {
+    return make_op_awaiter(io_uring_prep_fixed_fd_install, fd, flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+inline auto async_ftruncate(int fd, off_t length) {
+    return make_op_awaiter(io_uring_prep_ftruncate, fd, length);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+inline auto async_cmd_discard(int fd, uint64_t offset, uint64_t nbytes) {
+    return make_op_awaiter(io_uring_prep_cmd_discard, fd, offset, nbytes);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+inline auto async_pipe(int *fds, int pipe_flags) {
+    return make_op_awaiter(io_uring_prep_pipe, fds, pipe_flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+inline auto async_pipe_direct(int *fds, int pipe_flags,
+                              unsigned int file_index) {
+    return make_op_awaiter(io_uring_prep_pipe_direct, fds, pipe_flags,
+                           file_index);
 }
 #endif
 
