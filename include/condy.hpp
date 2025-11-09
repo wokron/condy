@@ -14,10 +14,8 @@
 #include "condy/ring.hpp"               // IWYU pragma: export
 #include "condy/runtime.hpp"            // IWYU pragma: export
 #include "condy/runtime_options.hpp"    // IWYU pragma: export
-#include "condy/shuffle_generator.hpp"  // IWYU pragma: export
 #include "condy/singleton.hpp"          // IWYU pragma: export
 #include "condy/sync_wait.hpp"          // IWYU pragma: export
 #include "condy/task.hpp"               // IWYU pragma: export
 #include "condy/utils.hpp"              // IWYU pragma: export
 #include "condy/version.hpp"            // IWYU pragma: export
-#include "condy/wsqueue.hpp"            // IWYU pragma: export
