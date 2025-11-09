@@ -125,9 +125,11 @@ inline auto async_cancel(void *user_data, int flags) {
     return make_op_awaiter(io_uring_prep_cancel, user_data, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_cancel_fd(int fd, unsigned int flags) {
     return make_op_awaiter(io_uring_prep_cancel_fd, fd, flags);
 }
+#endif
 
 inline auto async_link_timeout(__kernel_timespec *ts, unsigned flags) {
     return make_op_awaiter(io_uring_prep_link_timeout, ts, flags);
@@ -159,9 +161,11 @@ inline auto async_close(int fd) {
     return make_op_awaiter(io_uring_prep_close, fd);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_close_direct(unsigned file_index) {
     return make_op_awaiter(io_uring_prep_close_direct, file_index);
 }
+#endif
 
 inline auto async_read(int fd, void *buf, size_t nbytes, off_t offset) {
     return make_op_awaiter(io_uring_prep_read, fd, buf, nbytes, offset);
@@ -225,9 +229,11 @@ inline auto async_unlinkat(int dfd, const char *path, int flags) {
     return make_op_awaiter(io_uring_prep_unlinkat, dfd, path, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_unlink(const char *path, int flags) {
     return make_op_awaiter(io_uring_prep_unlink, path, flags);
 }
+#endif
 
 inline auto async_renameat(int olddfd, const char *oldpath, int newdfd,
                            const char *newpath) {
@@ -235,9 +241,11 @@ inline auto async_renameat(int olddfd, const char *oldpath, int newdfd,
                            newpath);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_rename(const char *oldpath, const char *newpath) {
     return make_op_awaiter(io_uring_prep_rename, oldpath, newpath);
 }
+#endif
 
 inline auto async_sync_file_range(int fd, off64_t offset, off64_t nbytes,
                                   unsigned int flags) {
@@ -249,18 +257,22 @@ inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
     return make_op_awaiter(io_uring_prep_mkdirat, dfd, path, mode);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_mkdir(const char *path, mode_t mode) {
     return make_op_awaiter(io_uring_prep_mkdir, path, mode);
 }
+#endif
 
 inline auto async_symlinkat(const char *target, int newdirfd,
                             const char *linkpath) {
     return make_op_awaiter(io_uring_prep_symlinkat, target, newdirfd, linkpath);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_symlink(const char *target, const char *linkpath) {
     return make_op_awaiter(io_uring_prep_symlink, target, linkpath);
 }
+#endif
 
 inline auto async_linkat(int olddirfd, const char *oldpath, int newdirfd,
                          const char *newpath, int flags) {
@@ -268,51 +280,69 @@ inline auto async_linkat(int olddirfd, const char *oldpath, int newdirfd,
                            newpath, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_link(const char *oldpath, const char *newpath, int flags) {
     return make_op_awaiter(io_uring_prep_link, oldpath, newpath, flags);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_msg_ring(int fd, unsigned int len, uint64_t data,
                            unsigned int flags) {
     return make_op_awaiter(io_uring_prep_msg_ring, fd, len, data, flags);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_getxattr(const char *name, const char *path, char *value,
                            size_t len) {
     return make_op_awaiter(io_uring_prep_getxattr, name, path, value, len);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_setxattr(const char *name, const char *path,
                            const char *value, int flags, size_t len) {
     return make_op_awaiter(io_uring_prep_setxattr, name, path, value, flags,
                            len);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_fgetxattr(int fd, const char *name, char *value, size_t len) {
     return make_op_awaiter(io_uring_prep_fgetxattr, fd, name, value, len);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_fsetxattr(int fd, const char *name, const char *value,
                             int flags, size_t len) {
     return make_op_awaiter(io_uring_prep_fsetxattr, fd, name, value, flags,
                            len);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_socket(int domain, int type, int protocol,
                          unsigned int flags) {
     return make_op_awaiter(io_uring_prep_socket, domain, type, protocol, flags);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_socket_direct(int domain, int type, int protocol,
                                 unsigned file_index, unsigned int flags) {
     return make_op_awaiter(io_uring_prep_socket_direct, domain, type, protocol,
                            file_index, flags);
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
 inline auto async_socket_direct_alloc(int domain, int type, int protocol,
                                       unsigned int flags) {
     return make_op_awaiter(io_uring_prep_socket_direct_alloc, domain, type,
                            protocol, flags);
 }
+#endif
 
 } // namespace condy

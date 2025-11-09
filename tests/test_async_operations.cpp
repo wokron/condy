@@ -65,6 +65,8 @@ TEST_CASE("test async_operations - simple read write") {
     REQUIRE(unfinished == 0);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
+
 namespace {
 
 void server(std::latch &l, uint16_t port,
@@ -146,3 +148,5 @@ TEST_CASE("test async_operations - multishot accept") {
     cancel_channel.try_push(std::monostate{});
     server_thread.join();
 }
+
+#endif
