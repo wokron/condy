@@ -158,8 +158,7 @@ void mock_multishot_event_loop(size_t &unfinished) {
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
             handle_ptr->set_result(cqe->res);
-            auto *work = handle_ptr->multishot(42);
-            (*work)();
+            handle_ptr->multishot(42);
             (*handle_ptr)();
         });
     }
@@ -187,7 +186,7 @@ TEST_CASE("test op_awaiter - multishot op") {
         co_await condy::make_multishot_op_awaiter(
             [&](int res) {
                 auto coro = handle_multishot(res);
-                return &coro.release().promise();
+                coro.release().resume();
             },
             io_uring_prep_nop);
         --unfinished;

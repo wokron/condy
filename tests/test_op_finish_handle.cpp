@@ -157,18 +157,14 @@ struct SetFinishWorkInvoker
 TEST_CASE("test op_finish_handle - multishot op") {
     SetFinishWorkInvoker invoker;
 
-    auto func = [&](int res) -> condy::WorkInvoker * {
+    auto func = [&](int res) {
         invoker.result = res;
-        return &invoker;
+        invoker();
     };
 
     condy::MultiShotOpFinishHandle<decltype(func)> handle(func);
     REQUIRE(!invoker.finished);
-    auto *work_invoker = handle.multishot(1);
-    REQUIRE(work_invoker == &invoker);
-    REQUIRE(!invoker.finished);
-    REQUIRE(invoker.result == 1);
-    (*work_invoker)();
+    handle.multishot(1);
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
 }

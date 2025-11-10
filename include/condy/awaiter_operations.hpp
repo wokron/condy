@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/awaiters.hpp"
+#include "condy/task.hpp"
 
 namespace condy {
 
@@ -22,10 +23,10 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
 template <typename CoroFunc, typename Func, typename... Args>
 auto make_multishot_op_awaiter_coro(CoroFunc &&coro_func, Func &&func,
                                     Args &&...args) {
-    auto multishot_func = [coro_func = std::forward<CoroFunc>(coro_func)](
-                              int res) mutable -> WorkInvoker * {
+    auto multishot_func = [coro_func =
+                               std::forward<CoroFunc>(coro_func)](int res) {
         auto coro = coro_func(res);
-        return &coro.release().promise();
+        condy::co_spawn(std::move(coro)).detach();
     };
     return make_multishot_op_awaiter(std::move(multishot_func),
                                      std::forward<Func>(func),
