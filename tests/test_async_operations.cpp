@@ -104,7 +104,7 @@ void server(std::latch &l, uint16_t port,
         socklen_t addrlen = sizeof(addr);
         auto r = co_await (condy::async_multishot_accept(
                                server_fd, reinterpret_cast<sockaddr *>(&addr),
-                               &addrlen, 0, session_func) ||
+                               &addrlen, 0, condy::will_spawn(session_func)) ||
                            cancel_channel.pop());
         REQUIRE(r.index() == 1); // Cancelled
     };

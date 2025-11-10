@@ -11,6 +11,15 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
         std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
+// Helper to spawn a coroutine from a multishot operation
+template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
+    struct SpawnHelper {
+        void operator()(int res) { co_spawn(func(res)).detach(); }
+        std::decay_t<CoroFunc> func;
+    };
+    return SpawnHelper{std::forward<CoroFunc>(coro)};
+}
+
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                                Args &&...args) {
@@ -18,19 +27,6 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                               std::decay_t<Args>...>(
         std::forward<MultiShotFunc>(multishot_func), std::forward<Func>(func),
         std::forward<Args>(args)...);
-}
-
-template <typename CoroFunc, typename Func, typename... Args>
-auto make_multishot_op_awaiter_coro(CoroFunc &&coro_func, Func &&func,
-                                    Args &&...args) {
-    auto multishot_func = [coro_func =
-                               std::forward<CoroFunc>(coro_func)](int res) {
-        auto coro = coro_func(res);
-        condy::co_spawn(std::move(coro)).detach();
-    };
-    return make_multishot_op_awaiter(std::move(multishot_func),
-                                     std::forward<Func>(func),
-                                     std::forward<Args>(args)...);
 }
 
 template <typename Func, typename... Args>

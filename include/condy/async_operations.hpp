@@ -78,12 +78,12 @@ inline auto async_recvmsg(int fd, struct msghdr *msg, unsigned flags) {
 }
 
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_recvmsg_multishot(int fd, struct msghdr *msg, unsigned flags,
-                                    CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_recvmsg_multishot, fd,
-                                          msg, flags);
+                                    MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_recvmsg_multishot, fd, msg,
+                                     flags);
 }
 #endif
 
@@ -96,12 +96,12 @@ inline auto async_poll_add(int fd, unsigned poll_mask) {
 }
 
 #if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_poll_multishot(int fd, unsigned poll_mask,
-                                 CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_poll_multishot, fd,
-                                          poll_mask);
+                                 MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_poll_multishot, fd,
+                                     poll_mask);
 }
 #endif
 
@@ -154,24 +154,24 @@ inline auto async_accept_direct(int fd, struct sockaddr *addr,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_multishot_accept(int fd, struct sockaddr *addr,
                                    socklen_t *addrlen, int flags,
-                                   CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_multishot_accept, fd,
-                                          addr, addrlen, flags);
+                                   MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_multishot_accept, fd, addr,
+                                     addrlen, flags);
 }
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_multishot_accept_direct(int fd, struct sockaddr *addr,
                                           socklen_t *addrlen, int flags,
-                                          CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_multishot_accept_direct,
-                                          fd, addr, addrlen, flags);
+                                          MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_multishot_accept_direct, fd,
+                                     addr, addrlen, flags);
 }
 #endif
 
@@ -269,12 +269,12 @@ inline auto async_read(int fd, void *buf, unsigned nbytes, __u64 offset) {
 }
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_read_multishot(int fd, unsigned nbytes, __u64 offset,
-                                 int buf_group, CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_read_multishot, fd,
-                                          nbytes, offset, buf_group);
+                                 int buf_group, MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_read_multishot, fd, nbytes,
+                                     offset, buf_group);
 }
 #endif
 
@@ -370,12 +370,12 @@ inline auto async_recv(int sockfd, void *buf, size_t len, int flags) {
 }
 
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
-template <typename CoroFunc>
+template <typename MultiShotFunc>
 inline auto async_recv_multishot(int sockfd, void *buf, size_t len, int flags,
-                                 CoroFunc &&coro_func) {
-    return make_multishot_op_awaiter_coro(std::forward<CoroFunc>(coro_func),
-                                          io_uring_prep_recv_multishot, sockfd,
-                                          buf, len, flags);
+                                 MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_recv_multishot, sockfd, buf,
+                                     len, flags);
 }
 #endif
 
