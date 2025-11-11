@@ -13,6 +13,85 @@ namespace condy {
 
 struct OpFinishHandle;
 
+class FdTable {
+public:
+    FdTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
+        : ring_(ring), sq_mutex_(sq_mutex) {}
+
+    void init(size_t capacity) {
+        std::lock_guard lock(sq_mutex_);
+        int r = io_uring_register_files_sparse(&ring_, capacity);
+        if (r < 0) {
+            throw std::runtime_error("io_uring_register_files_sparse failed: " +
+                                     std::string(strerror(-r)));
+        }
+        capacity_ = capacity;
+        alloc_range_offset_ = 0;
+        alloc_range_size_ = capacity;
+        initialized_ = true;
+    }
+
+    void register_fd(int fixed_fd, int fd) {
+        std::lock_guard lock(sq_mutex_);
+        check_initialized_();
+        int r = io_uring_register_files_update(&ring_, fixed_fd, &fd, 1);
+        if (r < 0) {
+            throw std::runtime_error("io_uring_register_files_update failed: " +
+                                     std::string(strerror(-r)));
+        }
+    }
+
+    void unregister_fd(int fixed_fd) {
+        std::lock_guard lock(sq_mutex_);
+        check_initialized_();
+        int invalid_fd = -1;
+        int r =
+            io_uring_register_files_update(&ring_, fixed_fd, &invalid_fd, 1);
+        if (r < 0) {
+            throw std::runtime_error("io_uring_register_files_update failed: " +
+                                     std::string(strerror(-r)));
+        }
+    }
+
+    void set_alloc_range(size_t offset, size_t size) {
+        std::lock_guard lock(sq_mutex_);
+        check_initialized_();
+        alloc_range_offset_ = offset;
+        alloc_range_size_ = size;
+        int r = io_uring_register_file_alloc_range(&ring_, offset, size);
+        if (r < 0) {
+            throw std::runtime_error(
+                "io_uring_register_file_alloc_range failed: " +
+                std::string(strerror(-r)));
+        }
+    }
+
+    std::pair<size_t, size_t> get_alloc_range() const {
+        std::lock_guard lock(sq_mutex_);
+        return {alloc_range_offset_, alloc_range_size_};
+    }
+
+    size_t capacity() const {
+        std::lock_guard lock(sq_mutex_);
+        return capacity_;
+    }
+
+private:
+    void check_initialized_() {
+        if (!initialized_) {
+            throw std::runtime_error("FdTable not initialized");
+        }
+    }
+
+private:
+    bool initialized_ = false;
+    size_t capacity_ = 0;
+    size_t alloc_range_offset_ = 0;
+    size_t alloc_range_size_ = 0;
+    io_uring &ring_;
+    MaybeMutex<std::mutex> &sq_mutex_;
+};
+
 class Ring {
 public:
     Ring() = default;
@@ -127,6 +206,8 @@ public:
 
     io_uring *ring() { return &ring_; }
 
+    FdTable &fd_table() { return fd_table_; }
+
 private:
     template <typename Func>
     bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {
@@ -190,6 +271,8 @@ private:
     std::atomic_size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
+
+    FdTable fd_table_{ring_, sq_mutex_};
 
     // Configuration
     size_t submit_batch_size_ = 128;

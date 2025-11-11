@@ -40,7 +40,7 @@ public:
                         prep_func_(sqe, std::forward<decltype(args)>(args)...);
                     },
                     args_);
-                io_uring_sqe_set_flags(sqe, flags);
+                io_uring_sqe_set_flags(sqe, flags | this->flags_);
             },
             &finish_handle_);
     }
@@ -57,10 +57,14 @@ public:
 
     int await_resume() { return finish_handle_.extract_result(); }
 
+public:
+    void add_flags(unsigned int flags) { flags_ |= flags; }
+
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     Handle finish_handle_;
+    unsigned int flags_ = 0;
 };
 
 template <typename Func, typename... Args>
@@ -82,26 +86,6 @@ public:
     MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func, Args... args)
         : Base(MultiShotOpFinishHandle<MultiShotFunc>(multishot_func), func,
                args...) {}
-};
-
-template <typename Func, typename... Args>
-class [[nodiscard]] DrainedOpAwaiter : public OpAwaiter<Func, Args...> {
-public:
-    using Base = OpAwaiter<Func, Args...>;
-    using Base::Base;
-
-    DrainedOpAwaiter(OpAwaiter<Func, Args...> &&base) : Base(std::move(base)) {}
-
-    void register_operation(unsigned int flags) {
-        Base::register_operation(flags | IOSQE_IO_DRAIN);
-    }
-
-    template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
-        Base::init_finish_handle();
-        Base::finish_handle_.set_invoker(&h.promise());
-        register_operation(0);
-    }
 };
 
 template <typename Handle, typename Awaiter>

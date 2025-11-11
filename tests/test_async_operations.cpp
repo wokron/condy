@@ -150,3 +150,45 @@ TEST_CASE("test async_operations - multishot accept") {
 }
 
 #endif
+
+TEST_CASE("test async_operations - fixed fd read write") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char msg[] = "Hello, condy!";
+    char buf[20] = {0};
+
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::Context::current();
+    context.init(&ring);
+
+    auto &fd_table = ring.fd_table();
+    fd_table.init(2);
+    fd_table.register_fd(0, pipe_fds[0]);
+    fd_table.register_fd(1, pipe_fds[1]);
+
+    size_t unfinished = 2;
+    auto writer = [&]() -> condy::Coro<void> {
+        int bytes_written =
+            co_await condy::async_write(condy::fixed(1), msg, sizeof(msg), 0);
+        REQUIRE(bytes_written == sizeof(msg));
+        --unfinished;
+    };
+    auto reader = [&]() -> condy::Coro<void> {
+        int bytes_read =
+            co_await condy::async_read(condy::fixed(0), buf, sizeof(msg), 0);
+        REQUIRE(bytes_read == sizeof(msg));
+        --unfinished;
+    };
+
+    writer().release().resume();
+    reader().release().resume();
+    REQUIRE(unfinished == 2);
+
+    event_loop(unfinished);
+
+    REQUIRE(unfinished == 0);
+}

@@ -31,8 +31,8 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
 
 template <typename Func, typename... Args>
 auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
-    return DrainedOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
-        std::move(op));
+    op.add_flags(IOSQE_IO_DRAIN);
+    return op;
 }
 
 template <typename Condition, typename... Awaiters>
