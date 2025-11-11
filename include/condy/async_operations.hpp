@@ -24,6 +24,7 @@ void maybe_add_fixed_fd_flag(OpAwaiter &op, int fd) {
 
 } // namespace detail
 
+// Helper to specify a fixed fd
 inline auto fixed(int fd) { return detail::FixedFd{fd}; }
 
 inline auto async_nop() { return make_op_awaiter(io_uring_prep_nop); }
@@ -120,6 +121,24 @@ inline auto async_multishot_accept_direct(Fd fd, struct sockaddr *addr,
     return op;
 }
 #endif
+
+template <typename Fd>
+inline auto async_read_fixed(Fd fd, void *buf, unsigned nbytes, __u64 offset,
+                             int buf_index) {
+    auto op = make_op_awaiter(io_uring_prep_read_fixed, fd, buf, nbytes, offset,
+                              buf_index);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+
+template <typename Fd>
+inline auto async_write_fixed(Fd fd, const void *buf, unsigned nbytes,
+                              __u64 offset, int buf_index) {
+    auto op = make_op_awaiter(io_uring_prep_write_fixed, fd, buf, nbytes,
+                              offset, buf_index);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
 
 } // namespace condy
 

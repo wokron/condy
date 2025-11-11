@@ -192,3 +192,46 @@ TEST_CASE("test async_operations - fixed fd read write") {
 
     REQUIRE(unfinished == 0);
 }
+
+TEST_CASE("test async_operations - fixed buffer read write") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char msg[] = "Hello, condy!";
+    char buf[20] = {0};
+
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::Context::current();
+    context.init(&ring);
+
+    auto &buffer_table = ring.buffer_table();
+    buffer_table.init(2);
+    buffer_table.register_buffer(
+        0, {.iov_base = (void *)msg, .iov_len = sizeof(msg)});
+    buffer_table.register_buffer(1, {.iov_base = buf, .iov_len = sizeof(buf)});
+
+    size_t unfinished = 2;
+    auto writer = [&]() -> condy::Coro<void> {
+        int bytes_written = co_await condy::async_write_fixed(
+            pipe_fds[1], msg, sizeof(msg), 0, 0); // Use buffer index 0
+        REQUIRE(bytes_written == sizeof(msg));
+        --unfinished;
+    };
+    auto reader = [&]() -> condy::Coro<void> {
+        int bytes_read = co_await condy::async_read_fixed(
+            pipe_fds[0], buf, sizeof(msg), 0, 1); // Use buffer index 1
+        REQUIRE(bytes_read == sizeof(msg));
+        --unfinished;
+    };
+
+    writer().release().resume();
+    reader().release().resume();
+    REQUIRE(unfinished == 2);
+
+    event_loop(unfinished);
+
+    REQUIRE(unfinished == 0);
+}

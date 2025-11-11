@@ -92,6 +92,67 @@ private:
     MaybeMutex<std::mutex> &sq_mutex_;
 };
 
+class BufferTable {
+public:
+    BufferTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
+        : ring_(ring), sq_mutex_(sq_mutex) {}
+
+    void init(size_t capacity) {
+        std::lock_guard lock(sq_mutex_);
+        int r = io_uring_register_buffers_sparse(&ring_, capacity);
+        if (r < 0) {
+            throw std::runtime_error(
+                "io_uring_register_buffers_sparse failed: " +
+                std::string(strerror(-r)));
+        }
+        capacity_ = capacity;
+        initialized_ = true;
+    }
+
+    void register_buffer(int index, const iovec &buf) {
+        std::lock_guard lock(sq_mutex_);
+        check_initialized_();
+        int r = io_uring_register_buffers_update_tag(&ring_, index, &buf,
+                                                     nullptr, 1);
+        if (r < 0) {
+            throw std::runtime_error(
+                "io_uring_register_buffers_update failed: " +
+                std::string(strerror(-r)));
+        }
+    }
+
+    void unregister_buffer(int index) {
+        std::lock_guard lock(sq_mutex_);
+        check_initialized_();
+        iovec vec{nullptr, 0};
+        int r = io_uring_register_buffers_update_tag(&ring_, index, &vec,
+                                                     nullptr, 1);
+        if (r < 0) {
+            throw std::runtime_error(
+                "io_uring_register_buffers_update failed: " +
+                std::string(strerror(-r)));
+        }
+    }
+
+    size_t capacity() const {
+        std::lock_guard lock(sq_mutex_);
+        return capacity_;
+    }
+
+private:
+    void check_initialized_() {
+        if (!initialized_) {
+            throw std::runtime_error("BufferTable not initialized");
+        }
+    }
+
+private:
+    bool initialized_ = false;
+    size_t capacity_ = 0;
+    io_uring &ring_;
+    MaybeMutex<std::mutex> &sq_mutex_;
+};
+
 class Ring {
 public:
     Ring() = default;
@@ -208,6 +269,8 @@ public:
 
     FdTable &fd_table() { return fd_table_; }
 
+    BufferTable &buffer_table() { return buffer_table_; }
+
 private:
     template <typename Func>
     bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {
@@ -273,6 +336,7 @@ private:
     size_t unsubmitted_count_ = 0;
 
     FdTable fd_table_{ring_, sq_mutex_};
+    BufferTable buffer_table_{ring_, sq_mutex_};
 
     // Configuration
     size_t submit_batch_size_ = 128;
