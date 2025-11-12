@@ -18,9 +18,7 @@ void maybe_add_fixed_fd_flag(OpAwaiter &op, const FixedFd &fixed_fd) {
 }
 
 template <typename OpAwaiter>
-void maybe_add_fixed_fd_flag(OpAwaiter &op, int fd) {
-    // No fixed fd provided, do nothing
-}
+void maybe_add_fixed_fd_flag(OpAwaiter &op, int fd) { /* No-op */ }
 
 } // namespace detail
 

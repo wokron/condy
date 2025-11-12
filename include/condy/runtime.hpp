@@ -11,6 +11,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <mutex>
 
@@ -29,6 +30,8 @@ public:
     virtual void resume_work() = 0;
 
     virtual bool is_single_thread() const = 0;
+
+    virtual uint16_t next_bgid() = 0;
 };
 
 using WorkListQueue =
@@ -135,6 +138,8 @@ public:
     }
 
     bool is_single_thread() const override { return true; }
+
+    uint16_t next_bgid() override { return next_bgid_++; }
 
 private:
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
@@ -252,6 +257,8 @@ private:
 
     size_t tick_count_ = 0;
 
+    uint16_t next_bgid_ = 0;
+
     // Configuration parameters
     size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
@@ -360,6 +367,8 @@ public:
     }
 
     bool is_single_thread() const override { return false; }
+
+    uint16_t next_bgid() override { return next_bgid_++; }
 
 private:
     void worker_loop_(size_t index) {
@@ -523,6 +532,8 @@ private:
     // Initialized to 1 to prevent premature exit
     std::atomic_size_t pending_works_ = 1;
     size_t blocking_threads_ = 0;
+
+    std::atomic_uint16_t next_bgid_ = 0;
 
     // Configuration parameters
     size_t global_queue_interval_ = 31;
