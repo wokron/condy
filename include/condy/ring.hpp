@@ -18,6 +18,12 @@ public:
     FdTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
         : ring_(ring), sq_mutex_(sq_mutex) {}
 
+    FdTable(const FdTable &) = delete;
+    FdTable &operator=(const FdTable &) = delete;
+    FdTable(FdTable &&) = delete;
+    FdTable &operator=(FdTable &&) = delete;
+
+public:
     void init(size_t capacity) {
         std::lock_guard lock(sq_mutex_);
         int r = io_uring_register_files_sparse(&ring_, capacity);
@@ -97,6 +103,12 @@ public:
     BufferTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
         : ring_(ring), sq_mutex_(sq_mutex) {}
 
+    BufferTable(const BufferTable &) = delete;
+    BufferTable &operator=(const BufferTable &) = delete;
+    BufferTable(BufferTable &&) = delete;
+    BufferTable &operator=(BufferTable &&) = delete;
+
+public:
     void init(size_t capacity) {
         std::lock_guard lock(sq_mutex_);
         int r = io_uring_register_buffers_sparse(&ring_, capacity);
