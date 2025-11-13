@@ -24,7 +24,7 @@ TEST_CASE("test ring - register and complete ops") {
     constexpr size_t num_ops = 4;
     OpFinishHandle handles[num_ops];
     for (size_t i = 0; i < num_ops; i++) {
-        handles[i].set_result(-1);
+        handles[i].set_result(-1, 0);
         ring.register_op([](io_uring_sqe *sqe) { io_uring_prep_nop(sqe); },
                          &handles[i]);
     }
@@ -35,7 +35,7 @@ TEST_CASE("test ring - register and complete ops") {
         OpFinishHandle *handle =
             reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         REQUIRE(handle != nullptr);
-        handle->set_result(cqe->res);
+        handle->set_result(cqe->res, 0);
         count++;
     });
 
@@ -62,7 +62,7 @@ TEST_CASE("test ring - cancel ops") {
     constexpr size_t num_ops = 8;
     OpFinishHandle handles[num_ops];
     for (size_t i = 0; i < num_ops; i++) {
-        handles[i].set_result(-1);
+        handles[i].set_result(-1, 0);
         ring.register_op(
             [&](io_uring_sqe *sqe) {
                 if (i % 2 == 0) {
@@ -87,7 +87,7 @@ TEST_CASE("test ring - cancel ops") {
         OpFinishHandle *handle =
             reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
         REQUIRE(handle != nullptr);
-        handle->set_result(cqe->res);
+        handle->set_result(cqe->res, 0);
         if (cqe->res == -ECANCELED) {
             canceled_count++;
         }
@@ -111,7 +111,7 @@ TEST_CASE("test ring - reap with timeout") {
         .tv_nsec = 1000 * 1000, // 1 ms
     };
     OpFinishHandle handle;
-    handle.set_result(-1);
+    handle.set_result(-1, 0);
     ring.register_op(
         [&](io_uring_sqe *sqe) { io_uring_prep_timeout(sqe, &ts, 0, 0); },
         &handle);
@@ -122,7 +122,7 @@ TEST_CASE("test ring - reap with timeout") {
             OpFinishHandle *handle =
                 reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->set_result(cqe->res);
+            handle->set_result(cqe->res, 0);
         },
         500); // 500 us
 
@@ -133,7 +133,7 @@ TEST_CASE("test ring - reap with timeout") {
             OpFinishHandle *handle =
                 reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->set_result(cqe->res);
+            handle->set_result(cqe->res, 0);
         },
         10 * 1000); // 10 ms
 

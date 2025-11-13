@@ -28,7 +28,10 @@ public:
         ring_->cancel_op(this);
     }
 
-    void set_result(int res) { res_ = res; }
+    void set_result(int res, int flags) {
+        res_ = res;
+        flags_ = flags;
+    }
 
     void operator()() { (*invoker_)(); }
 
@@ -47,6 +50,7 @@ protected:
     MultiShotFunc multishot_func_ = nullptr;
     Ring *ring_ = nullptr;
     int res_;
+    int flags_;
     Invoker *invoker_ = nullptr;
 };
 

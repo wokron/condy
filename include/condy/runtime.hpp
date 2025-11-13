@@ -233,7 +233,7 @@ private:
     void process_cqe_(io_uring_cqe *cqe) {
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        handle->set_result(cqe->res);
+        handle->set_result(cqe->res, cqe->flags);
 #if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         if (cqe->flags & IORING_CQE_F_MORE) {
             handle->multishot();
@@ -424,7 +424,7 @@ private:
     void process_cqe_(io_uring_cqe *cqe) {
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        handle->set_result(cqe->res);
+        handle->set_result(cqe->res, cqe->flags);
 #if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         if (cqe->flags & IORING_CQE_F_MORE) {
             handle->multishot();

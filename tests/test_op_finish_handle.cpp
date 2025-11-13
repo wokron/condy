@@ -28,7 +28,7 @@ void event_loop(size_t &unfinished) {
         ring->reap_completions([&](io_uring_cqe *cqe) {
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
-            handle_ptr->set_result(cqe->res);
+            handle_ptr->set_result(cqe->res, 0);
             (*handle_ptr)();
         });
     }
@@ -55,7 +55,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
     ring.wait_all_completions([](io_uring_cqe *cqe) {
         auto handle_ptr =
             static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        handle_ptr->set_result(42);
+        handle_ptr->set_result(42, 0);
         (*handle_ptr)();
     });
 
@@ -164,7 +164,7 @@ TEST_CASE("test op_finish_handle - multishot op") {
 
     condy::MultiShotMixin<decltype(func), condy::OpFinishHandle> handle(func);
     REQUIRE(!invoker.finished);
-    handle.set_result(1);
+    handle.set_result(1, 0);
     handle.multishot();
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
