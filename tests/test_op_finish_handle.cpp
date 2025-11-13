@@ -162,9 +162,10 @@ TEST_CASE("test op_finish_handle - multishot op") {
         invoker();
     };
 
-    condy::MultiShotOpFinishHandle<decltype(func)> handle(func);
+    condy::MultiShotMixin<decltype(func), condy::OpFinishHandle> handle(func);
     REQUIRE(!invoker.finished);
-    handle.multishot(1);
+    handle.set_result(1);
+    handle.multishot();
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
 }

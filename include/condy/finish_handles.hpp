@@ -19,10 +19,9 @@ struct Ring;
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
     using ReturnType = int;
-    using MultiShotFunc = void (*)(void *, int);
+    using MultiShotFunc = void (*)(void *);
 
     OpFinishHandle() = default;
-    OpFinishHandle(MultiShotFunc func) : func_(func) {}
 
     void cancel() {
         assert(ring_ != nullptr);
@@ -39,33 +38,39 @@ public:
 
     void set_ring(Ring *ring) { ring_ = ring; }
 
-    void multishot(int res) {
-        assert(func_ != nullptr);
-        func_(this, res);
+    void multishot() {
+        assert(multishot_func_ != nullptr);
+        multishot_func_(this);
     }
 
-private:
-    MultiShotFunc func_ = nullptr;
+protected:
+    MultiShotFunc multishot_func_ = nullptr;
     Ring *ring_ = nullptr;
     int res_;
     Invoker *invoker_ = nullptr;
 };
 
-template <typename HandleFunc>
-class MultiShotOpFinishHandle : public OpFinishHandle {
+template <typename Func, typename HandleBase>
+class MultiShotMixin : public HandleBase {
 public:
-    MultiShotOpFinishHandle(HandleFunc func)
-        : OpFinishHandle(invoke_multishot_), func_(func) {}
-
-private:
-    static void invoke_multishot_(void *data, int res) {
-        auto *self = static_cast<MultiShotOpFinishHandle<HandleFunc> *>(data);
-        self->func_(res);
+    template <typename... Args>
+    MultiShotMixin(Func func, Args &&...args)
+        : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
+        this->multishot_func_ = &MultiShotMixin::invoke_multishot_;
     }
 
 private:
-    HandleFunc func_;
+    static void invoke_multishot_(void *data) {
+        auto *self = static_cast<MultiShotMixin<Func, HandleBase> *>(data);
+        self->func_(self->extract_result());
+    }
+
+private:
+    Func func_;
 };
+
+template <typename MultiShotFunc>
+using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
 
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {

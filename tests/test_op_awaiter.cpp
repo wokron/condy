@@ -157,8 +157,9 @@ void mock_multishot_event_loop(size_t &unfinished) {
         ring->reap_completions([&](io_uring_cqe *cqe) {
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
+            handle_ptr->set_result(42);
+            handle_ptr->multishot();
             handle_ptr->set_result(cqe->res);
-            handle_ptr->multishot(42);
             (*handle_ptr)();
         });
     }
