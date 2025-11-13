@@ -41,6 +41,9 @@ public:
                     },
                     args_);
                 io_uring_sqe_set_flags(sqe, flags | this->flags_);
+                if (bgid_ >= 0) {
+                    io_uring_sqe_set_buf_group(sqe, bgid_);
+                }
             },
             &finish_handle_);
     }
@@ -55,16 +58,19 @@ public:
         register_operation(0);
     }
 
-    int await_resume() { return finish_handle_.extract_result(); }
+    auto await_resume() { return finish_handle_.extract_result(); }
 
 public:
     void add_flags(unsigned int flags) { flags_ |= flags; }
+
+    void set_bgid(int bgid) { bgid_ = bgid; }
 
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     Handle finish_handle_;
     unsigned int flags_ = 0;
+    int bgid_ = -1;
 };
 
 template <typename Func, typename... Args>
@@ -85,6 +91,17 @@ public:
         OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func, Args...>;
     MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func, Args... args)
         : Base(MultiShotOpFinishHandle<MultiShotFunc>(multishot_func), func,
+               args...) {}
+};
+
+template <typename Func, typename... Args>
+class [[nodiscard]] SelectBufferOpAwaiter
+    : public OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...> {
+public:
+    using Base = OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...>;
+    SelectBufferOpAwaiter(detail::ProvidedBuffersImplPtr buffers_impl,
+                          Func func, Args... args)
+        : Base(SelectBufferOpFinishHandle(std::move(buffers_impl)), func,
                args...) {}
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/buffers.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include "condy/utils.hpp"
@@ -35,7 +36,7 @@ public:
 
     void operator()() { (*invoker_)(); }
 
-    int extract_result() { return res_; }
+    ReturnType extract_result() { return res_; }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
@@ -75,6 +76,34 @@ private:
 
 template <typename MultiShotFunc>
 using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
+
+template <typename HandleBase> class SelectBufferMixin : public HandleBase {
+public:
+    using ReturnType = std::pair<int, ProvidedBufferEntry>;
+
+    template <typename... Args>
+    SelectBufferMixin(detail::ProvidedBuffersImplPtr buffers_impl,
+                      Args &&...args)
+        : HandleBase(std::forward<Args>(args)...),
+          buffers_impl_(std::move(buffers_impl)) {}
+
+    ReturnType extract_result() {
+        int res = this->res_;
+        ProvidedBufferEntry entry;
+        if (this->flags_ & IORING_CQE_F_BUFFER) {
+            assert(res >= 0);
+            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+            entry = ProvidedBufferEntry(std::move(buffers_impl_),
+                                        static_cast<size_t>(bid));
+        }
+        return std::make_pair(res, std::move(entry));
+    }
+
+private:
+    detail::ProvidedBuffersImplPtr buffers_impl_;
+};
+
+using SelectBufferOpFinishHandle = SelectBufferMixin<OpFinishHandle>;
 
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {

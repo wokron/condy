@@ -2,7 +2,7 @@
 
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
-#include "condy/runtime.hpp"
+#include "condy/ring.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <sys/mman.h>
+#include <utility>
 
 namespace condy {
 
@@ -64,6 +65,8 @@ public:
 public:
     uint16_t bgid() const { return bgid_; }
 
+    size_t buffer_size() const { return buffer_size_; }
+
     void *get_buffer(size_t bid) const {
         assert(bid < num_buffers_);
         return buffers_base_ + bid * buffer_size_;
@@ -89,15 +92,16 @@ private:
     size_t data_size_;
 };
 
+using ProvidedBuffersImplPtr = std::shared_ptr<ProvidedBuffersImpl>;
+
 } // namespace detail
 
 class ProvidedBuffers {
 public:
     ProvidedBuffers(size_t log_num_buffers, size_t buffer_size)
         : impl_(std::make_shared<detail::ProvidedBuffersImpl>(
-              Context::current().ring()->ring(),
-              Context::current().runtime()->next_bgid(), log_num_buffers,
-              buffer_size)) {}
+              Context::current().ring()->ring(), Context::current().next_bgid(),
+              log_num_buffers, buffer_size)) {}
     ProvidedBuffers(ProvidedBuffers &&) = default;
 
     ProvidedBuffers(const ProvidedBuffers &) = delete;
@@ -105,23 +109,19 @@ public:
     ProvidedBuffers &operator=(ProvidedBuffers &&) = delete;
 
 public:
-    std::shared_ptr<detail::ProvidedBuffersImpl> copy_impl() const {
-        return impl_;
-    }
+    detail::ProvidedBuffersImplPtr copy_impl() const { return impl_; }
 
 private:
-    std::shared_ptr<detail::ProvidedBuffersImpl> impl_;
+    detail::ProvidedBuffersImplPtr impl_;
 };
 
 class ProvidedBufferEntry {
 public:
     ProvidedBufferEntry() = default;
-    ProvidedBufferEntry(std::shared_ptr<detail::ProvidedBuffersImpl> impl,
-                        size_t bid, size_t size)
-        : impl_(std::move(impl)), bid_(bid), size_(size) {}
+    ProvidedBufferEntry(detail::ProvidedBuffersImplPtr impl, size_t bid)
+        : impl_(std::move(impl)), bid_(bid) {}
     ProvidedBufferEntry(ProvidedBufferEntry &&other)
-        : impl_(std::move(other.impl_)), bid_(std::exchange(other.bid_, 0)),
-          size_(std::exchange(other.size_, 0)) {}
+        : impl_(std::move(other.impl_)), bid_(std::exchange(other.bid_, 0)) {}
     ProvidedBufferEntry &operator=(ProvidedBufferEntry &&other) {
         if (this != &other) {
             if (impl_ != nullptr) {
@@ -129,7 +129,6 @@ public:
             }
             impl_ = std::move(other.impl_);
             bid_ = std::exchange(other.bid_, 0);
-            size_ = std::exchange(other.size_, 0);
         }
         return *this;
     }
@@ -146,7 +145,7 @@ public:
 public:
     void *data() const { return impl_->get_buffer(bid_); }
 
-    size_t size() const { return size_; }
+    size_t size() const { return impl_->buffer_size(); }
 
     void reset() {
         impl_->add_buffer(bid_);
@@ -154,9 +153,8 @@ public:
     }
 
 private:
-    std::shared_ptr<detail::ProvidedBuffersImpl> impl_ = nullptr;
+    detail::ProvidedBuffersImplPtr impl_ = nullptr;
     size_t bid_ = 0;
-    size_t size_ = 0;
 };
 
 } // namespace condy

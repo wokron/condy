@@ -30,8 +30,6 @@ public:
     virtual void resume_work() = 0;
 
     virtual bool is_single_thread() const = 0;
-
-    virtual uint16_t next_bgid() = 0;
 };
 
 using WorkListQueue =
@@ -114,7 +112,7 @@ public:
         io_uring_enable_rings(ring_.ring());
 #endif
 
-        Context::current().init(&ring_, this, schedule_local_);
+        Context::current().init(&ring_, this, schedule_local_, next_bgid_func_);
         auto d = defer([]() { Context::current().reset(); });
 
         while (true) {
@@ -139,12 +137,15 @@ public:
 
     bool is_single_thread() const override { return true; }
 
-    uint16_t next_bgid() override { return next_bgid_++; }
-
 private:
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
         auto *self = static_cast<SingleThreadRuntime *>(runtime);
         self->local_queue_.push_back(work);
+    }
+
+    static size_t next_bgid_func_(IRuntime *runtime) {
+        auto *self = static_cast<SingleThreadRuntime *>(runtime);
+        return self->next_bgid_++;
     }
 
     bool wait_for_work_() {
@@ -368,13 +369,12 @@ public:
 
     bool is_single_thread() const override { return false; }
 
-    uint16_t next_bgid() override { return next_bgid_++; }
-
 private:
     void worker_loop_(size_t index) {
         data_ = &local_data_[index];
 
-        Context::current().init(&data_->ring, this, schedule_local_);
+        Context::current().init(&data_->ring, this, schedule_local_,
+                                next_bgid_func_);
         auto d = defer([]() { Context::current().reset(); });
 
         while (true) {
@@ -401,6 +401,11 @@ private:
         auto *self = static_cast<MultiThreadRuntime *>(runtime);
         self->data_->local_queue.push_back(work);
         self->maybe_overflow_();
+    }
+
+    static size_t next_bgid_func_(IRuntime *runtime) {
+        auto *self = static_cast<MultiThreadRuntime *>(runtime);
+        return self->next_bgid_++;
     }
 
     void maybe_overflow_() {

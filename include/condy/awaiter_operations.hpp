@@ -30,6 +30,18 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
 }
 
 template <typename Func, typename... Args>
+auto make_select_buffer_op_awaiter(detail::ProvidedBuffersImplPtr buffers_impl,
+                                   Func &&func, Args &&...args) {
+    int bgid = buffers_impl->bgid();
+    auto op = SelectBufferOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
+        std::move(buffers_impl), std::forward<Func>(func),
+        std::forward<Args>(args)...);
+    op.add_flags(IOSQE_BUFFER_SELECT);
+    op.set_bgid(bgid);
+    return op;
+}
+
+template <typename Func, typename... Args>
 auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
     op.add_flags(IOSQE_IO_DRAIN);
     return op;
