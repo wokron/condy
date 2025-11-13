@@ -218,15 +218,16 @@ TEST_CASE("test async_operations - fixed buffer read write") {
 
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written = co_await condy::async_write_fixed(
-            pipe_fds[1], condy::buffer(msg), 0, 0); // Use buffer index 0
+        // Use buffer index 0
+        int bytes_written = co_await condy::async_write(
+            pipe_fds[1], condy::fixed(0, condy::buffer(msg)), 0);
         REQUIRE(bytes_written == sizeof(msg));
         --unfinished;
     };
     auto reader = [&]() -> condy::Coro<void> {
-        int bytes_read = co_await condy::async_read_fixed(
-            pipe_fds[0], condy::buffer(buf, sizeof(buf)), 0,
-            1); // Use buffer index 1
+        // Use buffer index 1
+        int bytes_read = co_await condy::async_read(
+            pipe_fds[0], condy::fixed(1, condy::buffer(buf, sizeof(buf))), 0);
         REQUIRE(bytes_read == sizeof(msg));
         --unfinished;
     };

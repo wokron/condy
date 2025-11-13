@@ -3,6 +3,7 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
+#include <type_traits>
 
 namespace condy {
 
@@ -25,10 +26,35 @@ template <typename Buffer>
 constexpr bool is_provided_buffers_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBuffers>;
 
+template <typename BufferBase> class FixedBuffer : public BufferBase {
+public:
+    FixedBuffer(int buf_index, BufferBase base)
+        : BufferBase(base), buf_index_(buf_index) {}
+
+    int buf_index() const { return buf_index_; }
+
+private:
+    int buf_index_;
+};
+
+template <typename Buffer> struct is_fixed_buffer : public std::false_type {};
+
+template <typename BufferBase>
+struct is_fixed_buffer<FixedBuffer<BufferBase>> : public std::true_type {};
+
+template <typename Buffer>
+constexpr bool is_fixed_buffer_v = is_fixed_buffer<std::decay_t<Buffer>>::value;
+
 } // namespace detail
 
 // Helper to specify a fixed fd
 inline auto fixed(int fd) { return detail::FixedFd{fd}; }
+
+// Helper to specify a fixed buffer
+template <typename Buffer> auto fixed(int buf_index, Buffer &&buf) {
+    return detail::FixedBuffer<std::decay_t<Buffer>>(buf_index,
+                                                     std::forward<Buffer>(buf));
+}
 
 inline auto async_nop() { return make_op_awaiter(io_uring_prep_nop); }
 
@@ -44,6 +70,9 @@ inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
             return make_select_buffer_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_read, fd,
                 nullptr, 0, offset);
+        } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
+            return make_op_awaiter(io_uring_prep_read_fixed, fd, buf.data(),
+                                   buf.size(), offset, buf.buf_index());
         } else {
             return make_op_awaiter(io_uring_prep_read, fd, buf.data(),
                                    buf.size(), offset);
@@ -53,6 +82,21 @@ inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
     return op;
 }
 
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+template <typename Fd, typename Buffer, typename MultiShotFunc>
+inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
+                                 MultiShotFunc &&func) {
+    auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
+        io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
+    };
+    auto op = make_multishot_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func),
+        std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
 template <typename Fd, typename Buffer>
 inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
     auto op = [&] {
@@ -60,6 +104,9 @@ inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
             return make_select_buffer_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_write, fd,
                 nullptr, 0, offset);
+        } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
+            return make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
+                                   buf.size(), offset, buf.buf_index());
         } else {
             return make_op_awaiter(io_uring_prep_write, fd, buf.data(),
                                    buf.size(), offset);
@@ -138,38 +185,6 @@ inline auto async_multishot_accept_direct(Fd fd, struct sockaddr *addr,
     auto op = make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
                                         io_uring_prep_multishot_accept_direct,
                                         fd, addr, addrlen, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-#endif
-
-template <typename Fd, typename Buffer>
-inline auto async_read_fixed(Fd fd, Buffer &&buf, __u64 offset, int buf_index) {
-    auto op = make_op_awaiter(io_uring_prep_read_fixed, fd, buf.data(),
-                              buf.size(), offset, buf_index);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-
-template <typename Fd, typename Buffer>
-inline auto async_write_fixed(Fd fd, Buffer &&buf, __u64 offset,
-                              int buf_index) {
-    auto op = make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
-                              buf.size(), offset, buf_index);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-
-#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-template <typename Fd, typename Buffer, typename MultiShotFunc>
-inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
-                                 MultiShotFunc &&func) {
-    auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
-        io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
-    };
-    auto op = make_multishot_select_buffer_op_awaiter(
-        std::forward<MultiShotFunc>(func),
-        std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
