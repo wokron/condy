@@ -7,11 +7,8 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <sys/eventfd.h>
 
 namespace condy {
-
-struct OpFinishHandle;
 
 class FdTable {
 public:
@@ -197,8 +194,7 @@ public:
 
     void set_use_mutex(bool use_mutex) { sq_mutex_.set_use_mutex(use_mutex); }
 
-    template <typename Func>
-    void register_op(Func &&prep_func, OpFinishHandle *handle) {
+    template <typename Func> void register_op(Func &&prep_func, void *handle) {
         std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
@@ -207,7 +203,7 @@ public:
         maybe_submit_();
     }
 
-    void cancel_op(OpFinishHandle *handle) {
+    void cancel_op(void *handle) {
         std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         io_uring_prep_cancel(sqe, handle, 0);
