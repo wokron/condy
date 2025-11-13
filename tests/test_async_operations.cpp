@@ -1,6 +1,8 @@
 #include "condy/awaiter_operations.hpp"
+#include "condy/buffers.hpp"
 #include "condy/channel.hpp"
 #include "condy/coro.hpp"
+#include "condy/runtime.hpp"
 #include "condy/sync_wait.hpp"
 #include <condy/async_operations.hpp>
 #include <cstring>
@@ -45,13 +47,13 @@ TEST_CASE("test async_operations - simple read write") {
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
         int bytes_written =
-            co_await condy::async_write(pipe_fds[1], msg, sizeof(msg), 0);
+            co_await condy::async_write(pipe_fds[1], condy::buffer(msg), 0);
         REQUIRE(bytes_written == sizeof(msg));
         --unfinished;
     };
     auto reader = [&]() -> condy::Coro<void> {
-        int bytes_read =
-            co_await condy::async_read(pipe_fds[0], buf, sizeof(msg), 0);
+        int bytes_read = co_await condy::async_read(
+            pipe_fds[0], condy::buffer(buf, sizeof(msg)), 0);
         REQUIRE(bytes_read == sizeof(msg));
         --unfinished;
     };
@@ -173,13 +175,13 @@ TEST_CASE("test async_operations - fixed fd read write") {
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
         int bytes_written =
-            co_await condy::async_write(condy::fixed(1), msg, sizeof(msg), 0);
+            co_await condy::async_write(condy::fixed(1), condy::buffer(msg), 0);
         REQUIRE(bytes_written == sizeof(msg));
         --unfinished;
     };
     auto reader = [&]() -> condy::Coro<void> {
-        int bytes_read =
-            co_await condy::async_read(condy::fixed(0), buf, sizeof(msg), 0);
+        int bytes_read = co_await condy::async_read(
+            condy::fixed(0), condy::buffer(buf, sizeof(msg)), 0);
         REQUIRE(bytes_read == sizeof(msg));
         --unfinished;
     };
@@ -216,13 +218,14 @@ TEST_CASE("test async_operations - fixed buffer read write") {
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
         int bytes_written = co_await condy::async_write_fixed(
-            pipe_fds[1], msg, sizeof(msg), 0, 0); // Use buffer index 0
+            pipe_fds[1], condy::buffer(msg), 0, 0); // Use buffer index 0
         REQUIRE(bytes_written == sizeof(msg));
         --unfinished;
     };
     auto reader = [&]() -> condy::Coro<void> {
         int bytes_read = co_await condy::async_read_fixed(
-            pipe_fds[0], buf, sizeof(msg), 0, 1); // Use buffer index 1
+            pipe_fds[0], condy::buffer(buf, sizeof(buf)), 0,
+            1); // Use buffer index 1
         REQUIRE(bytes_read == sizeof(msg));
         --unfinished;
     };
@@ -232,6 +235,39 @@ TEST_CASE("test async_operations - fixed buffer read write") {
     REQUIRE(unfinished == 2);
 
     event_loop(unfinished);
+
+    REQUIRE(unfinished == 0);
+}
+
+TEST_CASE("test async_operations - provided buffers read") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char msg[] = "Hello, condy!";
+
+    condy::SingleThreadRuntime runtime;
+
+    size_t unfinished = 2;
+    auto writer = [&]() -> condy::Coro<void> {
+        int bytes_written = co_await condy::async_write(
+            pipe_fds[1], condy::buffer(msg), 0); // Use buffer index 0
+        REQUIRE(bytes_written == sizeof(msg));
+        --unfinished;
+    };
+    auto reader = [&]() -> condy::Coro<void> {
+        condy::ProvidedBuffers provided_buffers(2, 32);
+        auto [bytes_read, buf] = co_await condy::async_read(
+            pipe_fds[0], std::move(provided_buffers), 0);
+        REQUIRE(bytes_read == sizeof(msg));
+        REQUIRE(std::memcmp(buf.data(), msg, sizeof(msg)) == 0);
+        --unfinished;
+    };
+
+    condy::co_spawn(runtime, writer()).detach();
+    condy::co_spawn(runtime, reader()).detach();
+
+    runtime.done();
+    runtime.wait();
 
     REQUIRE(unfinished == 0);
 }

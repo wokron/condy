@@ -109,7 +109,8 @@ public:
     ProvidedBuffers &operator=(ProvidedBuffers &&) = delete;
 
 public:
-    detail::ProvidedBuffersImplPtr copy_impl() const { return impl_; }
+    detail::ProvidedBuffersImplPtr copy_impl() const & { return impl_; }
+    detail::ProvidedBuffersImplPtr copy_impl() && { return std::move(impl_); }
 
 private:
     detail::ProvidedBuffersImplPtr impl_;
@@ -156,5 +157,47 @@ private:
     detail::ProvidedBuffersImplPtr impl_ = nullptr;
     size_t bid_ = 0;
 };
+
+// Just buffer
+class Buffer {
+public:
+    Buffer(void *data, size_t size) : data_(data), size_(size) {}
+
+    void *data() const { return data_; }
+
+    size_t size() const { return size_; }
+
+private:
+    void *data_;
+    size_t size_;
+};
+
+class ConstBuffer {
+public:
+    ConstBuffer(const void *data, size_t size) : data_(data), size_(size) {}
+    ConstBuffer(Buffer buf) : data_(buf.data()), size_(buf.size()) {}
+
+    const void *data() const { return data_; }
+
+    size_t size() const { return size_; }
+
+private:
+    const void *data_;
+    size_t size_;
+};
+
+inline Buffer buffer(void *data, size_t size) { return Buffer(data, size); }
+
+inline ConstBuffer buffer(const void *data, size_t size) {
+    return ConstBuffer(data, size);
+}
+
+template <size_t N> inline Buffer buffer(char (&arr)[N]) {
+    return Buffer(static_cast<void *>(arr), N);
+}
+
+template <size_t N> inline ConstBuffer buffer(const char (&arr)[N]) {
+    return ConstBuffer(static_cast<const void *>(arr), N);
+}
 
 } // namespace condy

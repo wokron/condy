@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/awaiter_operations.hpp"
+#include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
 
 namespace condy {
@@ -20,6 +21,10 @@ void maybe_add_fixed_fd_flag(OpAwaiter &op, const FixedFd &fixed_fd) {
 template <typename OpAwaiter>
 void maybe_add_fixed_fd_flag(OpAwaiter &op, int fd) { /* No-op */ }
 
+template <typename Buffer>
+constexpr bool is_provided_buffers_v =
+    std::is_same_v<std::decay_t<Buffer>, ProvidedBuffers>;
+
 } // namespace detail
 
 // Helper to specify a fixed fd
@@ -32,16 +37,34 @@ inline auto async_timeout(struct __kernel_timespec *ts, unsigned count,
     return make_op_awaiter(io_uring_prep_timeout, ts, count, flags);
 }
 
-template <typename Fd>
-inline auto async_read(Fd fd, void *buf, unsigned nbytes, __u64 offset) {
-    auto op = make_op_awaiter(io_uring_prep_read, fd, buf, nbytes, offset);
+template <typename Fd, typename Buffer>
+inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
+    auto op = [&] {
+        if constexpr (detail::is_provided_buffers_v<Buffer>) {
+            return make_select_buffer_op_awaiter(
+                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_read, fd,
+                nullptr, 0, offset);
+        } else {
+            return make_op_awaiter(io_uring_prep_read, fd, buf.data(),
+                                   buf.size(), offset);
+        }
+    }();
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
 
-template <typename Fd>
-inline auto async_write(Fd fd, const void *buf, unsigned nbytes, __u64 offset) {
-    auto op = make_op_awaiter(io_uring_prep_write, fd, buf, nbytes, offset);
+template <typename Fd, typename Buffer>
+inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
+    auto op = [&] {
+        if constexpr (detail::is_provided_buffers_v<Buffer>) {
+            return make_select_buffer_op_awaiter(
+                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_write, fd,
+                nullptr, 0, offset);
+        } else {
+            return make_op_awaiter(io_uring_prep_write, fd, buf.data(),
+                                   buf.size(), offset);
+        }
+    }();
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
@@ -120,20 +143,19 @@ inline auto async_multishot_accept_direct(Fd fd, struct sockaddr *addr,
 }
 #endif
 
-template <typename Fd>
-inline auto async_read_fixed(Fd fd, void *buf, unsigned nbytes, __u64 offset,
-                             int buf_index) {
-    auto op = make_op_awaiter(io_uring_prep_read_fixed, fd, buf, nbytes, offset,
-                              buf_index);
+template <typename Fd, typename Buffer>
+inline auto async_read_fixed(Fd fd, Buffer &&buf, __u64 offset, int buf_index) {
+    auto op = make_op_awaiter(io_uring_prep_read_fixed, fd, buf.data(),
+                              buf.size(), offset, buf_index);
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
 
-template <typename Fd>
-inline auto async_write_fixed(Fd fd, const void *buf, unsigned nbytes,
-                              __u64 offset, int buf_index) {
-    auto op = make_op_awaiter(io_uring_prep_write_fixed, fd, buf, nbytes,
-                              offset, buf_index);
+template <typename Fd, typename Buffer>
+inline auto async_write_fixed(Fd fd, Buffer &&buf, __u64 offset,
+                              int buf_index) {
+    auto op = make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
+                              buf.size(), offset, buf_index);
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
