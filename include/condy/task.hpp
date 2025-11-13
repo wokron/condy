@@ -67,7 +67,7 @@ void TaskBase<T, Allocator>::wait_inner_(
     struct TaskWaiter : public InvokerAdapter<TaskWaiter> {
         TaskWaiter(std::promise<void> &p) : prom_(p) {}
 
-        void operator()() { prom_.set_value(); }
+        void invoke() { prom_.set_value(); }
 
         std::promise<void> &prom_;
     };
@@ -140,7 +140,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
         }
     }
 
-    void operator()() {
+    void invoke() {
         assert(caller_promise_ != nullptr);
         runtime_->schedule(caller_promise_);
     }

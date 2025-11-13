@@ -12,7 +12,7 @@ namespace {
 
 struct SetFinishInvoker
     : public condy::InvokerAdapter<SetFinishInvoker, condy::WorkInvoker> {
-    void operator()() { finished = true; }
+    void invoke() { finished = true; }
     bool finished = false;
 };
 

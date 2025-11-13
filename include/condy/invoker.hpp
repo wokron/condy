@@ -11,7 +11,7 @@ public:
 
     void operator()() { func_(this); }
 
-private:
+protected:
     Func func_;
 };
 
@@ -21,7 +21,7 @@ public:
     InvokerAdapter() : Invoker(&InvokerAdapter::invoke_) {}
 
 private:
-    static void invoke_(void *self) { static_cast<T *>(self)->operator()(); }
+    static void invoke_(void *self) { static_cast<T *>(self)->invoke(); }
 };
 
 class WorkInvoker : public Invoker {

@@ -177,7 +177,7 @@ public:
         return std::move(exception_);
     }
 
-    void operator()() {
+    void invoke() {
         auto h = std::coroutine_handle<PromiseType>::from_promise(
             static_cast<PromiseType &>(*this));
         h.resume();

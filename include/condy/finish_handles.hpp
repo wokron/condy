@@ -34,7 +34,7 @@ public:
         flags_ = flags;
     }
 
-    void operator()() { (*invoker_)(); }
+    void invoke() { (*invoker_)(); }
 
     ReturnType extract_result() { return res_; }
 
@@ -111,6 +111,33 @@ template <typename MultiShotFunc>
 using MultiShotSelectBufferOpFinishHandle =
     MultiShotMixin<MultiShotFunc, SelectBufferOpFinishHandle>;
 
+template <typename Func, typename HandleBase>
+class ZeroCopyMixin : public HandleBase {
+public:
+    template <typename... Args>
+    ZeroCopyMixin(Func func, Args &&...args)
+        : HandleBase(std::forward<Args>(args)...),
+          free_func_(std::move(func)) {
+        this->multishot_func_ = &ZeroCopyMixin::invoke_multishot_;
+        this->func_ = &ZeroCopyMixin::invoke_notify_; // Override the base invoke
+    }
+
+private:
+    static void invoke_multishot_(void *data) {
+        auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
+        (*self->invoker_)(); // Resume here
+    }
+
+    static void invoke_notify_(void *data) {
+        auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
+        self->free_func_(self->res_);
+        delete self; // TODO: Better way?
+    }
+
+private:
+    Func free_func_;
+};
+
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {
 public:
@@ -174,7 +201,7 @@ private:
 
 private:
     struct FinishInvoker : public InvokerAdapter<FinishInvoker> {
-        void operator()() { self_->finish_(no_); }
+        void invoke() { self_->finish_(no_); }
         RangedParallelFinishHandle *self_;
         size_t no_;
     };
@@ -298,7 +325,7 @@ private:
 private:
     template <size_t I>
     struct FinishInvoker : public InvokerAdapter<FinishInvoker<I>> {
-        void operator()() { self_->template finish_<I>(); }
+        void invoke() { self_->template finish_<I>(); }
         ParallelFinishHandle *self_;
     };
 

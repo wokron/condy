@@ -26,7 +26,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void operator()() {
+    void invoke() {
         Context::current().runtime()->resume_work();
         (*invoker_)();
     }
@@ -63,7 +63,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void operator()() {
+    void invoke() {
         Context::current().runtime()->resume_work();
         (*invoker_)();
     }

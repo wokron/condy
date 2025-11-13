@@ -241,6 +241,11 @@ private:
             return;
         }
 #endif
+        if (cqe->flags & IORING_CQE_F_NOTIF) {
+            // Notify cqe, no need to schedule back to local queue
+            (*handle)();
+            return;
+        }
         local_queue_.push_back(handle);
     }
 
@@ -436,6 +441,11 @@ private:
             return;
         }
 #endif
+        if (cqe->flags & IORING_CQE_F_NOTIF) {
+            // Notify cqe, no need to schedule back to local queue
+            (*handle)();
+            return;
+        }
         data_->local_queue.push_back(handle);
         maybe_overflow_();
     }

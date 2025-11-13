@@ -10,14 +10,14 @@
 namespace {
 
 struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
-    void operator()() { finished = true; }
+    void invoke() { finished = true; }
     bool finished = false;
 };
 
 struct SetUnfinishedInvoker
     : public condy::InvokerAdapter<SetUnfinishedInvoker> {
     SetUnfinishedInvoker(size_t &unfinished_ref) : unfinished(unfinished_ref) {}
-    void operator()() { unfinished--; }
+    void invoke() { unfinished--; }
     size_t &unfinished;
 };
 
@@ -147,7 +147,7 @@ namespace {
 
 struct SetFinishWorkInvoker
     : public condy::InvokerAdapter<SetFinishWorkInvoker, condy::WorkInvoker> {
-    void operator()() { finished = true; }
+    void invoke() { finished = true; }
     bool finished = false;
     int result = -1;
 };
@@ -168,4 +168,24 @@ TEST_CASE("test op_finish_handle - multishot op") {
     handle.multishot();
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
+}
+
+TEST_CASE("test op_finish_handle - zero copy op") {
+    SetFinishWorkInvoker invoker;
+
+    int res = -1;
+    auto func = [&](int r) { res = r; };
+
+    auto *handle =
+        new condy::ZeroCopyMixin<decltype(func), condy::OpFinishHandle>(func);
+    handle->set_invoker(&invoker);
+    REQUIRE(!invoker.finished);
+    handle->set_result(1, 0);
+    handle->multishot();
+    REQUIRE(invoker.finished);
+    REQUIRE(handle->extract_result() == 1);
+    REQUIRE(res == -1);
+    handle->set_result(2, 0);
+    (*handle)();
+    REQUIRE(res == 2);
 }

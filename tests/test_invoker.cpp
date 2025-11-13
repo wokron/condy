@@ -6,7 +6,7 @@ namespace {
 class TestA : public condy::InvokerAdapter<TestA> {
 public:
     TestA() : called_(false) {}
-    void operator()() { called_ = true; }
+    void invoke() { called_ = true; }
     bool called() const { return called_; }
 
 private:
@@ -16,7 +16,7 @@ private:
 class TestB : public condy::InvokerAdapter<TestB> {
 public:
     TestB() : value_(0) {}
-    void operator()() { value_ += 42; }
+    void invoke() { value_ += 42; }
     int value() const { return value_; }
 
 private:

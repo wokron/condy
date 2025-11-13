@@ -17,6 +17,7 @@ namespace condy {
 
 namespace detail {
 
+// TODO: Is this thread-safe?
 class ProvidedBuffersImpl {
 public:
     ProvidedBuffersImpl(io_uring *ring, uint16_t bgid, size_t log_num_buffers,
