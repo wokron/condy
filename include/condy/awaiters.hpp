@@ -90,8 +90,9 @@ public:
     using Base =
         OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func, Args...>;
     MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func, Args... args)
-        : Base(MultiShotOpFinishHandle<MultiShotFunc>(multishot_func), func,
-               args...) {}
+        : Base(
+              MultiShotOpFinishHandle<MultiShotFunc>(std::move(multishot_func)),
+              func, args...) {}
 };
 
 template <typename Func, typename... Args>
@@ -103,6 +104,22 @@ public:
                           Func func, Args... args)
         : Base(SelectBufferOpFinishHandle(std::move(buffers_impl)), func,
                args...) {}
+};
+
+template <typename MultiShotFunc, typename Func, typename... Args>
+class [[nodiscard]] MultiShotSelectBufferOpAwaiter
+    : public OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>,
+                           Func, Args...> {
+public:
+    using Base =
+        OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>, Func,
+                      Args...>;
+    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
+                                   detail::ProvidedBuffersImplPtr buffers_impl,
+                                   Func func, Args... args)
+        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc>(
+                   std::move(multishot_func), std::move(buffers_impl)),
+               func, args...) {}
 };
 
 template <typename Handle, typename Awaiter>

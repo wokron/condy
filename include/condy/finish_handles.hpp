@@ -93,8 +93,10 @@ public:
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            entry = ProvidedBufferEntry(std::move(buffers_impl_),
-                                        static_cast<size_t>(bid));
+            // No std::move here, since buffers_impl_ may be used multiple times
+            // (multishot)
+            entry =
+                ProvidedBufferEntry(buffers_impl_, static_cast<size_t>(bid));
         }
         return std::make_pair(res, std::move(entry));
     }
@@ -104,6 +106,10 @@ private:
 };
 
 using SelectBufferOpFinishHandle = SelectBufferMixin<OpFinishHandle>;
+
+template <typename MultiShotFunc>
+using MultiShotSelectBufferOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, SelectBufferOpFinishHandle>;
 
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {

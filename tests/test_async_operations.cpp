@@ -5,6 +5,7 @@
 #include "condy/runtime.hpp"
 #include "condy/sync_wait.hpp"
 #include <condy/async_operations.hpp>
+#include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
 #include <latch>
@@ -249,8 +250,8 @@ TEST_CASE("test async_operations - provided buffers read") {
 
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written = co_await condy::async_write(
-            pipe_fds[1], condy::buffer(msg), 0); // Use buffer index 0
+        int bytes_written =
+            co_await condy::async_write(pipe_fds[1], condy::buffer(msg), 0);
         REQUIRE(bytes_written == sizeof(msg));
         --unfinished;
     };
@@ -260,6 +261,60 @@ TEST_CASE("test async_operations - provided buffers read") {
             pipe_fds[0], std::move(provided_buffers), 0);
         REQUIRE(bytes_read == sizeof(msg));
         REQUIRE(std::memcmp(buf.data(), msg, sizeof(msg)) == 0);
+        --unfinished;
+    };
+
+    condy::co_spawn(runtime, writer()).detach();
+    condy::co_spawn(runtime, reader()).detach();
+
+    runtime.done();
+    runtime.wait();
+
+    REQUIRE(unfinished == 0);
+}
+
+TEST_CASE("test async_operations - multishot provided buffers read") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    char msg[16];
+
+    condy::SingleThreadRuntime runtime;
+
+    const int times = 5;
+
+    size_t unfinished = 2;
+    auto writer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < times; i++) {
+            std::fill_n(msg, 16, i + 1);
+            int bytes_written = co_await condy::async_write(
+                pipe_fds[1], condy::buffer(msg, 16), 0);
+            REQUIRE(bytes_written == sizeof(msg));
+        }
+        close(pipe_fds[1]);
+        --unfinished;
+    };
+
+    // TODO: Hard to use in this case, need to implement something like
+    // condy::will_push(ch)
+    int count = 0;
+    auto multishot =
+        [&](std::pair<int, condy::ProvidedBufferEntry> r) -> condy::Coro<void> {
+        auto &[n, buf] = r;
+        REQUIRE(n == 16);
+        char *data = reinterpret_cast<char *>(buf.data());
+        for (int i = 0; i < n; i++) {
+            REQUIRE(data[i] == count + 1);
+        }
+        count++;
+        co_return;
+    };
+
+    auto reader = [&]() -> condy::Coro<void> {
+        condy::ProvidedBuffers provided_buffers(times, 16);
+        auto [n, buf] = co_await condy::async_read_multishot(
+            pipe_fds[0], provided_buffers, 0, condy::will_spawn(multishot));
+        REQUIRE(n == 0);
         --unfinished;
     };
 

@@ -160,6 +160,21 @@ inline auto async_write_fixed(Fd fd, Buffer &&buf, __u64 offset,
     return op;
 }
 
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+template <typename Fd, typename Buffer, typename MultiShotFunc>
+inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
+                                 MultiShotFunc &&func) {
+    auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
+        io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
+    };
+    auto op = make_multishot_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func),
+        std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
 } // namespace condy
 
 // inline auto async_splice(int fd_in, int64_t off_in, int fd_out, int64_t

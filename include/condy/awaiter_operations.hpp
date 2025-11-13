@@ -11,13 +11,16 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
         std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
+template <typename CoroFunc> struct SpawnHelper {
+    void operator()(auto &&res) {
+        co_spawn(func(std::forward<decltype(res)>(res))).detach();
+    }
+    std::decay_t<CoroFunc> func;
+};
+
 // Helper to spawn a coroutine from a multishot operation
 template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
-    struct SpawnHelper {
-        void operator()(int res) { co_spawn(func(res)).detach(); }
-        std::decay_t<CoroFunc> func;
-    };
-    return SpawnHelper{std::forward<CoroFunc>(coro)};
+    return SpawnHelper<std::decay_t<CoroFunc>>{std::forward<CoroFunc>(coro)};
 }
 
 template <typename MultiShotFunc, typename Func, typename... Args>
@@ -36,6 +39,20 @@ auto make_select_buffer_op_awaiter(detail::ProvidedBuffersImplPtr buffers_impl,
     auto op = SelectBufferOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
         std::move(buffers_impl), std::forward<Func>(func),
         std::forward<Args>(args)...);
+    op.add_flags(IOSQE_BUFFER_SELECT);
+    op.set_bgid(bgid);
+    return op;
+}
+
+template <typename MultiShotFunc, typename Func, typename... Args>
+auto make_multishot_select_buffer_op_awaiter(
+    MultiShotFunc &&multishot_func, detail::ProvidedBuffersImplPtr buffers_impl,
+    Func &&func, Args &&...args) {
+    int bgid = buffers_impl->bgid();
+    auto op = MultiShotSelectBufferOpAwaiter<
+        std::decay_t<MultiShotFunc>, std::decay_t<Func>, std::decay_t<Args>...>(
+        std::forward<MultiShotFunc>(multishot_func), std::move(buffers_impl),
+        std::forward<Func>(func), std::forward<Args>(args)...);
     op.add_flags(IOSQE_BUFFER_SELECT);
     op.set_bgid(bgid);
     return op;
