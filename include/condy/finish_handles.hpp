@@ -353,6 +353,8 @@ public:
     }
 
 private:
+// TODO: investigate why clang optimization breaks this function
+#pragma clang optimize off
     template <size_t Idx = 0>
     static std::variant<typename Handles::ReturnType...>
     tuple_at_(std::tuple<typename Handles::ReturnType...> results, size_t idx) {
@@ -368,6 +370,7 @@ private:
             throw std::out_of_range("Index out of range in get_from_tuple_at_");
         }
     }
+#pragma clang optimize on
 };
 
 } // namespace condy
