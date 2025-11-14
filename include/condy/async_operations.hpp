@@ -190,6 +190,28 @@ inline auto async_multishot_accept_direct(Fd fd, struct sockaddr *addr,
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
+template <typename Fd, typename Buffer, typename FreeFunc>
+inline auto async_send_zc(Fd sockfd, Buffer &&buf, int flags, unsigned zc_flags,
+                          FreeFunc &&func) {
+    auto op = [&] {
+        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
+            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
+                                             io_uring_prep_send_zc_fixed,
+                                             sockfd, buf.data(), buf.size(),
+                                             flags, zc_flags, buf.buf_index());
+        } else {
+            return make_zero_copy_op_awaiter(
+                std::forward<FreeFunc>(func), io_uring_prep_send_zc, sockfd,
+                buf.data(), buf.size(), flags, zc_flags);
+        }
+        // TODO: Support send_bundle
+    }();
+    detail::maybe_add_fixed_fd_flag(op, sockfd);
+    return op;
+}
+#endif
+
 } // namespace condy
 
 // inline auto async_splice(int fd_in, int64_t off_in, int fd_out, int64_t

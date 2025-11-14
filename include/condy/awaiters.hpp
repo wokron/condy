@@ -10,6 +10,28 @@
 
 namespace condy {
 
+template <typename Handle> class HandleBox {
+public:
+    HandleBox(Handle h) : handle_(std::move(h)) {}
+
+    Handle &get() { return handle_; }
+
+private:
+    Handle handle_;
+};
+
+template <typename Func, typename HandleBase>
+class HandleBox<ZeroCopyMixin<Func, HandleBase>> {
+public:
+    using Handle = ZeroCopyMixin<Func, HandleBase>;
+    HandleBox(Handle h) : handle_ptr_(new Handle(std::move(h))) {}
+
+    Handle &get() { return *handle_ptr_; }
+
+private:
+    Handle *handle_ptr_;
+};
+
 template <typename Handle, typename Func, typename... Args>
 class OpAwaiterBase {
 public:
@@ -25,14 +47,14 @@ public:
     OpAwaiterBase &operator=(OpAwaiterBase &&) = delete;
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() { return &finish_handle_.get(); }
 
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int flags) {
         auto &context = Context::current();
         auto *ring = context.ring();
-        finish_handle_.set_ring(ring);
+        finish_handle_.get().set_ring(ring);
         ring->register_op(
             [&](io_uring_sqe *sqe) {
                 std::apply(
@@ -45,7 +67,7 @@ public:
                     io_uring_sqe_set_buf_group(sqe, bgid_);
                 }
             },
-            &finish_handle_);
+            &finish_handle_.get());
     }
 
 public:
@@ -54,11 +76,11 @@ public:
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
-        finish_handle_.set_invoker(&h.promise());
+        finish_handle_.get().set_invoker(&h.promise());
         register_operation(0);
     }
 
-    auto await_resume() { return finish_handle_.extract_result(); }
+    auto await_resume() { return finish_handle_.get().extract_result(); }
 
 public:
     void add_flags(unsigned int flags) { flags_ |= flags; }
@@ -68,7 +90,7 @@ public:
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
-    Handle finish_handle_;
+    HandleBox<Handle> finish_handle_;
     unsigned int flags_ = 0;
     int bgid_ = -1;
 };
@@ -120,6 +142,16 @@ public:
         : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc>(
                    std::move(multishot_func), std::move(buffers_impl)),
                func, args...) {}
+};
+
+template <typename FreeFunc, typename Func, typename... Args>
+class [[nodiscard]] ZeroCopyOpAwaiter
+    : public OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func, Args...> {
+public:
+    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func, Args...>;
+    ZeroCopyOpAwaiter(FreeFunc free_func, Func func, Args... args)
+        : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func,
+               args...) {}
 };
 
 template <typename Handle, typename Awaiter>

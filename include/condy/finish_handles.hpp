@@ -116,10 +116,10 @@ class ZeroCopyMixin : public HandleBase {
 public:
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...),
-          free_func_(std::move(func)) {
+        : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
         this->multishot_func_ = &ZeroCopyMixin::invoke_multishot_;
-        this->func_ = &ZeroCopyMixin::invoke_notify_; // Override the base invoke
+        this->func_ =
+            &ZeroCopyMixin::invoke_notify_; // Override the base invoke
     }
 
 private:
@@ -137,6 +137,9 @@ private:
 private:
     Func free_func_;
 };
+
+template <typename FreeFunc>
+using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
 
 template <typename Condition, typename Handle>
 class RangedParallelFinishHandle {

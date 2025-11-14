@@ -58,6 +58,15 @@ auto make_multishot_select_buffer_op_awaiter(
     return op;
 }
 
+template <typename FreeFunc, typename Func, typename... Args>
+auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
+                               Args &&...args) {
+    return ZeroCopyOpAwaiter<std::decay_t<FreeFunc>, std::decay_t<Func>,
+                             std::decay_t<Args>...>(
+        std::forward<FreeFunc>(free_func), std::forward<Func>(func),
+        std::forward<Args>(args)...);
+}
+
 template <typename Func, typename... Args>
 auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
     op.add_flags(IOSQE_IO_DRAIN);

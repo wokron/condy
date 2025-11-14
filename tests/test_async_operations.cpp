@@ -327,3 +327,74 @@ TEST_CASE("test async_operations - multishot provided buffers read") {
 
     REQUIRE(unfinished == 0);
 }
+
+namespace {
+
+void create_tcp_socketpair(int sv[2]) {
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(listener >= 0);
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0; // Let the OS choose the port
+
+    int r = bind(listener, (sockaddr *)&addr, sizeof(addr));
+    REQUIRE(r == 0);
+
+    r = listen(listener, 1);
+    REQUIRE(r == 0);
+
+    socklen_t addrlen = sizeof(addr);
+    r = getsockname(listener, (sockaddr *)&addr, &addrlen);
+    REQUIRE(r == 0);
+
+    sv[0] = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(sv[0] >= 0);
+
+    r = connect(sv[0], (sockaddr *)&addr, sizeof(addr));
+    REQUIRE(r == 0);
+
+    sv[1] = accept(listener, nullptr, nullptr);
+    REQUIRE(sv[1] >= 0);
+
+    close(listener);
+}
+
+} // namespace
+
+TEST_CASE("test async_operations - zero-copy read") {
+    int socket_pair[2];
+    create_tcp_socketpair(socket_pair);
+    const char msg[] = "Hello, condy!";
+
+    condy::SingleThreadRuntime runtime;
+
+    size_t unfinished = 2;
+    bool free_called = false;
+    auto writer = [&]() -> condy::Coro<void> {
+        int bytes_written = co_await condy::async_send_zc(
+            socket_pair[0], condy::buffer(msg), 0, 0,
+            [&](int r) { free_called = true; });
+        REQUIRE(bytes_written == sizeof(msg));
+        REQUIRE(!free_called);
+        --unfinished;
+    };
+    auto reader = [&]() -> condy::Coro<void> {
+        char buffer[128];
+        auto bytes_read = co_await condy::async_read(socket_pair[1],
+                                                     condy::buffer(buffer), 0);
+        REQUIRE(bytes_read == sizeof(msg));
+        REQUIRE(std::memcmp(buffer, msg, sizeof(msg)) == 0);
+        --unfinished;
+    };
+
+    condy::co_spawn(runtime, writer()).detach();
+    condy::co_spawn(runtime, reader()).detach();
+
+    runtime.done();
+    runtime.wait();
+
+    REQUIRE(unfinished == 0);
+    REQUIRE(free_called == true);
+}
