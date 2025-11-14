@@ -20,8 +20,8 @@ condy::Coro<> handle_client(int client_fd) {
     char buffer[BUFFER_SIZE];
 
     while (true) {
-        ssize_t n =
-            co_await condy::async_read(client_fd, buffer, BUFFER_SIZE, 0);
+        ssize_t n = co_await condy::async_read(
+            client_fd, condy::buffer(buffer, BUFFER_SIZE), 0);
         if (n <= 0) {
             if (n < 0) {
                 std::fprintf(stderr, "Read error: %s\n", std::strerror(-n));
@@ -29,7 +29,7 @@ condy::Coro<> handle_client(int client_fd) {
             break;
         }
 
-        n = co_await condy::async_write(client_fd, buffer, n, 0);
+        n = co_await condy::async_write(client_fd, condy::buffer(buffer, n), 0);
         if (n < 0) {
             std::fprintf(stderr, "Write error: %s\n", std::strerror(-n));
             break;

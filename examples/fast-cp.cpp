@@ -32,17 +32,18 @@ condy::Coro<> copy_file_task(int infd, int outfd, off_t &offset,
 
         int r1, r2;
         if (!partial_copy) {
-            std::tie(r1, r2) =
-                co_await (condy::async_read(infd, buffer.get(), CHUNK_SIZE,
-                                            current_offset) >>
-                          condy::async_write(outfd, buffer.get(), CHUNK_SIZE,
-                                             current_offset));
+            std::tie(r1, r2) = co_await (
+                condy::async_read(infd, condy::buffer(buffer.get(), CHUNK_SIZE),
+                                  current_offset) >>
+                condy::async_write(outfd,
+                                   condy::buffer(buffer.get(), CHUNK_SIZE),
+                                   current_offset));
 
         } else {
-            r1 = co_await condy::async_read(infd, buffer.get(), CHUNK_SIZE,
-                                            current_offset);
-            r2 = co_await condy::async_write(outfd, buffer.get(), CHUNK_SIZE,
-                                             current_offset);
+            r1 = co_await condy::async_read(
+                infd, condy::buffer(buffer.get(), CHUNK_SIZE), current_offset);
+            r2 = co_await condy::async_write(
+                outfd, condy::buffer(buffer.get(), CHUNK_SIZE), current_offset);
         }
         if (r1 < 0) {
             std::fprintf(stderr, "Read error at offset %lld: %s\n",
