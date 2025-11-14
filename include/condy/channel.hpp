@@ -117,6 +117,18 @@ public:
         return try_pop_inner_();
     }
 
+    template <typename U> void force_push(U &&item) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (try_push_inner_(std::forward<U>(item))) [[likely]] {
+            return;
+        }
+        ChannelPushFinishHandle<T> *fake_handle =
+            new ChannelPushFinishHandle<T>();
+        fake_handle->set_item(std::forward<U>(item));
+        assert(pop_awaiters_.empty());
+        push_awaiters_.push_back(fake_handle);
+    }
+
     struct [[nodiscard]] ChannelPushAwaiter;
     template <typename U> ChannelPushAwaiter push(U &&item) {
         return {*this, std::forward<U>(item)};
@@ -227,7 +239,10 @@ private:
 
     template <typename Handle> static void schedule_(Handle *handle) {
         auto *runtime = handle->get_runtime();
-        if (runtime == Context::current().runtime()) {
+        if (runtime == nullptr) [[unlikely]] {
+            // Fake handle, no need to schedule
+            delete handle;
+        } else if (runtime == Context::current().runtime()) {
             Context::current().schedule_local(handle);
         } else {
             runtime->schedule(handle);

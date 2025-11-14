@@ -332,3 +332,29 @@ TEST_CASE("test channel - cross runtimes") {
     t1.join();
     t2.join();
 }
+
+TEST_CASE("test channel - force push") {
+    condy::Channel<int> channel(2);
+
+    REQUIRE(channel.try_push(1) == true);
+    REQUIRE(channel.try_push(2) == true);
+    REQUIRE(channel.try_push(3) == false);
+
+    for (size_t i = 0; i < 10; i++) {
+        channel.force_push(static_cast<int>(i + 3));
+    }
+
+    // Force pushed items act just like a waiting coroutine push
+    REQUIRE(channel.size() == 2);
+
+    for (size_t i = 0; i < 12; i++) {
+        auto item = channel.try_pop();
+        REQUIRE(item.has_value());
+        REQUIRE(item.value() == static_cast<int>(i + 1));
+    }
+
+    REQUIRE(channel.size() == 0);
+
+    channel.force_push(42);
+    REQUIRE(channel.size() == 1);
+}
