@@ -296,25 +296,27 @@ TEST_CASE("test async_operations - multishot provided buffers read") {
         --unfinished;
     };
 
-    // TODO: Hard to use in this case, need to implement something like
-    // condy::will_push(ch)
-    int count = 0;
-    auto multishot =
-        [&](std::pair<int, condy::ProvidedBufferEntry> r) -> condy::Coro<void> {
-        auto &[n, buf] = r;
-        REQUIRE(n == 16);
-        char *data = reinterpret_cast<char *>(buf.data());
-        for (int i = 0; i < n; i++) {
-            REQUIRE(data[i] == count + 1);
+    auto multishot_reader =
+        [&](condy::Channel<std::pair<int, condy::ProvidedBufferEntry>> &ch)
+        -> condy::Coro<void> {
+        int count = 0;
+        for (int i = 0; i < times; i++) {
+            auto [n, buf] = co_await ch.pop();
+            REQUIRE(n == 16);
+            char *data = reinterpret_cast<char *>(buf.data());
+            for (int i = 0; i < n; i++) {
+                REQUIRE(data[i] == count + 1);
+            }
+            count++;
         }
-        count++;
-        co_return;
     };
 
     auto reader = [&]() -> condy::Coro<void> {
+        condy::Channel<std::pair<int, condy::ProvidedBufferEntry>> ch(times);
+        condy::co_spawn(multishot_reader(ch)).detach();
         condy::ProvidedBuffers provided_buffers(times, 16);
         auto [n, buf] = co_await condy::async_read_multishot(
-            pipe_fds[0], provided_buffers, 0, condy::will_spawn(multishot));
+            pipe_fds[0], provided_buffers, 0, condy::will_push(ch));
         REQUIRE(n == 0);
         --unfinished;
     };
