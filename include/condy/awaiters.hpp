@@ -32,12 +32,22 @@ private:
     Handle *handle_ptr_;
 };
 
+template <> class HandleBox<TimerFinishHandle> {
+public:
+    HandleBox(TimerFinishHandle *h) : handle_ptr_(h) {}
+
+    TimerFinishHandle &get() { return *handle_ptr_; }
+
+private:
+    TimerFinishHandle *handle_ptr_;
+};
+
 template <typename Handle, typename Func, typename... Args>
 class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
-    OpAwaiterBase(HandleType handle, Func func, Args... args)
+    OpAwaiterBase(HandleBox<Handle> handle, Func func, Args... args)
         : finish_handle_(std::move(handle)), prep_func_(func),
           args_(std::make_tuple(std::move(args)...)) {}
     OpAwaiterBase(OpAwaiterBase &&) = default;
@@ -152,6 +162,15 @@ public:
     ZeroCopyOpAwaiter(FreeFunc free_func, Func func, Args... args)
         : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func,
                args...) {}
+};
+
+template <typename Func, typename... Args>
+class [[nodiscard]] TimerOpAwaiter
+    : public OpAwaiterBase<TimerFinishHandle, Func, Args...> {
+public:
+    using Base = OpAwaiterBase<TimerFinishHandle, Func, Args...>;
+    TimerOpAwaiter(TimerFinishHandle *timer_handle, Func func, Args... args)
+        : Base(HandleBox<TimerFinishHandle>(timer_handle), func, args...) {}
 };
 
 template <typename Handle, typename Awaiter>
