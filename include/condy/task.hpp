@@ -15,11 +15,9 @@ template <typename T = void, typename Allocator = void> class TaskBase {
 public:
     using PromiseType = typename Coro<T, Allocator>::promise_type;
 
-    TaskBase(std::coroutine_handle<PromiseType> h, bool remote_task)
-        : handle_(h), remote_task_(remote_task) {}
+    TaskBase(std::coroutine_handle<PromiseType> h) : handle_(h) {}
     TaskBase(TaskBase &&other) noexcept
-        : handle_(std::exchange(other.handle_, nullptr)),
-          remote_task_(other.remote_task_) {}
+        : handle_(std::exchange(other.handle_, nullptr)) {}
 
     TaskBase(const TaskBase &) = delete;
     TaskBase &operator=(const TaskBase &) = delete;
@@ -39,14 +37,11 @@ public:
 
     auto operator co_await() &&;
 
-    bool is_remote_task() const noexcept { return remote_task_; }
-
 protected:
     static void wait_inner_(std::coroutine_handle<PromiseType> handle);
 
 protected:
     std::coroutine_handle<PromiseType> handle_;
-    bool remote_task_;
 };
 
 template <typename T, typename Allocator>
@@ -124,14 +119,9 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
     bool
     await_suspend(std::coroutine_handle<PromiseType> caller_handle) noexcept {
         Context::current().runtime()->pend_work();
-        if (runtime_ == nullptr) {
-            // No runtime provided, local task
-            return task_handle_.promise().register_task_await(caller_handle);
-        } else {
-            // Remote task, need to post back to caller runtime
-            caller_promise_ = &caller_handle.promise();
-            return task_handle_.promise().register_task_await(this);
-        }
+        assert(runtime_ != nullptr);
+        caller_promise_ = &caller_handle.promise();
+        return task_handle_.promise().register_task_await(this);
     }
 
     void invoke() {
@@ -181,34 +171,22 @@ struct TaskAwaiter<void, Allocator> : public TaskAwaiterBase<void, Allocator> {
 template <typename T, typename Allocator>
 inline auto TaskBase<T, Allocator>::operator co_await() && {
     return TaskAwaiter<T, Allocator>(std::exchange(handle_, nullptr),
-                                     remote_task_ ? Context::current().runtime()
-                                                  : nullptr);
+                                     Context::current().runtime());
 }
 
 template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
-    auto handle = coro.release();
-    auto &promise = handle.promise();
-    promise.set_auto_destroy(false);
-    promise.set_use_mutex(true);
-
-    Context::current().runtime()->schedule(&promise);
-    return {handle, false};
+    return co_spawn(*Context::current().runtime(), std::move(coro));
 }
 
-template <typename T, typename Allocator, typename Runtime>
+template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
-    if (static_cast<Runtime *>(&runtime) == Context::current().runtime()) {
-        return co_spawn(std::move(coro));
-    }
-
     auto handle = coro.release();
     auto &promise = handle.promise();
     promise.set_auto_destroy(false);
-    promise.set_use_mutex(true);
 
     runtime.schedule(&promise);
-    return {handle, true};
+    return {handle};
 }
 
 namespace pmr {

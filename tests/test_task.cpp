@@ -238,9 +238,7 @@ TEST_CASE("test task - run in different thread") {
     auto main = [&]() -> condy::Coro<void> {
         auto prev_id = std::this_thread::get_id();
         auto t1 = condy::co_spawn(runtime2, remote(prev_id));
-        REQUIRE(t1.is_remote_task());
         auto t2 = condy::co_spawn(runtime1, local(prev_id));
-        REQUIRE(!t2.is_remote_task());
         co_await std::move(t2);
         REQUIRE(finished2);
         co_await std::move(t1);

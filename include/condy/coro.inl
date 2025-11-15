@@ -99,29 +99,26 @@ public:
             auto &self = handle.promise();
             std::unique_lock lock(self.mutex_);
 
-            auto caller_handle = self.caller_handle_;
-
-            // 1. Common coro or detached task, destroy self
+            // 1. Detached task, destroy self
             if (self.auto_destroy_) {
+                assert(self.caller_handle_ == std::noop_coroutine());
                 lock.unlock();
                 handle.destroy();
-                return caller_handle;
+                return std::noop_coroutine();
             }
 
-            // 2. Task awaited by another coroutine in different event loops,
-            // need to post back to caller loop
+            // 2. Task awaited by another coroutine, invoke callback
             if (self.remote_callback_ != nullptr) {
                 auto *callback = self.remote_callback_;
+                assert(self.caller_handle_ == std::noop_coroutine());
                 lock.unlock();
                 (*callback)();
                 return std::noop_coroutine();
             }
 
-            // 3. Task awaited by another coroutine in the same event loop,
-            // or task that has not been awaited yet (noop_coroutine), just
-            // resume caller
+            // 3. Stacked coroutine, or task that has not been awaited yet
             self.finished_ = true;
-            return caller_handle;
+            return self.caller_handle_;
         }
 
         void await_resume() noexcept {}
@@ -142,15 +139,6 @@ public:
         }
     }
 
-    bool register_task_await(std::coroutine_handle<> caller_handle) noexcept {
-        std::lock_guard lock(mutex_);
-        if (finished_) {
-            return false; // ready to resume immediately
-        }
-        caller_handle_ = caller_handle;
-        return true;
-    }
-
     bool register_task_await(Invoker *remote_callback) noexcept {
         std::lock_guard lock(mutex_);
         if (finished_) {
@@ -168,10 +156,6 @@ public:
         auto_destroy_ = auto_destroy;
     }
 
-    void set_use_mutex(bool use_mutex) noexcept {
-        mutex_.set_use_mutex(use_mutex);
-    }
-
     std::exception_ptr &exception() & noexcept { return exception_; }
     std::exception_ptr &&exception() && noexcept {
         return std::move(exception_);
@@ -184,7 +168,7 @@ public:
     }
 
 protected:
-    MaybeMutex<std::mutex> mutex_;
+    std::mutex mutex_;
     std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     bool auto_destroy_ = true;
     bool finished_ = false;
