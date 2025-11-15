@@ -482,9 +482,9 @@ TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto [order, results] = co_await condy::make_parallel_awaiter<
-            condy::WaitAllCancelCondition>(std::move(aw1), std::move(aw2),
-                                           std::move(aw3));
+        auto [order, results] =
+            co_await condy::make_parallel_awaiter<condy::WaitAll>(
+                std::move(aw1), std::move(aw2), std::move(aw3));
         auto [r1, r2, r3] = results;
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);

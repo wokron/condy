@@ -90,9 +90,9 @@ auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
     return op;
 }
 
-template <typename Condition, typename... Awaiters>
+template <bool Cancel, typename... Awaiters>
 auto make_parallel_awaiter(Awaiters &&...awaiters) {
-    return ParallelAwaiterWrapper<Condition, std::decay_t<Awaiters>...>(
+    return ParallelAwaiterWrapper<Cancel, std::decay_t<Awaiters>...>(
         std::forward<Awaiters>(awaiters)...);
 }
 
@@ -111,10 +111,10 @@ template <typename... Awaiters> auto make_link_awaiter(Awaiters &&...awaiters) {
         std::forward<Awaiters>(awaiters)...);
 }
 
-template <typename Condition, typename Range>
+template <bool Cancel, typename Range>
 auto make_ranged_parallel_awaiter(Range &&range) {
     using AwaiterType = typename std::decay_t<Range>::value_type;
-    return RangedParallelAwaiterWrapper<Condition, AwaiterType>(
+    return RangedParallelAwaiterWrapper<Cancel, AwaiterType>(
         std::forward<Range>(range));
 }
 

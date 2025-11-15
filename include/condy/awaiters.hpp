@@ -230,9 +230,9 @@ protected:
     std::vector<Awaiter> awaiters_;
 };
 
-template <typename Condition, typename Awaiter>
+template <bool Cancel, typename Awaiter>
 using RangedParallelAwaiterWrapper = RangedParallelAwaiter<
-    RangedParallelFinishHandle<Condition, typename Awaiter::HandleType>,
+    RangedParallelFinishHandle<Cancel, typename Awaiter::HandleType>,
     Awaiter>;
 
 template <typename Awaiter>
@@ -339,9 +339,9 @@ protected:
     std::tuple<Awaiters...> awaiters_;
 };
 
-template <typename Condition, typename... Awaiter>
+template <bool Cancel, typename... Awaiter>
 using ParallelAwaiterWrapper = ParallelAwaiter<
-    ParallelFinishHandle<Condition, typename Awaiter::HandleType...>,
+    ParallelFinishHandle<Cancel, typename Awaiter::HandleType...>,
     Awaiter...>;
 
 template <typename... Awaiter>

@@ -143,17 +143,13 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
 
-template <typename Condition, typename Handle>
-class RangedParallelFinishHandle {
+template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
 
     void init(std::vector<Handle *> handles) {
-        finished_count_.emplace(0);
-        canceled_count_.emplace(0);
-        outstanding_count_.emplace(handles.size());
         handles_ = std::move(handles);
         child_invokers_.resize(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -167,7 +163,8 @@ public:
     }
 
     void cancel() {
-        if (canceled_count_.get()++ == 0) {
+        if (!canceled_) {
+            canceled_ = true;
             for (auto &handle : handles_) {
                 handle->cancel();
             }
@@ -187,20 +184,24 @@ public:
 
 private:
     void finish_(size_t idx) {
-        size_t no = finished_count_.get()++;
+        size_t no = finished_count_++;
         order_[no] = idx;
 
-        if (cancel_checker_(idx) && canceled_count_.get()++ == 0) {
-            for (size_t i = 0; i < handles_.size(); i++) {
-                if (i != idx) {
-                    handles_[i]->cancel();
+        if constexpr (Cancel) {
+            if (!canceled_) {
+                canceled_ = true;
+                for (size_t i = 0; i < handles_.size(); i++) {
+                    if (i != idx) {
+                        handles_[i]->cancel();
+                    }
                 }
             }
         }
 
-        if (--outstanding_count_.get() == 0) {
+        if (no == handles_.size() - 1) {
             // All finished or canceled
             (*invoker_)();
+            return;
         }
     }
 
@@ -211,33 +212,23 @@ private:
         size_t no_;
     };
 
-    Uninitialized<std::atomic_size_t> finished_count_;
-    Uninitialized<std::atomic_size_t> outstanding_count_;
-    Uninitialized<std::atomic_size_t> canceled_count_;
+    size_t finished_count_ = 0;
+    bool canceled_ = false;
     std::vector<Handle *> handles_ = {};
     std::vector<FinishInvoker> child_invokers_;
-    Condition cancel_checker_ = {};
     std::vector<size_t> order_;
     Invoker *invoker_ = nullptr;
 };
 
-struct WaitAllCancelCondition {
-    template <typename... Args> bool operator()(Args &&...args) const {
-        return false;
-    }
-};
+constexpr bool WaitAll = false;
 
-struct WaitOneCancelCondition {
-    template <typename... Args> bool operator()(Args &&...args) const {
-        return true;
-    }
-};
+constexpr bool WaitOne = true;
 
 template <typename Handle>
 class RangedWaitAllFinishHandle
-    : public RangedParallelFinishHandle<WaitAllCancelCondition, Handle> {
+    : public RangedParallelFinishHandle<WaitAll, Handle> {
 public:
-    using Base = RangedParallelFinishHandle<WaitAllCancelCondition, Handle>;
+    using Base = RangedParallelFinishHandle<WaitAll, Handle>;
     using ReturnType = std::vector<typename Handle::ReturnType>;
 
     ReturnType extract_result() {
@@ -248,9 +239,9 @@ public:
 
 template <typename Handle>
 class RangedWaitOneFinishHandle
-    : public RangedParallelFinishHandle<WaitOneCancelCondition, Handle> {
+    : public RangedParallelFinishHandle<WaitOne, Handle> {
 public:
-    using Base = RangedParallelFinishHandle<WaitOneCancelCondition, Handle>;
+    using Base = RangedParallelFinishHandle<WaitOne, Handle>;
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
@@ -261,21 +252,19 @@ public:
     }
 };
 
-template <typename Condition, typename... Handles> class ParallelFinishHandle {
+template <bool Cancel, typename... Handles> class ParallelFinishHandle {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
     template <typename... HandlePtr> void init(HandlePtr... handles) {
-        finished_count_.emplace(0);
-        outstanding_count_.emplace(sizeof...(Handles));
-        canceled_count_.emplace(0);
         handles_ = std::make_tuple(handles...);
         foreach_set_invoker_();
     }
 
     void cancel() {
-        if (canceled_count_.get()++ == 0) {
+        if (!canceled_) {
+            canceled_ = true;
             constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
             foreach_call_cancel_<SkipIdx>();
         }
@@ -314,14 +303,17 @@ private:
     }
 
     template <size_t Idx> void finish_() {
-        size_t no = finished_count_.get()++;
+        size_t no = finished_count_++;
         order_[no] = Idx;
 
-        if (cancel_checker_(Idx) && canceled_count_.get()++ == 0) {
-            foreach_call_cancel_<Idx>();
+        if constexpr (Cancel) {
+            if (!canceled_) {
+                canceled_ = true;
+                foreach_call_cancel_<Idx>();
+            }
         }
 
-        if (--outstanding_count_.get() == 0) {
+        if (no == sizeof...(Handles) - 1) {
             // All finished or canceled
             (*invoker_)();
         }
@@ -348,21 +340,18 @@ private:
 
     using InvokerTupleType = typename helper<0, Handles...>::type;
 
-    Uninitialized<std::atomic_size_t> finished_count_;
-    Uninitialized<std::atomic_size_t> outstanding_count_;
-    Uninitialized<std::atomic_size_t> canceled_count_;
+    size_t finished_count_ = 0;
+    bool canceled_ = false;
     std::tuple<Handles *...> handles_;
     InvokerTupleType child_invokers_;
-    Condition cancel_checker_ = {};
     std::array<size_t, sizeof...(Handles)> order_;
     Invoker *invoker_ = nullptr;
 };
 
 template <typename... Handles>
-class WaitAllFinishHandle
-    : public ParallelFinishHandle<WaitAllCancelCondition, Handles...> {
+class WaitAllFinishHandle : public ParallelFinishHandle<WaitAll, Handles...> {
 public:
-    using Base = ParallelFinishHandle<WaitAllCancelCondition, Handles...>;
+    using Base = ParallelFinishHandle<WaitAll, Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
     ReturnType extract_result() {
@@ -372,10 +361,9 @@ public:
 };
 
 template <typename... Handles>
-class WaitOneFinishHandle
-    : public ParallelFinishHandle<WaitOneCancelCondition, Handles...> {
+class WaitOneFinishHandle : public ParallelFinishHandle<WaitOne, Handles...> {
 public:
-    using Base = ParallelFinishHandle<WaitOneCancelCondition, Handles...>;
+    using Base = ParallelFinishHandle<WaitOne, Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
     ReturnType extract_result() {

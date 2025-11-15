@@ -1,19 +1,18 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
-#include "condy/utils.hpp"
 #include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <stdexcept>
 
 namespace condy {
 
 class FdTable {
 public:
-    FdTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
-        : ring_(ring), sq_mutex_(sq_mutex) {}
+    FdTable(io_uring &ring) : ring_(ring) {}
 
     FdTable(const FdTable &) = delete;
     FdTable &operator=(const FdTable &) = delete;
@@ -22,7 +21,6 @@ public:
 
 public:
     void init(size_t capacity) {
-        std::lock_guard lock(sq_mutex_);
         int r = io_uring_register_files_sparse(&ring_, capacity);
         if (r < 0) {
             throw std::runtime_error("io_uring_register_files_sparse failed: " +
@@ -35,7 +33,6 @@ public:
     }
 
     void register_fd(int fixed_fd, int fd) {
-        std::lock_guard lock(sq_mutex_);
         check_initialized_();
         int r = io_uring_register_files_update(&ring_, fixed_fd, &fd, 1);
         if (r < 0) {
@@ -45,7 +42,6 @@ public:
     }
 
     void unregister_fd(int fixed_fd) {
-        std::lock_guard lock(sq_mutex_);
         check_initialized_();
         int invalid_fd = -1;
         int r =
@@ -57,7 +53,6 @@ public:
     }
 
     void set_alloc_range(size_t offset, size_t size) {
-        std::lock_guard lock(sq_mutex_);
         check_initialized_();
         alloc_range_offset_ = offset;
         alloc_range_size_ = size;
@@ -70,14 +65,10 @@ public:
     }
 
     std::pair<size_t, size_t> get_alloc_range() const {
-        std::lock_guard lock(sq_mutex_);
         return {alloc_range_offset_, alloc_range_size_};
     }
 
-    size_t capacity() const {
-        std::lock_guard lock(sq_mutex_);
-        return capacity_;
-    }
+    size_t capacity() const { return capacity_; }
 
 private:
     void check_initialized_() {
@@ -92,13 +83,11 @@ private:
     size_t alloc_range_offset_ = 0;
     size_t alloc_range_size_ = 0;
     io_uring &ring_;
-    MaybeMutex<std::mutex> &sq_mutex_;
 };
 
 class BufferTable {
 public:
-    BufferTable(io_uring &ring, MaybeMutex<std::mutex> &sq_mutex)
-        : ring_(ring), sq_mutex_(sq_mutex) {}
+    BufferTable(io_uring &ring) : ring_(ring) {}
 
     BufferTable(const BufferTable &) = delete;
     BufferTable &operator=(const BufferTable &) = delete;
@@ -107,7 +96,6 @@ public:
 
 public:
     void init(size_t capacity) {
-        std::lock_guard lock(sq_mutex_);
         int r = io_uring_register_buffers_sparse(&ring_, capacity);
         if (r < 0) {
             throw std::runtime_error(
@@ -119,7 +107,6 @@ public:
     }
 
     void register_buffer(int index, const iovec &buf) {
-        std::lock_guard lock(sq_mutex_);
         check_initialized_();
         int r = io_uring_register_buffers_update_tag(&ring_, index, &buf,
                                                      nullptr, 1);
@@ -131,7 +118,6 @@ public:
     }
 
     void unregister_buffer(int index) {
-        std::lock_guard lock(sq_mutex_);
         check_initialized_();
         iovec vec{nullptr, 0};
         int r = io_uring_register_buffers_update_tag(&ring_, index, &vec,
@@ -143,10 +129,7 @@ public:
         }
     }
 
-    size_t capacity() const {
-        std::lock_guard lock(sq_mutex_);
-        return capacity_;
-    }
+    size_t capacity() const { return capacity_; }
 
 private:
     void check_initialized_() {
@@ -159,7 +142,6 @@ private:
     bool initialized_ = false;
     size_t capacity_ = 0;
     io_uring &ring_;
-    MaybeMutex<std::mutex> &sq_mutex_;
 };
 
 class Ring {
@@ -192,10 +174,7 @@ public:
         }
     }
 
-    void set_use_mutex(bool use_mutex) { sq_mutex_.set_use_mutex(use_mutex); }
-
     template <typename Func> void register_op(Func &&prep_func, void *handle) {
-        std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
         io_uring_sqe_set_data(sqe, handle);
@@ -204,7 +183,6 @@ public:
     }
 
     void cancel_op(void *handle) {
-        std::lock_guard lock(sq_mutex_);
         io_uring_sqe *sqe = get_sqe_();
         io_uring_prep_cancel(sqe, handle, 0);
         io_uring_sqe_set_data(sqe, IGNORE_DATA);
@@ -212,7 +190,6 @@ public:
     }
 
     void submit() {
-        std::lock_guard lock(sq_mutex_);
         unsubmitted_count_ = 0;
         io_uring_submit(&ring_);
     }
@@ -259,7 +236,6 @@ public:
     }
 
     void reserve_space(size_t n) {
-        std::lock_guard lock(sq_mutex_);
         size_t space_left;
         do {
             space_left = io_uring_sq_space_left(&ring_);
@@ -336,15 +312,14 @@ public:
 
 private:
     // SQ may be accessed from multiple threads, so protect it
-    MaybeMutex<std::mutex> sq_mutex_;
     bool initialized_ = false;
     io_uring ring_;
     std::atomic_size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
 
-    FdTable fd_table_{ring_, sq_mutex_};
-    BufferTable buffer_table_{ring_, sq_mutex_};
+    FdTable fd_table_{ring_};
+    BufferTable buffer_table_{ring_};
 
     // Configuration
     size_t submit_batch_size_ = 128;
