@@ -247,7 +247,7 @@ TEST_CASE("test async_operations - provided buffers read") {
 
     const char msg[] = "Hello, condy!";
 
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     size_t unfinished = 2;
     auto writer = [&]() -> condy::Coro<void> {
@@ -280,7 +280,7 @@ TEST_CASE("test async_operations - multishot provided buffers read") {
 
     char msg[16];
 
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     const int times = 5;
 
@@ -370,7 +370,7 @@ TEST_CASE("test async_operations - zero-copy read") {
     create_tcp_socketpair(socket_pair);
     const char msg[] = "Hello, condy!";
 
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     size_t unfinished = 2;
     bool free_called = false;

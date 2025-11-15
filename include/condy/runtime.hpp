@@ -35,9 +35,9 @@ public:
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
-class SingleThreadRuntime : public IRuntime {
+class Runtime : public IRuntime {
 public:
-    SingleThreadRuntime(const SingleThreadOptions &options = {}) {
+    Runtime(const RuntimeOptions &options = {}) {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
 
@@ -78,12 +78,12 @@ public:
         idle_time_us_ = options.idle_time_us_;
     }
 
-    ~SingleThreadRuntime() { ring_.destroy(); }
+    ~Runtime() { ring_.destroy(); }
 
-    SingleThreadRuntime(const SingleThreadRuntime &) = delete;
-    SingleThreadRuntime &operator=(const SingleThreadRuntime &) = delete;
-    SingleThreadRuntime(SingleThreadRuntime &&) = delete;
-    SingleThreadRuntime &operator=(SingleThreadRuntime &&) = delete;
+    Runtime(const Runtime &) = delete;
+    Runtime &operator=(const Runtime &) = delete;
+    Runtime(Runtime &&) = delete;
+    Runtime &operator=(Runtime &&) = delete;
 
 public:
     void done() override {
@@ -139,12 +139,12 @@ public:
 
 private:
     static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
-        auto *self = static_cast<SingleThreadRuntime *>(runtime);
+        auto *self = static_cast<Runtime *>(runtime);
         self->local_queue_.push_back(work);
     }
 
     static size_t next_bgid_func_(IRuntime *runtime) {
-        auto *self = static_cast<SingleThreadRuntime *>(runtime);
+        auto *self = static_cast<Runtime *>(runtime);
         return self->next_bgid_++;
     }
 

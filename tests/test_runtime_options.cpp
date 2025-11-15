@@ -6,9 +6,9 @@
 #include <doctest/doctest.h>
 
 TEST_CASE("test runtime_options - single thread sqpoll") {
-    condy::SingleThreadOptions options;
+    condy::RuntimeOptions options;
     options.enable_sqpoll().sq_size(8).cq_size(16);
-    condy::SingleThreadRuntime runtime(options);
+    condy::Runtime runtime(options);
 
     bool finished = false;
 

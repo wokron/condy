@@ -3,7 +3,7 @@
 #include <doctest/doctest.h>
 
 TEST_CASE("test timer - sleep") {
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     condy::Timer timer;
 
@@ -28,7 +28,7 @@ TEST_CASE("test timer - sleep") {
 }
 
 TEST_CASE("test timer - sleep with cancel") {
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     condy::Timer timer;
 
@@ -62,7 +62,7 @@ TEST_CASE("test timer - sleep with cancel") {
 }
 
 TEST_CASE("test timer - sleep with update") {
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     condy::Timer timer;
 

@@ -29,8 +29,7 @@ condy::Coro<void> spawn_tasks(size_t task_count) {
 int main() {
     const size_t task_count = 1'000'000;
 
-    condy::SingleThreadRuntime runtime;
-    condy::sync_wait(runtime, spawn_tasks(task_count));
+    condy::sync_wait(spawn_tasks(task_count));
 
     return 0;
 }

@@ -1,12 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include <stdexcept>
 
 namespace condy {
 
-struct SingleThreadOptions {
+struct RuntimeOptions {
 public:
-    using Self = SingleThreadOptions;
+    using Self = RuntimeOptions;
 
     Self &global_queue_interval(size_t v) {
         global_queue_interval_ = v;
@@ -78,7 +79,7 @@ protected:
     size_t cq_size_ = 1024;
     bool enable_coop_taskrun_ = false;
 
-    friend class SingleThreadRuntime;
+    friend class Runtime;
 };
 
 } // namespace condy

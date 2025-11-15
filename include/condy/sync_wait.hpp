@@ -16,7 +16,7 @@ T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
 }
 
 template <typename T, typename Allocator> T sync_wait(Coro<T, Allocator> coro) {
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
     return sync_wait(runtime, std::move(coro));
 }
 

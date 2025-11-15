@@ -10,7 +10,7 @@
 
 namespace {
 
-auto options = condy::SingleThreadOptions().sq_size(8).cq_size(16);
+auto options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 } // namespace
 
@@ -45,7 +45,7 @@ TEST_CASE("test channel - try push and pop") {
 }
 
 TEST_CASE("test channel - push and pop with coroutines") {
-    condy::SingleThreadRuntime runtime(options);
+    condy::Runtime runtime(options);
     condy::Channel<int> channel(2);
 
     const size_t max_items = 41;
@@ -79,7 +79,7 @@ TEST_CASE("test channel - push and pop with coroutines") {
 }
 
 TEST_CASE("test channel - multi producer and consumer") {
-    condy::SingleThreadRuntime runtime(options);
+    condy::Runtime runtime(options);
     condy::Channel<int> channel(20);
 
     const size_t num_producers = 4;
@@ -130,7 +130,7 @@ TEST_CASE("test channel - multi producer and consumer") {
 TEST_CASE("test channel - wait two channel") {
     using condy::operators::operator&&;
 
-    condy::SingleThreadRuntime runtime(options);
+    condy::Runtime runtime(options);
     condy::Channel<int> ch1(1), ch2(1);
 
     std::atomic_bool finished = false;
@@ -162,7 +162,7 @@ TEST_CASE("test channel - wait two channel") {
 TEST_CASE("test channel - channel cancel pop") {
     using condy::operators::operator||;
 
-    condy::SingleThreadRuntime runtime(options);
+    condy::Runtime runtime(options);
     condy::Channel<int> ch1(1), ch2(1);
 
     std::atomic_bool finished = false;
@@ -209,7 +209,7 @@ TEST_CASE("test channel - move only type") {
 }
 
 TEST_CASE("test channel - cross runtimes") {
-    condy::SingleThreadRuntime runtime1(options), runtime2(options);
+    condy::Runtime runtime1(options), runtime2(options);
 
     condy::Channel<int> channel(2);
 

@@ -11,7 +11,7 @@ TEST_CASE("test sync_wait - with runtime") {
         co_return 42;
     };
 
-    condy::SingleThreadRuntime runtime;
+    condy::Runtime runtime;
 
     auto result = condy::sync_wait(runtime, func());
     REQUIRE(result == 42);
