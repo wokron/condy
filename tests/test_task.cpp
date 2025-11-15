@@ -8,8 +8,7 @@
 
 namespace {
 
-condy::RuntimeOptions options =
-    condy::RuntimeOptions().sq_size(8).cq_size(16);
+condy::RuntimeOptions options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 } // namespace
 
@@ -326,4 +325,46 @@ TEST_CASE("test task - spawn task with custom allocator") {
 
     REQUIRE(finished);
     REQUIRE(allocator.allocated);
+}
+
+TEST_CASE("test task - co_switch") {
+    condy::Runtime runtime1(options), runtime2(options);
+
+    bool finished1 = false, finished2 = false, task_finished = false;
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto id1 = std::this_thread::get_id();
+        co_await condy::co_switch(runtime2);
+        finished1 = true;
+        auto id2 = std::this_thread::get_id();
+        REQUIRE(id1 != id2);
+        co_await condy::co_switch(runtime1);
+        finished2 = true;
+        auto id3 = std::this_thread::get_id();
+        REQUIRE(id2 != id3);
+        REQUIRE(id1 == id3);
+
+        co_await condy::co_switch(runtime2);
+        co_return;
+    };
+
+    auto main = [&]() -> condy::Coro<void> {
+        auto prev_id = std::this_thread::get_id();
+        co_await condy::co_spawn(func());
+        REQUIRE(finished1);
+        REQUIRE(finished2);
+        task_finished = true;
+    };
+
+    std::thread rt2_thread([&]() { runtime2.wait(); });
+
+    condy::co_spawn(runtime1, main()).detach();
+
+    runtime1.done();
+    runtime1.wait();
+
+    runtime2.done();
+    rt2_thread.join();
+
+    REQUIRE(task_finished);
 }

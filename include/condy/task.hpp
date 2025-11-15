@@ -189,6 +189,25 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     return {handle};
 }
 
+namespace detail {
+
+struct [[nodiscard]] SwitchAwaiter {
+    bool await_ready() const noexcept { return false; }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> handle) noexcept {
+        runtime_->schedule(&handle.promise());
+    }
+
+    void await_resume() const noexcept {}
+
+    Runtime *runtime_;
+};
+
+} // namespace detail
+
+inline detail::SwitchAwaiter co_switch(Runtime &runtime) { return {&runtime}; }
+
 namespace pmr {
 
 template <typename T>
