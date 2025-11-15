@@ -8,11 +8,11 @@
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
 #include "condy/utils.hpp"
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include <sys/eventfd.h>
 
 namespace condy {
 
@@ -60,6 +60,12 @@ public:
         global_queue_interval_ = options.global_queue_interval_;
         event_interval_ = options.event_interval_;
         idle_time_us_ = options.idle_time_us_;
+
+        notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        if (notify_fd_ < 0) {
+            throw std::runtime_error("Failed to create eventfd for runtime: " +
+                                     std::string(std::strerror(errno)));
+        }
     }
 
     ~Runtime() { ring_.destroy(); }
@@ -73,7 +79,7 @@ public:
     void done() {
         std::lock_guard<std::mutex> lock(mutex_);
         pending_works_--;
-        cv_.notify_one();
+        eventfd_write(notify_fd_, 1);
     }
 
     void schedule(WorkInvoker *work) {
@@ -85,7 +91,7 @@ public:
         bool need_notify = global_queue_.empty();
         global_queue_.push_back(work);
         if (need_notify) {
-            cv_.notify_one();
+            eventfd_write(notify_fd_, 1);
         }
     }
 
@@ -94,8 +100,6 @@ public:
     void resume_work() { pending_works_--; }
 
     void wait() {
-        // In SingleThreadRuntime, wait is the place to run the event loop.
-
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         io_uring_enable_rings(ring_.ring());
 #endif
@@ -144,24 +148,26 @@ private:
                 return true;
             }
 
-            if (!ring_.has_outstanding_ops()) {
-                if (pending_works_ == 0) {
-                    // 3. If there is no more works, we can
-                    // exit.
-                    return false;
-                }
-                // 4. No outstanding ops in the ring, we can block here safely.
-                cv_.wait(lock, [this]() {
-                    return !global_queue_.empty() || pending_works_ == 0;
-                });
-                return true;
+            if (!ring_.has_outstanding_ops() && pending_works_ == 0) {
+                // 3. No outstanding ops in the ring, and no more works, we can
+                // exit.
+                return false;
             }
+
+            // 4. Clear and register eventfd for notification
+            eventfd_read(notify_fd_, &dummy_);
+            ring_.register_op(
+                [this](io_uring_sqe *sqe) {
+                    io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_),
+                                       0);
+                },
+                Ring::IGNORE_DATA);
+            ring_.submit();
         }
 
-        // 5. Now we have no work for now, but there's some outstanding ops in
-        // the ring. We wait them with a timeout.
-        ring_.reap_completions([this](io_uring_cqe *cqe) { process_cqe_(cqe); },
-                               idle_time_us_);
+        // 5. Block until we get some completions (or notification)
+        ring_.reap_completions(
+            [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
 
         return true;
     }
@@ -212,6 +218,10 @@ private:
     void process_cqe_(io_uring_cqe *cqe) {
         OpFinishHandle *handle =
             static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        if (handle == nullptr) {
+            // This is a dummy cqe for eventfd notification
+            return;
+        }
         handle->set_result(cqe->res, cqe->flags);
 #if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         if (cqe->flags & IORING_CQE_F_MORE) {
@@ -229,7 +239,8 @@ private:
 
 private:
     std::mutex mutex_;
-    std::condition_variable cv_;
+    eventfd_t dummy_;
+    int notify_fd_;
     WorkListQueue global_queue_;
 
     WorkListQueue local_queue_;

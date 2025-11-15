@@ -178,7 +178,9 @@ public:
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
         io_uring_sqe_set_data(sqe, handle);
-        outstanding_ops_count_++;
+        if (handle != IGNORE_DATA) {
+            outstanding_ops_count_++;
+        }
         maybe_submit_();
     }
 
@@ -314,7 +316,7 @@ private:
     // SQ may be accessed from multiple threads, so protect it
     bool initialized_ = false;
     io_uring ring_;
-    std::atomic_size_t outstanding_ops_count_ = 0;
+    size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
 
