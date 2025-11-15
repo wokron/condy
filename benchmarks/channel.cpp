@@ -67,9 +67,7 @@ int main() {
         "buffer size: %zu\n",
         pair_count, message_count, buffer_size);
 
-    condy::MultiThreadRuntime runtime;
-    condy::sync_wait(runtime,
-                     spsc_benchmark(pair_count, message_count, buffer_size));
+    condy::sync_wait(spsc_benchmark(pair_count, message_count, buffer_size));
 
     return 0;
 }

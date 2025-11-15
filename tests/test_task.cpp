@@ -11,8 +11,6 @@ namespace {
 condy::SingleThreadOptions options =
     condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
-condy::MultiThreadOptions options2 =
-    condy::MultiThreadOptions().num_threads(4).sq_size(8).cq_size(16);
 } // namespace
 
 TEST_CASE("test task - local spawn and await") {
@@ -283,35 +281,6 @@ TEST_CASE("test task - detach") {
     };
 
     condy::co_spawn(runtime, main()).detach();
-
-    runtime.done();
-    runtime.wait();
-
-    REQUIRE(finished);
-}
-
-TEST_CASE("test task - spawn in multi thread runtime") {
-    condy::MultiThreadRuntime runtime(options2);
-
-    bool finished = false;
-
-    auto func1 = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
-        finished = true;
-    };
-
-    auto func2 = [&]() -> condy::Coro<void> {
-        auto t = condy::co_spawn(func1());
-        REQUIRE(!t.is_remote_task());
-        REQUIRE(!t.is_single_thread_task());
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
-        co_await std::move(t);
-
-        REQUIRE(finished);
-        co_return;
-    };
-
-    condy::co_spawn(runtime, func2()).detach();
 
     runtime.done();
     runtime.wait();

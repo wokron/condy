@@ -12,9 +12,6 @@ namespace {
 
 auto options = condy::SingleThreadOptions().sq_size(8).cq_size(16);
 
-auto options2 =
-    condy::MultiThreadOptions().sq_size(8).cq_size(16).num_threads(4);
-
 } // namespace
 
 TEST_CASE("test channel - try push and pop") {
@@ -194,84 +191,6 @@ TEST_CASE("test channel - channel cancel pop") {
 
     t.join();
     REQUIRE(finished);
-}
-
-TEST_CASE("test channel - multi thread runtime push and pop") {
-    condy::MultiThreadRuntime runtime(options2);
-
-    condy::Channel<int> channel(2);
-
-    const size_t num_items = 101;
-
-    std::atomic_size_t finished = 0;
-
-    auto producer = [&]() -> condy::Coro<void> {
-        for (int i = 1; i <= num_items; ++i) {
-            co_await channel.push(i);
-        }
-        finished++;
-    };
-
-    auto consumer = [&]() -> condy::Coro<void> {
-        for (int i = 1; i <= num_items; ++i) {
-            int item = co_await channel.pop();
-            REQUIRE(item == i);
-        }
-        finished++;
-    };
-
-    auto t1 = condy::co_spawn(runtime, producer());
-    auto t2 = condy::co_spawn(runtime, consumer());
-
-    t1.wait();
-    t2.wait();
-
-    REQUIRE(finished == 2);
-}
-
-TEST_CASE("test channel - multi thread runtime multi producer and consumer") {
-    condy::MultiThreadRuntime runtime(options2);
-    condy::Channel<int> channel(20);
-
-    std::atomic_size_t finished = 0;
-
-    const size_t num_producers = 5;
-    const size_t num_consumers = 5;
-    const size_t items_per_producer = 25;
-
-    auto producer = [&](size_t id) -> condy::Coro<void> {
-        for (size_t i = 0; i < items_per_producer; ++i) {
-            co_await channel.push(static_cast<int>(id * 100 + i));
-        }
-        finished++;
-    };
-
-    auto consumer = [&]() -> condy::Coro<void> {
-        for (size_t i = 0; i < items_per_producer; ++i) {
-            co_await channel.pop();
-        }
-        finished++;
-    };
-
-    std::vector<condy::Task<void>> producer_tasks;
-    for (size_t i = 0; i < num_producers; ++i) {
-        producer_tasks.push_back(condy::co_spawn(runtime, producer(i)));
-    }
-
-    std::vector<condy::Task<void>> consumer_tasks;
-    for (size_t i = 0; i < num_consumers; ++i) {
-        consumer_tasks.push_back(condy::co_spawn(runtime, consumer()));
-    }
-
-    for (auto &task : producer_tasks) {
-        task.wait();
-    }
-
-    for (auto &task : consumer_tasks) {
-        task.wait();
-    }
-
-    REQUIRE(finished == (num_producers + num_consumers));
 }
 
 TEST_CASE("test channel - move only type") {
