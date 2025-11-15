@@ -37,9 +37,9 @@ public:
 
     T &get_item() { return item_; }
 
-    void set_runtime(IRuntime *runtime) { runtime_ = runtime; }
+    void set_runtime(Runtime *runtime) { runtime_ = runtime; }
 
-    IRuntime *get_runtime() const { return runtime_; }
+    Runtime *get_runtime() const { return runtime_; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -48,7 +48,7 @@ private:
     T item_;
     Invoker *invoker_ = nullptr;
     Channel<T> *channel_ = nullptr;
-    IRuntime *runtime_ = nullptr;
+    Runtime *runtime_ = nullptr;
 };
 
 template <typename T>
@@ -72,9 +72,9 @@ public:
 
     void set_result(T result) { result_ = std::move(result); }
 
-    void set_runtime(IRuntime *runtime) { runtime_ = runtime; }
+    void set_runtime(Runtime *runtime) { runtime_ = runtime; }
 
-    IRuntime *get_runtime() const { return runtime_; }
+    Runtime *get_runtime() const { return runtime_; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -83,7 +83,7 @@ private:
     T result_;
     Invoker *invoker_ = nullptr;
     Channel<T> *channel_ = nullptr;
-    IRuntime *runtime_ = nullptr;
+    Runtime *runtime_ = nullptr;
 };
 
 template <typename T> class ChannelPopFinishHandle;
@@ -242,8 +242,6 @@ private:
         if (runtime == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
             delete handle;
-        } else if (runtime == Context::current().runtime()) {
-            Context::current().schedule_local(handle);
         } else {
             runtime->schedule(handle);
         }
@@ -296,12 +294,13 @@ public:
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
-        Context::current().runtime()->pend_work();
+        auto *runtime = Context::current().runtime();
+        runtime->pend_work();
         finish_handle_.set_channel(&channel_);
-        finish_handle_.set_runtime(Context::current().runtime());
+        finish_handle_.set_runtime(runtime);
         bool ok = channel_.request_push(std::move(item_), &finish_handle_);
         if (ok) {
-            Context::current().schedule_local(&finish_handle_);
+            runtime->schedule(&finish_handle_);
         }
     }
 
@@ -348,13 +347,14 @@ public:
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
-        Context::current().runtime()->pend_work();
+        auto *runtime = Context::current().runtime();
+        runtime->pend_work();
         finish_handle_.set_channel(&channel_);
-        finish_handle_.set_runtime(Context::current().runtime());
+        finish_handle_.set_runtime(runtime);
         auto item = channel_.request_pop(&finish_handle_);
         if (item.has_value()) {
             finish_handle_.set_result(std::move(item.value()));
-            Context::current().schedule_local(&finish_handle_);
+            runtime->schedule(&finish_handle_);
         }
     }
 

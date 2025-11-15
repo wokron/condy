@@ -7,6 +7,28 @@
 
 namespace condy {
 
+class ProvidedBuffers {
+public:
+    ProvidedBuffers(size_t log_num_buffers, size_t buffer_size)
+        : impl_(std::make_shared<detail::ProvidedBuffersImpl>(
+              Context::current().ring()->ring(),
+              Context::current().runtime()->next_bgid(), log_num_buffers,
+              buffer_size)) {}
+
+    ProvidedBuffers(ProvidedBuffers &&) = default;
+
+    ProvidedBuffers(const ProvidedBuffers &) = delete;
+    ProvidedBuffers &operator=(const ProvidedBuffers &) = delete;
+    ProvidedBuffers &operator=(ProvidedBuffers &&) = delete;
+
+public:
+    detail::ProvidedBuffersImplPtr copy_impl() const & { return impl_; }
+    detail::ProvidedBuffersImplPtr copy_impl() && { return std::move(impl_); }
+
+private:
+    detail::ProvidedBuffersImplPtr impl_;
+};
+
 namespace detail {
 
 struct FixedFd {

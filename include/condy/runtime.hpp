@@ -8,7 +8,6 @@
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
 #include "condy/utils.hpp"
-#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -17,25 +16,10 @@
 
 namespace condy {
 
-class IRuntime {
-public:
-    virtual void done() = 0;
-
-    virtual void wait() = 0;
-
-    virtual void schedule(WorkInvoker *work) = 0;
-
-    virtual void pend_work() = 0;
-
-    virtual void resume_work() = 0;
-
-    virtual bool is_single_thread() const = 0;
-};
-
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
-class Runtime : public IRuntime {
+class Runtime {
 public:
     Runtime(const RuntimeOptions &options = {}) {
         io_uring_params params;
@@ -86,13 +70,17 @@ public:
     Runtime &operator=(Runtime &&) = delete;
 
 public:
-    void done() override {
+    void done() {
         std::lock_guard<std::mutex> lock(mutex_);
         pending_works_--;
         cv_.notify_one();
     }
 
-    void schedule(WorkInvoker *work) override {
+    void schedule(WorkInvoker *work) {
+        if (Context::current().runtime() == this) {
+            local_queue_.push_back(work);
+            return;
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         bool need_notify = global_queue_.empty();
         global_queue_.push_back(work);
@@ -101,18 +89,18 @@ public:
         }
     }
 
-    void pend_work() override { pending_works_++; }
+    void pend_work() { pending_works_++; }
 
-    void resume_work() override { pending_works_--; }
+    void resume_work() { pending_works_--; }
 
-    void wait() override {
+    void wait() {
         // In SingleThreadRuntime, wait is the place to run the event loop.
 
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         io_uring_enable_rings(ring_.ring());
 #endif
 
-        Context::current().init(&ring_, this, schedule_local_, next_bgid_func_);
+        Context::current().init(&ring_, this);
         auto d = defer([]() { Context::current().reset(); });
 
         while (true) {
@@ -135,19 +123,9 @@ public:
         }
     }
 
-    bool is_single_thread() const override { return true; }
+    size_t next_bgid() { return next_bgid_++; }
 
 private:
-    static void schedule_local_(IRuntime *runtime, WorkInvoker *work) {
-        auto *self = static_cast<Runtime *>(runtime);
-        self->local_queue_.push_back(work);
-    }
-
-    static size_t next_bgid_func_(IRuntime *runtime) {
-        auto *self = static_cast<Runtime *>(runtime);
-        return self->next_bgid_++;
-    }
-
     bool wait_for_work_() {
         ring_.submit();
         auto reaped = flush_ring_();

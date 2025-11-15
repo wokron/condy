@@ -15,14 +15,11 @@ template <typename T = void, typename Allocator = void> class TaskBase {
 public:
     using PromiseType = typename Coro<T, Allocator>::promise_type;
 
-    TaskBase(std::coroutine_handle<PromiseType> h, bool remote_task,
-             bool single_thread)
-        : handle_(h), remote_task_(remote_task), single_thread_(single_thread) {
-    }
+    TaskBase(std::coroutine_handle<PromiseType> h, bool remote_task)
+        : handle_(h), remote_task_(remote_task) {}
     TaskBase(TaskBase &&other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)),
-          remote_task_(other.remote_task_),
-          single_thread_(other.single_thread_) {}
+          remote_task_(other.remote_task_) {}
 
     TaskBase(const TaskBase &) = delete;
     TaskBase &operator=(const TaskBase &) = delete;
@@ -44,15 +41,12 @@ public:
 
     bool is_remote_task() const noexcept { return remote_task_; }
 
-    bool is_single_thread_task() const noexcept { return single_thread_; }
-
 protected:
     static void wait_inner_(std::coroutine_handle<PromiseType> handle);
 
 protected:
     std::coroutine_handle<PromiseType> handle_;
     bool remote_task_;
-    bool single_thread_;
 };
 
 template <typename T, typename Allocator>
@@ -121,7 +115,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
     TaskAwaiterBase(
         std::coroutine_handle<typename Coro<T, Allocator>::promise_type>
             task_handle,
-        IRuntime *runtime)
+        Runtime *runtime)
         : task_handle_(task_handle), runtime_(runtime) {}
 
     bool await_ready() const noexcept { return false; }
@@ -147,7 +141,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
 
     std::coroutine_handle<typename Coro<T, Allocator>::promise_type>
         task_handle_;
-    IRuntime *runtime_ = nullptr;
+    Runtime *runtime_ = nullptr;
     WorkInvoker *caller_promise_ = nullptr;
 };
 
@@ -196,17 +190,15 @@ inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
     auto handle = coro.release();
     auto &promise = handle.promise();
     promise.set_auto_destroy(false);
-    if (!Context::current().runtime()->is_single_thread()) {
-        promise.set_use_mutex(true);
-    }
+    promise.set_use_mutex(true);
 
-    Context::current().schedule_local(&promise);
-    return {handle, false, Context::current().runtime()->is_single_thread()};
+    Context::current().runtime()->schedule(&promise);
+    return {handle, false};
 }
 
 template <typename T, typename Allocator, typename Runtime>
 inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
-    if (static_cast<IRuntime *>(&runtime) == Context::current().runtime()) {
+    if (static_cast<Runtime *>(&runtime) == Context::current().runtime()) {
         return co_spawn(std::move(coro));
     }
 
@@ -216,7 +208,7 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     promise.set_use_mutex(true);
 
     runtime.schedule(&promise);
-    return {handle, true, runtime.is_single_thread()};
+    return {handle, true};
 }
 
 namespace pmr {
