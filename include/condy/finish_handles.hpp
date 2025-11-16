@@ -93,10 +93,16 @@ public:
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            // No std::move here, since buffers_impl_ may be used multiple times
-            // (multishot)
-            entry =
-                ProvidedBufferEntry(buffers_impl_, static_cast<size_t>(bid));
+            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
+            size_t size = buffers_impl_->buffer_size();
+            detail::ProvidedBuffersImplPtr buffers_impl = nullptr;
+            if (!(this->flags_ & IORING_CQE_F_BUF_MORE)) {
+                // NOTE: No std::move here, since buffers_impl_ may be used
+                // multiple times (multishot)
+                buffers_impl = buffers_impl_; // The entire buffer is consumed
+                // TODO: Add test case for this
+            }
+            entry = ProvidedBufferEntry(buffers_impl, data, size);
         }
         return std::make_pair(res, std::move(entry));
     }

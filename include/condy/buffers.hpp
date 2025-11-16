@@ -18,9 +18,9 @@ namespace detail {
 class ProvidedBuffersImpl {
 public:
     ProvidedBuffersImpl(io_uring *ring, uint16_t bgid, size_t log_num_buffers,
-                        size_t buffer_size)
+                        size_t buffer_size, unsigned int flags)
         : ring_(ring), num_buffers_(1 << log_num_buffers), bgid_(bgid),
-          buffer_size_(buffer_size) {
+          buffer_size_(buffer_size), buf_ring_mask_(num_buffers_ - 1) {
         assert(log_num_buffers <= 15);
         data_size_ = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
         data_ = mmap(NULL, data_size_, PROT_READ | PROT_WRITE,
@@ -36,8 +36,7 @@ public:
             .ring_entries = static_cast<unsigned>(num_buffers_),
             .bgid = bgid_,
         };
-        // TODO: Support IOU_PBUF_RING_INC
-        int r = io_uring_register_buf_ring(ring_, &reg, 0);
+        int r = io_uring_register_buf_ring(ring_, &reg, flags);
         if (r != 0) {
             munmap(data_, data_size_);
             throw std::runtime_error("io_uring_register_buf_ring failed: " +
@@ -48,7 +47,7 @@ public:
         for (size_t i = 0; i < num_buffers_; i++) {
             char *ptr = buffers_base_ + i * buffer_size_;
             io_uring_buf_ring_add(buf_ring_, ptr, buffer_size_, i,
-                                  io_uring_buf_ring_mask(num_buffers_), i);
+                                  buf_ring_mask_, i);
         }
         io_uring_buf_ring_advance(buf_ring_, num_buffers_);
     }
@@ -67,14 +66,24 @@ public:
 
     void *get_buffer(size_t bid) const {
         assert(bid < num_buffers_);
-        return buffers_base_ + bid * buffer_size_;
+        auto *addr = reinterpret_cast<void *>(buf_ring_->bufs[bid].addr);
+        return addr;
     }
 
-    void add_buffer(size_t bid) {
-        void *ptr = get_buffer(bid);
-        io_uring_buf_ring_add(buf_ring_, ptr, buffer_size_, bid,
-                              io_uring_buf_ring_mask(num_buffers_), 0);
+    void add_buffer(void *ptr) {
+        assert(is_valid_buffer_(ptr));
+        io_uring_buf_ring_add(buf_ring_, ptr, buffer_size_, next_bid_,
+                              buf_ring_mask_, 0);
         io_uring_buf_ring_advance(buf_ring_, 1);
+        next_bid_ = (next_bid_ + 1) & buf_ring_mask_;
+    }
+
+private:
+    bool is_valid_buffer_(void *ptr) const {
+        char *cptr = static_cast<char *>(ptr);
+        auto offset = cptr - buffers_base_;
+        return offset % buffer_size_ == 0 &&
+               offset / buffer_size_ < num_buffers_;
     }
 
 private:
@@ -82,6 +91,9 @@ private:
     size_t num_buffers_;
     size_t buffer_size_;
     uint16_t bgid_;
+
+    size_t next_bid_ = 0;
+    size_t buf_ring_mask_;
 
     io_uring_buf_ring *buf_ring_;
     char *buffers_base_;
@@ -97,24 +109,28 @@ using ProvidedBuffersImplPtr = std::shared_ptr<ProvidedBuffersImpl>;
 class ProvidedBufferEntry {
 public:
     ProvidedBufferEntry() = default;
-    ProvidedBufferEntry(detail::ProvidedBuffersImplPtr impl, size_t bid)
-        : impl_(std::move(impl)), bid_(bid) {}
+    ProvidedBufferEntry(detail::ProvidedBuffersImplPtr impl, void *data,
+                        size_t size)
+        : impl_(std::move(impl)), data_(data), size_(size) {}
     ProvidedBufferEntry(ProvidedBufferEntry &&other)
-        : impl_(std::move(other.impl_)), bid_(std::exchange(other.bid_, 0)) {}
+        : impl_(std::move(other.impl_)),
+          data_(std::exchange(other.data_, nullptr)),
+          size_(std::exchange(other.size_, 0)) {}
     ProvidedBufferEntry &operator=(ProvidedBufferEntry &&other) {
         if (this != &other) {
             if (impl_ != nullptr) {
-                impl_->add_buffer(bid_);
+                impl_->add_buffer(data_);
             }
             impl_ = std::move(other.impl_);
-            bid_ = std::exchange(other.bid_, 0);
+            data_ = std::exchange(other.data_, nullptr);
+            size_ = std::exchange(other.size_, 0);
         }
         return *this;
     }
 
     ~ProvidedBufferEntry() {
         if (impl_ != nullptr) {
-            impl_->add_buffer(bid_);
+            impl_->add_buffer(data_);
         }
     }
 
@@ -122,18 +138,23 @@ public:
     ProvidedBufferEntry &operator=(const ProvidedBufferEntry &) = delete;
 
 public:
-    void *data() const { return impl_->get_buffer(bid_); }
+    void *data() const { return data_; }
 
-    size_t size() const { return impl_->buffer_size(); }
+    size_t size() const { return size_; }
 
     void reset() {
-        impl_->add_buffer(bid_);
-        impl_.reset();
+        if (impl_ != nullptr) {
+            impl_->add_buffer(data_);
+            impl_.reset();
+        }
     }
+
+    bool owns_buffer() const { return impl_ != nullptr; }
 
 private:
     detail::ProvidedBuffersImplPtr impl_ = nullptr;
-    size_t bid_ = 0;
+    void *data_ = nullptr;
+    size_t size_ = 0;
 };
 
 // Just buffer

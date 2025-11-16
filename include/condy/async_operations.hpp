@@ -9,11 +9,12 @@ namespace condy {
 
 class ProvidedBuffers {
 public:
-    ProvidedBuffers(size_t log_num_buffers, size_t buffer_size)
+    ProvidedBuffers(size_t log_num_buffers, size_t buffer_size,
+                    unsigned int flags = 0)
         : impl_(std::make_shared<detail::ProvidedBuffersImpl>(
               Context::current().ring()->ring(),
               Context::current().runtime()->next_bgid(), log_num_buffers,
-              buffer_size)) {}
+              buffer_size, flags)) {}
 
     ProvidedBuffers(ProvidedBuffers &&) = default;
 

@@ -218,7 +218,7 @@ TEST_CASE("test op_awaiter - select buffer op") {
 
     condy::detail::ProvidedBuffersImplPtr buffers_impl =
         std::make_shared<condy::detail::ProvidedBuffersImpl>(ring.ring(), 0, 4,
-                                                             32);
+                                                             32, 0);
 
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
