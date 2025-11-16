@@ -33,8 +33,7 @@ int main() {
     std::pmr::monotonic_buffer_resource pool;
     std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
 
-    condy::SingleThreadRuntime runtime;
-    condy::sync_wait(runtime, spawn_tasks(allocator, task_count));
+    condy::sync_wait(spawn_tasks(allocator, task_count));
 
     return 0;
 }
