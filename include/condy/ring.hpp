@@ -178,7 +178,7 @@ public:
         io_uring_sqe *sqe = get_sqe_();
         std::move(prep_func)(sqe);
         io_uring_sqe_set_data(sqe, handle);
-        if (handle != IGNORE_DATA) {
+        if (handle != IGNORE_DATA && handle != NOTIFY_DATA) {
             outstanding_ops_count_++;
         }
         maybe_submit_();
@@ -270,7 +270,7 @@ private:
 #else
         bool unfinished = false;
 #endif
-        if (!unfinished) {
+        if (!unfinished && data != NOTIFY_DATA) {
             outstanding_ops_count_--;
         }
         process_func(cqe);
@@ -311,6 +311,7 @@ private:
 
 public:
     inline static void *const IGNORE_DATA = reinterpret_cast<void *>(0x1);
+    inline static void *const NOTIFY_DATA = reinterpret_cast<void *>(0x2);
 
 private:
     // SQ may be accessed from multiple threads, so protect it

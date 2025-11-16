@@ -9,18 +9,8 @@ struct RuntimeOptions {
 public:
     using Self = RuntimeOptions;
 
-    Self &global_queue_interval(size_t v) {
-        global_queue_interval_ = v;
-        return *this;
-    }
-
     Self &event_interval(size_t v) {
         event_interval_ = v;
-        return *this;
-    }
-
-    Self &idle_time_us(size_t v) {
-        idle_time_us_ = v;
         return *this;
     }
 
@@ -68,9 +58,7 @@ public:
     }
 
 protected:
-    size_t global_queue_interval_ = 31;
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000;
     size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
     size_t sqpoll_idle_time_ms_ = 1000;

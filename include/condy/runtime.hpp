@@ -57,9 +57,7 @@ public:
         ring_.init(ring_entries, &params);
         ring_.set_submit_batch_size(options.submit_batch_size_);
 
-        global_queue_interval_ = options.global_queue_interval_;
         event_interval_ = options.event_interval_;
-        idle_time_us_ = options.idle_time_us_;
 
         notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
         if (notify_fd_ < 0) {
@@ -68,7 +66,10 @@ public:
         }
     }
 
-    ~Runtime() { ring_.destroy(); }
+    ~Runtime() {
+        close(notify_fd_);
+        ring_.destroy();
+    }
 
     Runtime(const Runtime &) = delete;
     Runtime &operator=(const Runtime &) = delete;
@@ -77,22 +78,33 @@ public:
 
 public:
     void done() {
-        std::lock_guard<std::mutex> lock(mutex_);
         pending_works_--;
         eventfd_write(notify_fd_, 1);
     }
 
     void schedule(WorkInvoker *work) {
-        if (Context::current().runtime() == this) {
+        auto *runtime = Context::current().runtime();
+        if (runtime == this) {
             local_queue_.push_back(work);
             return;
         }
-        std::lock_guard<std::mutex> lock(mutex_);
-        bool need_notify = global_queue_.empty();
-        global_queue_.push_back(work);
-        if (need_notify) {
-            eventfd_write(notify_fd_, 1);
+
+        if (runtime != nullptr) {
+            runtime->ring_.register_op(
+                [work, this](io_uring_sqe *sqe) {
+                    __tsan_release(work);
+                    io_uring_prep_msg_ring_cqe_flags(
+                        sqe, this->ring_.ring()->ring_fd, 0,
+                        reinterpret_cast<uint64_t>(work), 0, IORING_CQE_F_MORE);
+                    sqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
+                },
+                Ring::IGNORE_DATA);
+            return;
         }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        global_queue_.push_back(work);
+        eventfd_write(notify_fd_, 1);
     }
 
     void pend_work() { pending_works_++; }
@@ -107,6 +119,11 @@ public:
         Context::current().init(&ring_, this);
         auto d = defer([]() { Context::current().reset(); });
 
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            flush_global_queue_();
+        }
+
         while (true) {
             tick_count_++;
 
@@ -114,14 +131,12 @@ public:
                 flush_ring_();
             }
 
-            auto *work = next_();
-            if (work) {
+            if (auto *work = local_queue_.pop_front()) {
                 (*work)();
                 continue;
             }
 
-            bool ok = wait_for_work_();
-            if (!ok) {
+            if (!wait_for_work_()) {
                 break;
             }
         }
@@ -130,6 +145,16 @@ public:
     size_t next_bgid() { return next_bgid_++; }
 
 private:
+    void flush_global_queue_() {
+        local_queue_.push_back(std::move(global_queue_));
+        eventfd_read(notify_fd_, &dummy_);
+        ring_.register_op(
+            [this](io_uring_sqe *sqe) {
+                io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
+            },
+            Ring::NOTIFY_DATA);
+    }
+
     bool wait_for_work_() {
         ring_.submit();
         auto reaped = flush_ring_();
@@ -138,31 +163,10 @@ private:
             return true;
         }
 
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            bool flushed = !global_queue_.empty();
-            local_queue_.push_back(std::move(global_queue_));
-            if (flushed) {
-                // 2. If we got some new work from the global queue, return
-                // immediately.
-                return true;
-            }
-
-            if (!ring_.has_outstanding_ops() && pending_works_ == 0) {
-                // 3. No outstanding ops in the ring, and no more works, we can
-                // exit.
-                return false;
-            }
-
-            // 4. Clear and register eventfd for notification
-            eventfd_read(notify_fd_, &dummy_);
-            ring_.register_op(
-                [this](io_uring_sqe *sqe) {
-                    io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_),
-                                       0);
-                },
-                Ring::IGNORE_DATA);
-            ring_.submit();
+        if (!ring_.has_outstanding_ops() && pending_works_ == 0) {
+            // 3. No outstanding ops in the ring, and no more works, we can
+            // exit.
+            return false;
         }
 
         // 5. Block until we get some completions (or notification)
@@ -172,56 +176,27 @@ private:
         return true;
     }
 
-    WorkInvoker *next_() {
-        WorkInvoker *work = nullptr;
-        if (tick_count_ % global_queue_interval_ == 0) {
-            work = next_global_();
-            if (!work) {
-                work = next_local_();
-            }
-        } else {
-            work = next_local_();
-            if (!work) {
-                work = next_global_flush_();
-            }
-        }
-        return work;
-    }
-
-    WorkInvoker *next_local_() {
-        if (local_queue_.empty()) {
-            return nullptr;
-        }
-        return local_queue_.pop_front();
-    }
-
-    WorkInvoker *next_global_() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return global_queue_.pop_front();
-    }
-
-    WorkInvoker *next_global_flush_() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        WorkInvoker *work = global_queue_.pop_front();
-        if (work == nullptr) {
-            return nullptr;
-        }
-        local_queue_.push_back(std::move(global_queue_));
-        return work;
-    }
-
     size_t flush_ring_() {
         return ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
     }
 
     void process_cqe_(io_uring_cqe *cqe) {
-        OpFinishHandle *handle =
-            static_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        if (handle == nullptr) {
-            // This is a dummy cqe for eventfd notification
+        auto *data = io_uring_cqe_get_data(cqe);
+        __tsan_acquire(data);
+        if (data == Ring::NOTIFY_DATA) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            flush_global_queue_();
             return;
         }
+
+        auto *work = static_cast<WorkInvoker *>(data);
+        if (!work->is_operation()) {
+            local_queue_.push_back(work);
+            return;
+        }
+
+        auto *handle = static_cast<OpFinishHandle *>(work);
         handle->set_result(cqe->res, cqe->flags);
 #if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         if (cqe->flags & IORING_CQE_F_MORE) {
@@ -238,26 +213,21 @@ private:
     }
 
 private:
+    // Global state
     std::mutex mutex_;
     eventfd_t dummy_;
     int notify_fd_;
     WorkListQueue global_queue_;
+    std::atomic_size_t pending_works_ = 1;
 
+    // Local state
     WorkListQueue local_queue_;
-
     Ring ring_;
-
-    // Initialized to 1 to prevent premature exit
-    size_t pending_works_ = 1;
-
     size_t tick_count_ = 0;
-
     uint16_t next_bgid_ = 0;
 
-    // Configuration parameters
-    size_t global_queue_interval_ = 31;
+    // Configurable parameters
     size_t event_interval_ = 61;
-    size_t idle_time_us_ = 1000;
 };
 
 } // namespace condy

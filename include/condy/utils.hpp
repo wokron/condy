@@ -7,6 +7,13 @@
 #include <iostream>
 #include <utility>
 
+#if defined(__has_feature) && __has_feature(thread_sanitizer)
+#include <sanitizer/tsan_interface.h>
+#else
+#define __tsan_acquire(addr) (void)0
+#define __tsan_release(addr) (void)0
+#endif
+
 namespace condy {
 
 class Defer {

@@ -3,9 +3,7 @@
 #include "condy/buffers.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
-#include "condy/utils.hpp"
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
@@ -22,7 +20,7 @@ public:
     using ReturnType = int;
     using MultiShotFunc = void (*)(void *);
 
-    OpFinishHandle() = default;
+    OpFinishHandle() { is_operation_ = true; }
 
     void cancel() {
         assert(ring_ != nullptr);
