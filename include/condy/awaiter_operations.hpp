@@ -50,7 +50,7 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
 }
 
 template <typename Func, typename... Args>
-auto make_select_buffer_op_awaiter(detail::ProvidedBuffersImplPtr buffers_impl,
+auto make_select_buffer_op_awaiter(detail::ProvidedBufferPoolImplPtr buffers_impl,
                                    Func &&func, Args &&...args) {
     int bgid = buffers_impl->bgid();
     auto op = SelectBufferOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
@@ -63,7 +63,7 @@ auto make_select_buffer_op_awaiter(detail::ProvidedBuffersImplPtr buffers_impl,
 
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_select_buffer_op_awaiter(
-    MultiShotFunc &&multishot_func, detail::ProvidedBuffersImplPtr buffers_impl,
+    MultiShotFunc &&multishot_func, detail::ProvidedBufferPoolImplPtr buffers_impl,
     Func &&func, Args &&...args) {
     int bgid = buffers_impl->bgid();
     auto op = MultiShotSelectBufferOpAwaiter<

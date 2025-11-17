@@ -15,10 +15,11 @@ namespace condy {
 
 namespace detail {
 
-class ProvidedBuffersImpl {
+class ProvidedBufferPoolImpl {
 public:
-    ProvidedBuffersImpl(io_uring *ring, uint16_t bgid, size_t log_num_buffers,
-                        size_t buffer_size, unsigned int flags)
+    ProvidedBufferPoolImpl(io_uring *ring, uint16_t bgid,
+                           size_t log_num_buffers, size_t buffer_size,
+                           unsigned int flags)
         : ring_(ring), num_buffers_(1 << log_num_buffers), bgid_(bgid),
           buffer_size_(buffer_size), buf_ring_mask_(num_buffers_ - 1) {
         assert(log_num_buffers <= 15);
@@ -52,12 +53,12 @@ public:
         io_uring_buf_ring_advance(buf_ring_, num_buffers_);
     }
 
-    ProvidedBuffersImpl(const ProvidedBuffersImpl &) = delete;
-    ProvidedBuffersImpl &operator=(const ProvidedBuffersImpl &) = delete;
-    ProvidedBuffersImpl(ProvidedBuffersImpl &&) = delete;
-    ProvidedBuffersImpl &operator=(ProvidedBuffersImpl &&) = delete;
+    ProvidedBufferPoolImpl(const ProvidedBufferPoolImpl &) = delete;
+    ProvidedBufferPoolImpl &operator=(const ProvidedBufferPoolImpl &) = delete;
+    ProvidedBufferPoolImpl(ProvidedBufferPoolImpl &&) = delete;
+    ProvidedBufferPoolImpl &operator=(ProvidedBufferPoolImpl &&) = delete;
 
-    ~ProvidedBuffersImpl() { munmap(data_, data_size_); }
+    ~ProvidedBufferPoolImpl() { munmap(data_, data_size_); }
 
 public:
     uint16_t bgid() const { return bgid_; }
@@ -102,21 +103,21 @@ private:
     size_t data_size_;
 };
 
-using ProvidedBuffersImplPtr = std::shared_ptr<ProvidedBuffersImpl>;
+using ProvidedBufferPoolImplPtr = std::shared_ptr<ProvidedBufferPoolImpl>;
 
 } // namespace detail
 
-class ProvidedBufferEntry {
+class ProvidedBuffer {
 public:
-    ProvidedBufferEntry() = default;
-    ProvidedBufferEntry(detail::ProvidedBuffersImplPtr impl, void *data,
-                        size_t size)
+    ProvidedBuffer() = default;
+    ProvidedBuffer(detail::ProvidedBufferPoolImplPtr impl, void *data,
+                   size_t size)
         : impl_(std::move(impl)), data_(data), size_(size) {}
-    ProvidedBufferEntry(ProvidedBufferEntry &&other)
+    ProvidedBuffer(ProvidedBuffer &&other)
         : impl_(std::move(other.impl_)),
           data_(std::exchange(other.data_, nullptr)),
           size_(std::exchange(other.size_, 0)) {}
-    ProvidedBufferEntry &operator=(ProvidedBufferEntry &&other) {
+    ProvidedBuffer &operator=(ProvidedBuffer &&other) {
         if (this != &other) {
             if (impl_ != nullptr) {
                 impl_->add_buffer(data_);
@@ -128,14 +129,14 @@ public:
         return *this;
     }
 
-    ~ProvidedBufferEntry() {
+    ~ProvidedBuffer() {
         if (impl_ != nullptr) {
             impl_->add_buffer(data_);
         }
     }
 
-    ProvidedBufferEntry(const ProvidedBufferEntry &) = delete;
-    ProvidedBufferEntry &operator=(const ProvidedBufferEntry &) = delete;
+    ProvidedBuffer(const ProvidedBuffer &) = delete;
+    ProvidedBuffer &operator=(const ProvidedBuffer &) = delete;
 
 public:
     void *data() const { return data_; }
@@ -152,7 +153,7 @@ public:
     bool owns_buffer() const { return impl_ != nullptr; }
 
 private:
-    detail::ProvidedBuffersImplPtr impl_ = nullptr;
+    detail::ProvidedBufferPoolImplPtr impl_ = nullptr;
     void *data_ = nullptr;
     size_t size_ = 0;
 };

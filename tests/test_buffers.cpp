@@ -9,7 +9,7 @@ TEST_CASE("test buffers - ProvidedBuffersImpl construct") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    condy::detail::ProvidedBuffersImpl impl(ring.ring(), 0, 2, 32, 0);
+    condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
 }
 
 TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
@@ -17,7 +17,7 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    condy::detail::ProvidedBuffersImpl impl(ring.ring(), 0, 2, 32, 0);
+    condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
 
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);

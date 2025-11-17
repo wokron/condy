@@ -132,7 +132,7 @@ class [[nodiscard]] SelectBufferOpAwaiter
     : public OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...> {
 public:
     using Base = OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...>;
-    SelectBufferOpAwaiter(detail::ProvidedBuffersImplPtr buffers_impl,
+    SelectBufferOpAwaiter(detail::ProvidedBufferPoolImplPtr buffers_impl,
                           Func func, Args... args)
         : Base(SelectBufferOpFinishHandle(std::move(buffers_impl)), func,
                args...) {}
@@ -147,7 +147,7 @@ public:
         OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>, Func,
                       Args...>;
     MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
-                                   detail::ProvidedBuffersImplPtr buffers_impl,
+                                   detail::ProvidedBufferPoolImplPtr buffers_impl,
                                    Func func, Args... args)
         : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc>(
                    std::move(multishot_func), std::move(buffers_impl)),

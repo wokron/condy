@@ -257,7 +257,7 @@ TEST_CASE("test async_operations - provided buffers read") {
         --unfinished;
     };
     auto reader = [&]() -> condy::Coro<void> {
-        condy::ProvidedBuffers provided_buffers(2, 32);
+        condy::ProvidedBufferPool provided_buffers(2, 32);
         auto [bytes_read, buf] = co_await condy::async_read(
             pipe_fds[0], std::move(provided_buffers), 0);
         REQUIRE(bytes_read == sizeof(msg));
@@ -297,7 +297,7 @@ TEST_CASE("test async_operations - multishot provided buffers read") {
     };
 
     auto multishot_reader =
-        [&](condy::Channel<std::pair<int, condy::ProvidedBufferEntry>> &ch)
+        [&](condy::Channel<std::pair<int, condy::ProvidedBuffer>> &ch)
         -> condy::Coro<void> {
         int count = 0;
         for (int i = 0; i < times; i++) {
@@ -312,9 +312,9 @@ TEST_CASE("test async_operations - multishot provided buffers read") {
     };
 
     auto reader = [&]() -> condy::Coro<void> {
-        condy::Channel<std::pair<int, condy::ProvidedBufferEntry>> ch(times);
+        condy::Channel<std::pair<int, condy::ProvidedBuffer>> ch(times);
         condy::co_spawn(multishot_reader(ch)).detach();
-        condy::ProvidedBuffers provided_buffers(times, 16);
+        condy::ProvidedBufferPool provided_buffers(times, 16);
         auto [n, buf] = co_await condy::async_read_multishot(
             pipe_fds[0], provided_buffers, 0, condy::will_push(ch));
         REQUIRE(n == 0);

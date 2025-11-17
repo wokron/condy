@@ -216,8 +216,8 @@ TEST_CASE("test op_awaiter - select buffer op") {
     auto &context = condy::Context::current();
     context.init(&ring);
 
-    condy::detail::ProvidedBuffersImplPtr buffers_impl =
-        std::make_shared<condy::detail::ProvidedBuffersImpl>(ring.ring(), 0, 4,
+    condy::detail::ProvidedBufferPoolImplPtr buffers_impl =
+        std::make_shared<condy::detail::ProvidedBufferPoolImpl>(ring.ring(), 0, 4,
                                                              32, 0);
 
     int pipefd[2];

@@ -79,31 +79,31 @@ using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
 
 template <typename HandleBase> class SelectBufferMixin : public HandleBase {
 public:
-    using ReturnType = std::pair<int, ProvidedBufferEntry>;
+    using ReturnType = std::pair<int, ProvidedBuffer>;
 
     template <typename... Args>
-    SelectBufferMixin(detail::ProvidedBuffersImplPtr buffers_impl,
+    SelectBufferMixin(detail::ProvidedBufferPoolImplPtr buffers_impl,
                       Args &&...args)
         : HandleBase(std::forward<Args>(args)...),
           buffers_impl_(std::move(buffers_impl)) {}
 
     ReturnType extract_result() {
         int res = this->res_;
-        ProvidedBufferEntry entry;
+        ProvidedBuffer entry;
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
             void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
             size_t size = buffers_impl_->buffer_size();
-            detail::ProvidedBuffersImplPtr buffers_impl = nullptr;
+            detail::ProvidedBufferPoolImplPtr buffers_impl = nullptr;
             buffers_impl = buffers_impl_;
-            entry = ProvidedBufferEntry(buffers_impl, data, size);
+            entry = ProvidedBuffer(buffers_impl, data, size);
         }
         return std::make_pair(res, std::move(entry));
     }
 
 private:
-    detail::ProvidedBuffersImplPtr buffers_impl_;
+    detail::ProvidedBufferPoolImplPtr buffers_impl_;
 };
 
 using SelectBufferOpFinishHandle = SelectBufferMixin<OpFinishHandle>;
