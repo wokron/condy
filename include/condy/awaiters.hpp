@@ -74,7 +74,7 @@ public:
                     args_);
                 io_uring_sqe_set_flags(sqe, flags | this->flags_);
                 if (bgid_ >= 0) {
-                    io_uring_sqe_set_buf_group(sqe, bgid_);
+                    sqe->buf_group = bgid_;
                 }
             },
             &finish_handle_.get());
@@ -232,8 +232,7 @@ protected:
 
 template <bool Cancel, typename Awaiter>
 using RangedParallelAwaiterWrapper = RangedParallelAwaiter<
-    RangedParallelFinishHandle<Cancel, typename Awaiter::HandleType>,
-    Awaiter>;
+    RangedParallelFinishHandle<Cancel, typename Awaiter::HandleType>, Awaiter>;
 
 template <typename Awaiter>
 using RangedWaitAllAwaiter = RangedParallelAwaiter<
@@ -341,8 +340,7 @@ protected:
 
 template <bool Cancel, typename... Awaiter>
 using ParallelAwaiterWrapper = ParallelAwaiter<
-    ParallelFinishHandle<Cancel, typename Awaiter::HandleType...>,
-    Awaiter...>;
+    ParallelFinishHandle<Cancel, typename Awaiter::HandleType...>, Awaiter...>;
 
 template <typename... Awaiter>
 using WaitAllAwaiter =
