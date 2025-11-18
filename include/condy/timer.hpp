@@ -24,6 +24,11 @@ public:
                               flags);
     }
 
+    auto async_wait_linked(struct __kernel_timespec *ts, unsigned flags) {
+        return TimerOpAwaiter(&finish_handle_, io_uring_prep_link_timeout, ts,
+                              flags);
+    }
+
     auto async_update(struct __kernel_timespec *ts, unsigned flags) {
         return make_op_awaiter(io_uring_prep_timeout_update, ts,
                                reinterpret_cast<__u64>(&finish_handle_), flags);

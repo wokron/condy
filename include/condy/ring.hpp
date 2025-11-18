@@ -41,6 +41,10 @@ public:
         }
     }
 
+    auto async_register_fd(int *fds, unsigned nr_fds, int offset);
+
+    auto async_get_raw_fd(int fixed_fd, unsigned int flags);
+
     void unregister_fd(int fixed_fd) {
         check_initialized_();
         int invalid_fd = -1;
