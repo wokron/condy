@@ -111,10 +111,16 @@ public:
 
     void resume_work() { pending_works_--; }
 
+    bool is_running() const { return running_.load(); }
+
+    void block_until_running() { running_.wait(false); }
+
     void wait() {
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         io_uring_enable_rings(ring_.ring());
 #endif
+        running_.store(true);
+        running_.notify_all();
 
         Context::current().init(&ring_, this);
         auto d = defer([]() { Context::current().reset(); });
@@ -213,6 +219,7 @@ private:
     }
 
 private:
+    std::atomic_bool running_ = false;
     // Global state
     std::mutex mutex_;
     eventfd_t dummy_;

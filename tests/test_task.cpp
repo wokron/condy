@@ -55,6 +55,8 @@ TEST_CASE("test task - remote spawn and await") {
 
     std::thread rt2_thread([&]() { runtime2.wait(); });
 
+    runtime2.block_until_running();
+
     runtime1.schedule(&h.promise());
     runtime1.done();
     runtime1.wait();
@@ -94,6 +96,8 @@ TEST_CASE("test task - remote spawn and wait 2") {
     };
 
     std::thread rt_thread([&]() { runtime.wait(); });
+
+    runtime.block_until_running();
 
     auto task = condy::co_spawn(runtime, func());
     task.wait();
@@ -184,6 +188,8 @@ TEST_CASE("test task - return value with wait") {
 
     std::thread rt_thread([&]() { runtime.wait(); });
 
+    runtime.block_until_running();
+
     auto task = condy::co_spawn(runtime, func());
     int r = task.wait();
     REQUIRE(r == 42);
@@ -207,6 +213,8 @@ TEST_CASE("test task - exception propagation") {
     };
 
     std::thread rt_thread([&]() { runtime.wait(); });
+
+    runtime.block_until_running();
 
     auto task = condy::co_spawn(runtime, main());
     REQUIRE_THROWS_AS(task.wait(), std::runtime_error);
@@ -246,6 +254,8 @@ TEST_CASE("test task - run in different thread") {
     };
 
     std::thread rt2_thread([&]() { runtime2.wait(); });
+
+    runtime2.block_until_running();
 
     condy::co_spawn(runtime1, main()).detach();
 
@@ -357,6 +367,8 @@ TEST_CASE("test task - co_switch") {
     };
 
     std::thread rt2_thread([&]() { runtime2.wait(); });
+
+    runtime2.block_until_running();
 
     condy::co_spawn(runtime1, main()).detach();
 

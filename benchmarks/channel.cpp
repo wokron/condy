@@ -74,6 +74,8 @@ int main() {
                          launch_producers(channels, num_pairs, num_messages));
     });
 
+    runtime1.block_until_running();
+
     condy::sync_wait(runtime2,
                      launch_consumers(channels, num_pairs, num_messages));
 
