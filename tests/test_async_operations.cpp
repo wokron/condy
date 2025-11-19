@@ -172,24 +172,24 @@ TEST_CASE("test async_operations - accept direct") {
         struct sockaddr_in addr{};
         socklen_t addrlen = sizeof(addr);
         int fd1 = co_await condy::async_accept_direct(
-            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
         REQUIRE(fd1 >= 0);
         REQUIRE(fd1 < 2);
 
         int fd2 = co_await condy::async_accept_direct(
-            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
         REQUIRE(fd2 >= 0);
         REQUIRE(fd2 < 2);
 
         int fd3 = co_await condy::async_accept_direct(
-            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
         REQUIRE(fd3 < 0); // Should fail, no more fixed fds available
 
         int r = co_await condy::async_close(condy::fixed(fd1));
         REQUIRE(r == 0);
 
         int fd4 = co_await condy::async_accept_direct(
-            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
         REQUIRE(fd4 >= 0); // Should succeed now
         REQUIRE(fd4 < 2);
 

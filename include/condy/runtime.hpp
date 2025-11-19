@@ -36,10 +36,8 @@ public:
         std::memset(&params, 0, sizeof(params));
 
         params.flags |= IORING_SETUP_CLAMP;
-#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         params.flags |= IORING_SETUP_SINGLE_ISSUER;
         params.flags |= IORING_SETUP_R_DISABLED;
-#endif
 
         size_t ring_entries = options.sq_size_;
         if (options.cq_size_ != ring_entries * 2) {
@@ -52,17 +50,13 @@ public:
             params.sq_thread_idle = options.sqpoll_idle_time_ms_;
         }
 
-#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         if (options.enable_defer_taskrun_) {
             params.flags |= IORING_SETUP_DEFER_TASKRUN;
         }
-#endif
 
-#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
         if (options.enable_coop_taskrun_) {
             params.flags |= IORING_SETUP_COOP_TASKRUN;
         }
-#endif
 
         ring_.init(ring_entries, &params);
         ring_.set_submit_batch_size(options.submit_batch_size_);
@@ -99,6 +93,7 @@ public:
             return;
         }
 
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
         if (runtime != nullptr) {
             runtime->ring_.register_op(
                 [work, this](io_uring_sqe *sqe) {
@@ -111,6 +106,7 @@ public:
                 Ring::IGNORE_DATA);
             return;
         }
+#endif
 
         std::lock_guard<std::mutex> lock(mutex_);
         global_queue_.push_back(work);
@@ -126,9 +122,7 @@ public:
     void block_until_running() { running_.wait(false); }
 
     void run() {
-#if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         io_uring_enable_rings(ring_.ring());
-#endif
         running_.store(true);
         running_.notify_all();
 
@@ -214,12 +208,10 @@ private:
 
         auto *handle = static_cast<OpFinishHandle *>(work);
         handle->set_result(cqe->res, cqe->flags);
-#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         if (cqe->flags & IORING_CQE_F_MORE) {
             handle->multishot();
             return;
         }
-#endif
         if (cqe->flags & IORING_CQE_F_NOTIF) {
             // Notify cqe, no need to schedule back to local queue
             (*handle)();

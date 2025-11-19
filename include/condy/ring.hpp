@@ -269,11 +269,7 @@ private:
             io_uring_cqe_seen(&ring_, cqe);
             return false;
         }
-#if !IO_URING_CHECK_VERSION(2, 1) // >= 2.1
         bool unfinished = cqe->flags & IORING_CQE_F_MORE;
-#else
-        bool unfinished = false;
-#endif
         if (!unfinished && data != NOTIFY_DATA) {
             outstanding_ops_count_--;
         }
