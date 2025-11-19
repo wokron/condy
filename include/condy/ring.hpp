@@ -1,7 +1,6 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
-#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>

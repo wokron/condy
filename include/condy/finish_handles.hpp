@@ -6,7 +6,6 @@
 #include <array>
 #include <cstddef>
 #include <limits>
-#include <stdexcept>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -372,8 +371,6 @@ public:
     }
 
 private:
-// TODO: investigate why clang optimization breaks this function
-#pragma clang optimize off
     template <size_t Idx = 0>
     static std::variant<typename Handles::ReturnType...>
     tuple_at_(std::tuple<typename Handles::ReturnType...> results, size_t idx) {
@@ -386,10 +383,13 @@ private:
                 return tuple_at_<Idx + 1>(std::move(results), idx);
             }
         } else {
-            throw std::out_of_range("Index out of range in get_from_tuple_at_");
+            // Should not reach here, but we need to make compiler happy.
+            // Throwing an exception will lead to wrong optimization.
+            assert(false && "Index out of bounds");
+            return std::variant<typename Handles::ReturnType...>{
+                std::in_place_index<0>, std::move(std::get<0>(results))};
         }
     }
-#pragma clang optimize on
 };
 
 } // namespace condy
