@@ -56,3 +56,4 @@ CMakeUserPresets.json
 build/
 .cache/
 .vscode/
+.clangd
