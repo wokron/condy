@@ -24,7 +24,7 @@ condy::RuntimeOptions options =
 TEST_CASE("test runtime - single thread no-op") {
     condy::Runtime runtime(options);
     runtime.done();
-    runtime.wait(); // Should exit immediately
+    runtime.run(); // Should exit immediately
 }
 
 TEST_CASE("test runtime - single thread schedule no-op") {
@@ -33,7 +33,7 @@ TEST_CASE("test runtime - single thread schedule no-op") {
     SetFinishInvoker invoker;
     runtime.schedule(&invoker);
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     REQUIRE(invoker.finished);
 }
@@ -47,7 +47,7 @@ TEST_CASE("test runtime - single thread schedule multiple no-op") {
         runtime.schedule(&invokers[i]);
     }
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     for (int i = 0; i < num_invokers; ++i) {
         REQUIRE(invokers[i].finished);
@@ -68,7 +68,7 @@ TEST_CASE("test runtime - single thread schedule coroutine") {
 
     runtime.schedule(&h.promise());
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     REQUIRE(finished);
 }
@@ -94,7 +94,7 @@ TEST_CASE("test runtime - single thread schedule multiple coroutines") {
     }
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
@@ -122,7 +122,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
     }
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
@@ -153,7 +153,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
     }
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
@@ -182,7 +182,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     auto h = coro.release();
     runtime.schedule(&h.promise());
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     REQUIRE(finished);
 }

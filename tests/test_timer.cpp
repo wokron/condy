@@ -23,7 +23,7 @@ TEST_CASE("test timer - sleep") {
     auto t = condy::co_spawn(runtime, func());
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
     t.wait();
 }
 
@@ -56,7 +56,7 @@ TEST_CASE("test timer - sleep with cancel") {
     auto t2 = condy::co_spawn(runtime, canceller());
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
     t1.wait();
     t2.wait();
 }
@@ -91,7 +91,7 @@ TEST_CASE("test timer - sleep with update") {
     auto t2 = condy::co_spawn(runtime, updater());
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
     t1.wait();
     t2.wait();
 }

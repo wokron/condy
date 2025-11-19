@@ -28,7 +28,7 @@ TEST_CASE("test runtime_options - single thread sqpoll") {
     condy::co_spawn(runtime, func()).detach();
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     REQUIRE(finished);
 }

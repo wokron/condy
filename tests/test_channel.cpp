@@ -70,7 +70,7 @@ TEST_CASE("test channel - push and pop with coroutines") {
     auto t2 = condy::co_spawn(runtime, consumer());
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     t1.wait();
     t2.wait();
@@ -115,7 +115,7 @@ TEST_CASE("test channel - multi producer and consumer") {
     }
 
     runtime.done();
-    runtime.wait();
+    runtime.run();
 
     for (auto &task : producer_tasks) {
         task.wait();
@@ -146,7 +146,7 @@ TEST_CASE("test channel - wait two channel") {
 
     std::thread t([&]() {
         runtime.done();
-        runtime.wait();
+        runtime.run();
     });
 
     runtime.block_until_running();
@@ -185,7 +185,7 @@ TEST_CASE("test channel - channel cancel pop") {
 
     std::thread t([&]() {
         runtime.done();
-        runtime.wait();
+        runtime.run();
     });
 
     runtime.block_until_running();
@@ -235,9 +235,9 @@ TEST_CASE("test channel - cross runtimes") {
         finished++;
     };
 
-    std::thread t1([&]() { runtime1.wait(); });
+    std::thread t1([&]() { runtime1.run(); });
 
-    std::thread t2([&]() { runtime2.wait(); });
+    std::thread t2([&]() { runtime2.run(); });
 
     runtime1.block_until_running();
     runtime2.block_until_running();

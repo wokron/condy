@@ -115,7 +115,7 @@ public:
 
     void block_until_running() { running_.wait(false); }
 
-    void wait() {
+    void run() {
 #if !IO_URING_CHECK_VERSION(2, 3) // >= 2.3
         io_uring_enable_rings(ring_.ring());
 #endif
