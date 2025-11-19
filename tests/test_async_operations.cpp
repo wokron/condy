@@ -1,352 +1,43 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/buffers.hpp"
 #include "condy/channel.hpp"
-#include "condy/coro.hpp"
 #include "condy/runtime.hpp"
 #include "condy/sync_wait.hpp"
+#include <cerrno>
 #include <condy/async_operations.hpp>
 #include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
-#include <latch>
+#include <liburing.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <thread>
-#include <variant>
+#include <unistd.h>
 
 namespace {
 
-void event_loop(size_t &unfinished) {
-    auto *ring = condy::Context::current().ring();
-    while (unfinished > 0) {
-        ring->submit();
-        ring->reap_completions([&](io_uring_cqe *cqe) {
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(
-                io_uring_cqe_get_data(cqe));
-            handle_ptr->set_result(cqe->res, 0);
-            (*handle_ptr)();
-        });
-    }
-}
-
-} // namespace
-
-TEST_CASE("test async_operations - simple read write") {
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    const char msg[] = "Hello, condy!";
-    char buf[20] = {0};
-
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    auto &context = condy::Context::current();
-    context.init(&ring);
-
-    size_t unfinished = 2;
-    auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written =
-            co_await condy::async_write(pipe_fds[1], condy::buffer(msg), 0);
-        REQUIRE(bytes_written == sizeof(msg));
-        --unfinished;
-    };
-    auto reader = [&]() -> condy::Coro<void> {
-        int bytes_read = co_await condy::async_read(
-            pipe_fds[0], condy::buffer(buf, sizeof(msg)), 0);
-        REQUIRE(bytes_read == sizeof(msg));
-        --unfinished;
-    };
-
-    writer().release().resume();
-    reader().release().resume();
-    REQUIRE(unfinished == 2);
-
-    event_loop(unfinished);
-
-    REQUIRE(unfinished == 0);
-}
-
-#if !IO_URING_CHECK_VERSION(2, 2) // >= 2.2
-
-namespace {
-
-void server(std::latch &l, uint16_t port,
-            condy::Channel<std::monostate> &cancel_channel) {
-    int server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    REQUIRE(server_fd > 0);
-
-    // Make socket reusable
-    int opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-    int r = bind(server_fd, (sockaddr *)&addr, sizeof(addr));
-    REQUIRE(r == 0);
-
-    r = listen(server_fd, 16);
-    REQUIRE(r == 0);
-
-    l.arrive_and_wait();
-
-    int accpted_count = 0;
-
-    auto session_func = [&](int client_fd) -> condy::Coro<void> {
-        accpted_count++;
-        close(client_fd);
-        co_return;
-    };
-
-    auto server_func = [&]() -> condy::Coro<void> {
-        using condy::operators::operator||;
-
-        socklen_t addrlen = sizeof(addr);
-        auto r = co_await (condy::async_multishot_accept(
-                               server_fd, reinterpret_cast<sockaddr *>(&addr),
-                               &addrlen, 0, condy::will_spawn(session_func)) ||
-                           cancel_channel.pop());
-        REQUIRE(r.index() == 1); // Cancelled
-    };
-
-    condy::sync_wait(server_func());
-
-    REQUIRE(accpted_count == 2);
-}
-
-void client(uint16_t port) {
-    for (int i = 0; i < 2; ++i) {
-        int client_fd = socket(AF_INET, SOCK_STREAM, 0);
-        REQUIRE(client_fd > 0);
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        addr.sin_port = htons(port);
-        int r = connect(client_fd, (sockaddr *)&addr, sizeof(addr));
-        REQUIRE(r == 0);
-        char buf[20] = {0};
-        int bytes_read = read(client_fd, buf, sizeof(buf));
-        REQUIRE(bytes_read == 0); // Server closes immediately
-        close(client_fd);
-    }
-}
-
-} // namespace
-
-TEST_CASE("test async_operations - multishot accept") {
-    const uint16_t port = 12345;
-    condy::Channel<std::monostate> cancel_channel(1);
-    std::latch latch(2);
-    std::thread server_thread([&]() { server(latch, port, cancel_channel); });
-
-    // Ensure server is ready before client starts
-    latch.arrive_and_wait();
-
-    client(port);
-
-    // Cancel the server
-    cancel_channel.try_push(std::monostate{});
-    server_thread.join();
-}
-
-#endif
-
-TEST_CASE("test async_operations - fixed fd read write") {
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    const char msg[] = "Hello, condy!";
-    char buf[20] = {0};
-
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    auto &context = condy::Context::current();
-    context.init(&ring);
-
-    auto &fd_table = ring.fd_table();
-    fd_table.init(2);
-    fd_table.register_fd(0, pipe_fds[0]);
-    fd_table.register_fd(1, pipe_fds[1]);
-
-    size_t unfinished = 2;
-    auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written =
-            co_await condy::async_write(condy::fixed(1), condy::buffer(msg), 0);
-        REQUIRE(bytes_written == sizeof(msg));
-        --unfinished;
-    };
-    auto reader = [&]() -> condy::Coro<void> {
-        int bytes_read = co_await condy::async_read(
-            condy::fixed(0), condy::buffer(buf, sizeof(msg)), 0);
-        REQUIRE(bytes_read == sizeof(msg));
-        --unfinished;
-    };
-
-    writer().release().resume();
-    reader().release().resume();
-    REQUIRE(unfinished == 2);
-
-    event_loop(unfinished);
-
-    REQUIRE(unfinished == 0);
-}
-
-TEST_CASE("test async_operations - fixed buffer read write") {
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    const char msg[] = "Hello, condy!";
-    char buf[20] = {0};
-
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    auto &context = condy::Context::current();
-    context.init(&ring);
-
-    auto &buffer_table = ring.buffer_table();
-    buffer_table.init(2);
-    buffer_table.register_buffer(
-        0, {.iov_base = (void *)msg, .iov_len = sizeof(msg)});
-    buffer_table.register_buffer(1, {.iov_base = buf, .iov_len = sizeof(buf)});
-
-    size_t unfinished = 2;
-    auto writer = [&]() -> condy::Coro<void> {
-        // Use buffer index 0
-        int bytes_written = co_await condy::async_write(
-            pipe_fds[1], condy::fixed(0, condy::buffer(msg)), 0);
-        REQUIRE(bytes_written == sizeof(msg));
-        --unfinished;
-    };
-    auto reader = [&]() -> condy::Coro<void> {
-        // Use buffer index 1
-        int bytes_read = co_await condy::async_read(
-            pipe_fds[0], condy::fixed(1, condy::buffer(buf, sizeof(buf))), 0);
-        REQUIRE(bytes_read == sizeof(msg));
-        --unfinished;
-    };
-
-    writer().release().resume();
-    reader().release().resume();
-    REQUIRE(unfinished == 2);
-
-    event_loop(unfinished);
-
-    REQUIRE(unfinished == 0);
-}
-
-TEST_CASE("test async_operations - provided buffers read") {
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    const char msg[] = "Hello, condy!";
-
-    condy::Runtime runtime;
-
-    size_t unfinished = 2;
-    auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written =
-            co_await condy::async_write(pipe_fds[1], condy::buffer(msg), 0);
-        REQUIRE(bytes_written == sizeof(msg));
-        --unfinished;
-    };
-    auto reader = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferPool provided_buffers(2, 32);
-        auto [bytes_read, buf] = co_await condy::async_read(
-            pipe_fds[0], std::move(provided_buffers), 0);
-        REQUIRE(bytes_read == sizeof(msg));
-        REQUIRE(std::memcmp(buf.data(), msg, sizeof(msg)) == 0);
-        --unfinished;
-    };
-
-    condy::co_spawn(runtime, writer()).detach();
-    condy::co_spawn(runtime, reader()).detach();
-
-    runtime.done();
-    runtime.wait();
-
-    REQUIRE(unfinished == 0);
-}
-
-TEST_CASE("test async_operations - multishot provided buffers read") {
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    char msg[16];
-
-    condy::Runtime runtime;
-
-    const int times = 5;
-
-    size_t unfinished = 2;
-    auto writer = [&]() -> condy::Coro<void> {
-        for (size_t i = 0; i < times; i++) {
-            std::fill_n(msg, 16, i + 1);
-            int bytes_written = co_await condy::async_write(
-                pipe_fds[1], condy::buffer(msg, 16), 0);
-            REQUIRE(bytes_written == sizeof(msg));
-        }
-        close(pipe_fds[1]);
-        --unfinished;
-    };
-
-    auto multishot_reader =
-        [&](condy::Channel<std::pair<int, condy::ProvidedBuffer>> &ch)
-        -> condy::Coro<void> {
-        int count = 0;
-        for (int i = 0; i < times; i++) {
-            auto [n, buf] = co_await ch.pop();
-            REQUIRE(n == 16);
-            char *data = reinterpret_cast<char *>(buf.data());
-            for (int i = 0; i < n; i++) {
-                REQUIRE(data[i] == count + 1);
-            }
-            count++;
-        }
-    };
-
-    auto reader = [&]() -> condy::Coro<void> {
-        condy::Channel<std::pair<int, condy::ProvidedBuffer>> ch(times);
-        condy::co_spawn(multishot_reader(ch)).detach();
-        condy::ProvidedBufferPool provided_buffers(times, 16);
-        auto [n, buf] = co_await condy::async_read_multishot(
-            pipe_fds[0], provided_buffers, 0, condy::will_push(ch));
-        REQUIRE(n == 0);
-        --unfinished;
-    };
-
-    condy::co_spawn(runtime, writer()).detach();
-    condy::co_spawn(runtime, reader()).detach();
-
-    runtime.done();
-    runtime.wait();
-
-    REQUIRE(unfinished == 0);
-}
-
-namespace {
-
-void create_tcp_socketpair(int sv[2]) {
-    int listener = socket(AF_INET, SOCK_STREAM, 0);
-    REQUIRE(listener >= 0);
+int create_accept_socket() {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(sockfd >= 0);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0; // Let the OS choose the port
 
-    int r = bind(listener, (sockaddr *)&addr, sizeof(addr));
+    int r = bind(sockfd, (sockaddr *)&addr, sizeof(addr));
     REQUIRE(r == 0);
 
-    r = listen(listener, 1);
+    r = listen(sockfd, 1);
     REQUIRE(r == 0);
 
+    return sockfd;
+}
+
+void create_tcp_socketpair(int sv[2]) {
+    int r;
+    int listener = create_accept_socket();
+
+    sockaddr_in addr{};
     socklen_t addrlen = sizeof(addr);
     r = getsockname(listener, (sockaddr *)&addr, &addrlen);
     REQUIRE(r == 0);
@@ -365,38 +56,317 @@ void create_tcp_socketpair(int sv[2]) {
 
 } // namespace
 
-TEST_CASE("test async_operations - zero-copy read") {
-    int socket_pair[2];
-    create_tcp_socketpair(socket_pair);
-    const char msg[] = "Hello, condy!";
+TEST_CASE("test async_operations - splice fixed fd") {
+    int pipe_fds1[2], pipe_fds2[2];
+    REQUIRE(pipe(pipe_fds1) == 0);
+    REQUIRE(pipe(pipe_fds2) == 0);
 
-    condy::Runtime runtime;
+    const char *msg = "Hello, condy!";
+    ssize_t msg_len = std::strlen(msg);
 
-    size_t unfinished = 2;
-    bool free_called = false;
-    auto writer = [&]() -> condy::Coro<void> {
-        int bytes_written = co_await condy::async_send_zc(
-            socket_pair[0], condy::buffer(msg), 0, 0,
-            [&](int r) { free_called = true; });
-        REQUIRE(bytes_written == sizeof(msg));
-        REQUIRE(!free_called);
-        --unfinished;
+    // Write message to the first pipe
+    ssize_t bytes_written = write(pipe_fds1[1], msg, msg_len);
+    REQUIRE(bytes_written == msg_len);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_fd_table();
+        fd_table.init(4);
+
+        auto r = co_await fd_table.async_register_fd(pipe_fds1, 2, 0);
+        REQUIRE(r == 2);
+        auto r2 = co_await fd_table.async_register_fd(pipe_fds2, 2, 2);
+        REQUIRE(r2 == 2);
+
+        // Splice data from pipe_fds1[0] to pipe_fds2[1]
+        ssize_t bytes_spliced = co_await condy::async_splice(
+            condy::fixed(0), -1, condy::fixed(3), -1, msg_len, 0);
+        REQUIRE(bytes_spliced == msg_len);
     };
-    auto reader = [&]() -> condy::Coro<void> {
+    condy::sync_wait(func());
+
+    // Read message from the second pipe
+    char buffer[64] = {0};
+    ssize_t bytes_read = read(pipe_fds2[0], buffer, sizeof(buffer));
+    REQUIRE(bytes_read == msg_len);
+    REQUIRE(std::strcmp(buffer, msg) == 0);
+}
+
+TEST_CASE("test async_operations - recvmsg multishot") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    const size_t times = 5;
+
+    const char *msg = "Hello, condy multishot!";
+    ssize_t msg_len = std::strlen(msg);
+
+    auto sender = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < times; ++i) {
+            ssize_t n = co_await condy::async_send(
+                sv[0], condy::buffer(msg, msg_len), 0);
+            REQUIRE(n == msg_len);
+        }
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        struct msghdr msg_hdr{};
+        msg_hdr.msg_iov = nullptr;
+        msg_hdr.msg_iovlen = 0;
+
+        condy::Channel<std::pair<int, condy::ProvidedBuffer>> channel(8);
+
+        condy::ProvidedBufferPool buf_pool(2, 256);
+
+        auto t = condy::co_spawn(sender());
+
+        auto [n, buf] = co_await condy::async_recvmsg_multishot(
+            sv[1], &msg_hdr, 0, buf_pool, condy::will_push(channel));
+        REQUIRE(n == -ENOBUFS);
+
+        co_await std::move(t);
+
+        REQUIRE(channel.size() == 4);
+
+        for (size_t i = 0; i < 4; ++i) {
+            auto [n, buf] = co_await channel.pop();
+            auto *out = io_uring_recvmsg_validate(buf.data(), n, &msg_hdr);
+            REQUIRE(n > msg_len);
+            void *payload = io_uring_recvmsg_payload(out, &msg_hdr);
+            size_t length = io_uring_recvmsg_payload_length(out, n, &msg_hdr);
+            REQUIRE(length == msg_len);
+            REQUIRE(std::memcmp(payload, msg, msg_len) == 0);
+        }
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_CASE("test async_operations - accept direct") {
+    int listen_fd = create_accept_socket();
+
+    auto client = [&]() -> condy::Coro<void> {
+        sockaddr_in addr{};
+        socklen_t addrlen = sizeof(addr);
+        int r = getsockname(listen_fd, (sockaddr *)&addr, &addrlen);
+        REQUIRE(r == 0);
+
+        for (int i = 0; i < 4; i++) {
+            int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            REQUIRE(sockfd >= 0);
+
+            r = co_await condy::async_connect(sockfd, (sockaddr *)&addr,
+                                              sizeof(addr));
+            REQUIRE(r == 0);
+
+            co_await condy::async_close(sockfd);
+        }
+    };
+
+    auto main = [&]() -> condy::Coro<void> {
+        condy::current_fd_table().init(2);
+
+        auto client_task = condy::co_spawn(client());
+
+        struct sockaddr_in addr{};
+        socklen_t addrlen = sizeof(addr);
+        int fd1 = co_await condy::async_accept_direct(
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+        REQUIRE(fd1 >= 0);
+        REQUIRE(fd1 < 2);
+
+        int fd2 = co_await condy::async_accept_direct(
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+        REQUIRE(fd2 >= 0);
+        REQUIRE(fd2 < 2);
+
+        int fd3 = co_await condy::async_accept_direct(
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+        REQUIRE(fd3 < 0); // Should fail, no more fixed fds available
+
+        int r = co_await condy::async_close(condy::fixed(fd1));
+        REQUIRE(r == 0);
+
+        int fd4 = co_await condy::async_accept_direct(
+            listen_fd, (sockaddr *)&addr, &addrlen, 0, IORING_FILE_INDEX_ALLOC);
+        REQUIRE(fd4 >= 0); // Should succeed now
+        REQUIRE(fd4 < 2);
+
+        co_await std::move(client_task);
+    };
+
+    condy::sync_wait(main());
+}
+
+TEST_CASE("test async_operations - cancel fd") {
+    auto canceller = [&](int fd) -> condy::Coro<void> {
+        int r = co_await condy::async_cancel_fd(fd, 0);
+        REQUIRE(r == 0);
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(canceller(STDIN_FILENO));
         char buffer[128];
-        auto bytes_read = co_await condy::async_read(socket_pair[1],
-                                                     condy::buffer(buffer), 0);
-        REQUIRE(bytes_read == sizeof(msg));
-        REQUIRE(std::memcmp(buffer, msg, sizeof(msg)) == 0);
-        --unfinished;
+
+        auto r = co_await condy::async_read(STDIN_FILENO,
+                                            condy::buffer(buffer, 128), 0);
+        REQUIRE(r == -ECANCELED);
+
+        co_await std::move(t);
     };
 
-    condy::co_spawn(runtime, writer()).detach();
-    condy::co_spawn(runtime, reader()).detach();
+    condy::sync_wait(func());
+}
 
-    runtime.done();
-    runtime.wait();
+TEST_CASE("test async_operations - link timeout") {
+    using condy::operators::operator>>;
+    auto func = [&]() -> condy::Coro<void> {
+        char buffer[128];
+        __kernel_timespec ts = {
+            .tv_sec = 0,
+            .tv_nsec = 1,
+        };
+        auto [r1, r2] = co_await (
+            condy::async_read(STDIN_FILENO, condy::buffer(buffer, 128), 0) >>
+            condy::async_link_timeout(&ts, 0));
+        REQUIRE(r1 == -ECANCELED);
+        REQUIRE(r2 == -ETIME);
+    };
 
-    REQUIRE(unfinished == 0);
-    REQUIRE(free_called == true);
+    condy::sync_wait(func());
+}
+
+TEST_CASE("test async_operations - read fixed buffer") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char *msg = "Hello, condy!";
+    ssize_t msg_len = std::strlen(msg);
+
+    ::write(pipe_fds[1], msg, msg_len);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &buffer_table = condy::current_buffer_table();
+        buffer_table.init(1);
+        char buf_storage[64];
+        buffer_table.register_buffer(
+            0, {.iov_base = buf_storage, .iov_len = sizeof(buf_storage)});
+
+        ssize_t n = co_await condy::async_read(
+            pipe_fds[0], condy::fixed(0, condy::buffer(buf_storage, 64)), 0);
+        REQUIRE(n == msg_len);
+        REQUIRE(std::memcmp(buf_storage, msg, msg_len) == 0);
+    };
+    condy::sync_wait(func());
+
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+
+TEST_CASE("test async_operations - read provided buffer") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char *msg = "Hello, condy provided buffer!";
+    ssize_t msg_len = std::strlen(msg);
+
+    ::write(pipe_fds[1], msg, msg_len);
+
+    auto func = [&]() -> condy::Coro<void> {
+        condy::ProvidedBufferPool buf_pool(2, 64);
+
+        auto [n, buf] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
+        REQUIRE(n == msg_len);
+        REQUIRE(std::memcmp(buf.data(), msg, msg_len) == 0);
+    };
+    condy::sync_wait(func());
+
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+
+TEST_CASE("test async_operations - write fixed buffer") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    char msg[] = "Hello, condy write fixed!";
+    size_t msg_len = std::strlen(msg);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &buffer_table = condy::current_buffer_table();
+        buffer_table.init(1);
+        buffer_table.register_buffer(0, {.iov_base = msg, .iov_len = msg_len});
+
+        ssize_t n = co_await condy::async_write(
+            pipe_fds[1], condy::fixed(0, condy::buffer(msg, msg_len)), 0);
+        REQUIRE(n == msg_len);
+    };
+    condy::sync_wait(func());
+
+    char read_buf[64];
+    ssize_t n = ::read(pipe_fds[0], read_buf, sizeof(read_buf));
+    REQUIRE(n == msg_len);
+    REQUIRE(std::memcmp(read_buf, msg, msg_len) == 0);
+
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+
+TEST_CASE("test async_operations - sendto") {
+    int sender_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    REQUIRE(sender_fd >= 0);
+    int receiver_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    REQUIRE(receiver_fd >= 0);
+    sockaddr_in recv_addr{};
+    recv_addr.sin_family = AF_INET;
+    recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    recv_addr.sin_port = 0; // Let OS choose the port
+
+    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    REQUIRE(r == 0);
+
+    socklen_t addrlen = sizeof(recv_addr);
+    r = getsockname(receiver_fd, (sockaddr *)&recv_addr, &addrlen);
+    REQUIRE(r == 0);
+
+    const char *msg = "Hello, condy!";
+    size_t msg_len = std::strlen(msg);
+
+    auto func = [&]() -> condy::Coro<void> {
+        ssize_t n = co_await condy::async_sendto(
+            sender_fd, condy::buffer(msg, msg_len), 0, (sockaddr *)&recv_addr,
+            sizeof(recv_addr));
+        REQUIRE(n == msg_len);
+    };
+    condy::sync_wait(func());
+
+    char recv_buf[64];
+    ssize_t n = ::recv(receiver_fd, recv_buf, sizeof(recv_buf), 0);
+    REQUIRE(n == msg_len);
+    REQUIRE(std::memcmp(recv_buf, msg, msg_len) == 0);
+
+    close(sender_fd);
+    close(receiver_fd);
+}
+
+TEST_CASE("test async_operations - send zero copy") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    const char *msg = "Hello, condy!";
+    ssize_t msg_len = std::strlen(msg);
+
+    auto func = [&]() -> condy::Coro<void> {
+        condy::Channel<int> channel(1);
+        char buffer[64];
+        std::memcpy(buffer, msg, msg_len);
+        ssize_t n =
+            co_await condy::async_send_zc(sv[1], condy::buffer(buffer, msg_len),
+                                          0, 0, condy::will_push(channel));
+        REQUIRE(n == msg_len);
+        co_await channel.pop();
+    };
+
+    condy::sync_wait(func());
 }

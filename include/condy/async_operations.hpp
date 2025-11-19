@@ -89,11 +89,11 @@ template <typename Buffer> auto fixed(int buf_index, Buffer &&buf) {
 template <typename Fd1, typename Fd2>
 inline auto async_splice(Fd1 fd_in, int64_t off_in, Fd2 fd_out, int64_t off_out,
                          unsigned int nbytes, unsigned int splice_flags) {
+    if constexpr (detail::is_fixed_fd_v<Fd1>) {
+        splice_flags |= SPLICE_F_FD_IN_FIXED;
+    }
     auto op = make_op_awaiter(io_uring_prep_splice, fd_in, off_in, fd_out,
                               off_out, nbytes, splice_flags);
-    if constexpr (detail::is_fixed_fd_v<Fd1>) {
-        op.add_flags(SPLICE_F_FD_IN_FIXED);
-    }
     detail::maybe_add_fixed_fd_flag(op, fd_out);
     return op;
 }
@@ -101,11 +101,11 @@ inline auto async_splice(Fd1 fd_in, int64_t off_in, Fd2 fd_out, int64_t off_out,
 template <typename Fd1, typename Fd2>
 inline auto async_tee(Fd1 fd_in, Fd2 fd_out, unsigned int nbytes,
                       unsigned int splice_flags) {
+    if constexpr (detail::is_fixed_fd_v<Fd1>) {
+        splice_flags |= SPLICE_F_FD_IN_FIXED;
+    }
     auto op =
         make_op_awaiter(io_uring_prep_tee, fd_in, fd_out, nbytes, splice_flags);
-    if constexpr (detail::is_fixed_fd_v<Fd1>) {
-        op.add_flags(SPLICE_F_FD_IN_FIXED);
-    }
     detail::maybe_add_fixed_fd_flag(op, fd_out);
     return op;
 }
