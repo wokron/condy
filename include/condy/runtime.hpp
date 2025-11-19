@@ -16,6 +16,16 @@
 
 namespace condy {
 
+inline auto &current_fd_table() {
+    return Context::current().ring()->fd_table();
+}
+
+inline auto &current_buffer_table() {
+    return Context::current().ring()->buffer_table();
+}
+
+inline auto &current_runtime() { return *Context::current().runtime(); }
+
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
