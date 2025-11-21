@@ -93,20 +93,13 @@ public:
             return;
         }
 
-#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
         if (runtime != nullptr) {
-            runtime->ring_.register_op(
-                [work, this](io_uring_sqe *sqe) {
-                    __tsan_release(work);
-                    io_uring_prep_msg_ring_cqe_flags(
-                        sqe, this->ring_.ring()->ring_fd, 0,
-                        reinterpret_cast<uint64_t>(work), 0, IORING_CQE_F_MORE);
-                    sqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
-                },
-                Ring::IGNORE_DATA);
+            __tsan_release(work);
+            io_uring_sqe *sqe = runtime->ring_.get_sqe();
+            prep_msg_ring_(sqe, work);
+            runtime->ring_.maybe_submit();
             return;
         }
-#endif
 
         std::lock_guard<std::mutex> lock(mutex_);
         global_queue_.push_back(work);
@@ -146,9 +139,12 @@ public:
                 continue;
             }
 
-            if (!wait_for_work_()) {
+            if (pending_works_ == 0) {
                 break;
             }
+
+            ring_.submit();
+            flush_ring_();
         }
     }
 
@@ -158,32 +154,21 @@ private:
     void flush_global_queue_() {
         local_queue_.push_back(std::move(global_queue_));
         eventfd_read(notify_fd_, &dummy_);
-        ring_.register_op(
-            [this](io_uring_sqe *sqe) {
-                io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
-            },
-            Ring::NOTIFY_DATA);
+        io_uring_sqe *sqe = ring_.get_sqe();
+        prep_read_notify_fd_(sqe);
+        ring_.maybe_submit();
     }
 
-    bool wait_for_work_() {
-        ring_.submit();
-        auto reaped = flush_ring_();
-        if (reaped > 0) {
-            // 1. If we got some completions, return immediately.
-            return true;
-        }
+    void prep_read_notify_fd_(io_uring_sqe *sqe) {
+        io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
+        io_uring_sqe_set_data(sqe, MagicData::NOTIFY);
+    }
 
-        if (!ring_.has_outstanding_ops() && pending_works_ == 0) {
-            // 3. No outstanding ops in the ring, and no more works, we can
-            // exit.
-            return false;
-        }
-
-        // 5. Block until we get some completions (or notification)
-        ring_.reap_completions(
-            [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
-
-        return true;
+    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work) {
+        io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
+                               reinterpret_cast<uint64_t>(work), 0);
+        sqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
+        io_uring_sqe_set_data(sqe, MagicData::IGNORE);
     }
 
     size_t flush_ring_() {
@@ -193,14 +178,17 @@ private:
 
     void process_cqe_(io_uring_cqe *cqe) {
         auto *data = io_uring_cqe_get_data(cqe);
-        __tsan_acquire(data);
-        if (data == Ring::NOTIFY_DATA) {
+        if (data == MagicData::IGNORE) {
+            return;
+        }
+        if (data == MagicData::NOTIFY) {
             std::lock_guard<std::mutex> lock(mutex_);
             flush_global_queue_();
             return;
         }
 
         auto *work = static_cast<WorkInvoker *>(data);
+        __tsan_acquire(work);
         if (!work->is_operation()) {
             local_queue_.push_back(work);
             return;
@@ -212,6 +200,9 @@ private:
             handle->multishot();
             return;
         }
+
+        pending_works_--;
+
         if (cqe->flags & IORING_CQE_F_NOTIF) {
             // Notify cqe, no need to schedule back to local queue
             (*handle)();

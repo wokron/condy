@@ -11,7 +11,7 @@ struct WorkInvoker;
 
 class Context : public ThreadLocalSingleton<Context> {
 public:
-    void init(Ring *ring, Runtime *runtime = nullptr) {
+    void init(Ring *ring, Runtime *runtime) {
         ring_ = ring;
         runtime_ = runtime;
     }

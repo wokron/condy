@@ -17,6 +17,9 @@ void event_loop(size_t &unfinished) {
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
+            if (io_uring_cqe_get_data(cqe) == condy::MagicData::IGNORE) {
+                return;
+            }
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
             handle_ptr->set_result(cqe->res, 0);
@@ -24,6 +27,9 @@ void event_loop(size_t &unfinished) {
         });
     }
 }
+
+// Just placeholder
+condy::Runtime runtime;
 
 } // namespace
 
@@ -33,7 +39,7 @@ TEST_CASE("test awaiter_operations - test make_op_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -59,7 +65,7 @@ TEST_CASE("test awaiter_operations - test make_all_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -92,7 +98,7 @@ TEST_CASE("test awaiter_operations - test make_one_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -127,7 +133,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -162,7 +168,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -205,7 +211,7 @@ TEST_CASE("test awaiter_operations - test &&") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -238,7 +244,7 @@ TEST_CASE("test awaiter_operations - test ||") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -272,7 +278,7 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -309,7 +315,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -345,7 +351,7 @@ TEST_CASE("test awaiter_operations - test make_link_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -382,7 +388,7 @@ TEST_CASE("test awaiter_operations - test >>") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -419,7 +425,7 @@ TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -446,7 +452,7 @@ TEST_CASE("test awaiter_operations - test ~") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -475,7 +481,7 @@ TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {

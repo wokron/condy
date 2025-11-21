@@ -5,6 +5,8 @@
 #include "condy/ring.hpp"
 #include <array>
 #include <cstddef>
+#include <liburing.h>
+#include <liburing/io_uring.h>
 #include <limits>
 #include <tuple>
 #include <variant>
@@ -23,7 +25,11 @@ public:
 
     void cancel() {
         assert(ring_ != nullptr);
-        ring_->cancel_op(this);
+        io_uring_sqe *sqe = ring_->get_sqe();
+        io_uring_prep_cancel(sqe, this, 0);
+        io_uring_sqe_set_data(sqe, MagicData::IGNORE);
+        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
+        ring_->maybe_submit();
     }
 
     void set_result(int res, int flags) {

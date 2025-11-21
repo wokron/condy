@@ -1,5 +1,6 @@
 #include "condy/buffers.hpp"
 #include "condy/ring.hpp"
+#include <cstddef>
 #include <doctest/doctest.h>
 #include <liburing.h>
 #include <liburing/io_uring.h>
@@ -24,25 +25,27 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
 
     ::write(pipefd[1], "test", 4);
 
-    ring.register_op(
-        [&](io_uring_sqe *sqe) {
-            io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
-            io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
-            sqe->buf_group = 0;
-        },
-        nullptr);
+    auto *sqe = ring.get_sqe();
+    io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
+    sqe->buf_group = 0;
+    io_uring_sqe_set_data(sqe, nullptr);
 
     int r = -1;
     int bid = -1;
 
-    ring.wait_all_completions([&](io_uring_cqe *cqe) {
-        auto *data = io_uring_cqe_get_data(cqe);
-        REQUIRE(data == nullptr);
-        r = cqe->res;
-        REQUIRE(r > 0);
-        REQUIRE((cqe->flags & IORING_CQE_F_BUFFER));
-        bid = cqe->flags >> IORING_CQE_BUFFER_SHIFT;
-    });
+    size_t reaped = 0;
+    while (reaped < 1) {
+        ring.submit();
+        reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
+            auto *data = io_uring_cqe_get_data(cqe);
+            REQUIRE(data == nullptr);
+            r = cqe->res;
+            REQUIRE(r > 0);
+            REQUIRE((cqe->flags & IORING_CQE_F_BUFFER));
+            bid = cqe->flags >> IORING_CQE_BUFFER_SHIFT;
+        });
+    }
 
     REQUIRE(r != -1);
 

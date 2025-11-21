@@ -14,6 +14,9 @@ void event_loop(size_t &unfinished) {
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
+            if (io_uring_cqe_get_data(cqe) == condy::MagicData::IGNORE) {
+                return;
+            }
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
             handle_ptr->set_result(cqe->res, cqe->flags);
@@ -21,6 +24,9 @@ void event_loop(size_t &unfinished) {
         });
     }
 }
+
+// Just placeholder
+condy::Runtime runtime;
 
 } // namespace
 
@@ -30,7 +36,7 @@ TEST_CASE("test op_awaiter - basic routine") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -46,7 +52,6 @@ TEST_CASE("test op_awaiter - basic routine") {
 
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
-    REQUIRE(!ring.has_outstanding_ops());
 
     context.reset();
 }
@@ -57,7 +62,7 @@ TEST_CASE("test op_awaiter - multiple ops") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -74,7 +79,6 @@ TEST_CASE("test op_awaiter - multiple ops") {
 
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
-    REQUIRE(!ring.has_outstanding_ops());
 
     context.reset();
 }
@@ -85,7 +89,7 @@ TEST_CASE("test op_awaiter - concurrent op") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -117,7 +121,7 @@ TEST_CASE("test op_awaiter - cancel op") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -156,6 +160,9 @@ void mock_multishot_event_loop(size_t &unfinished) {
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
+            if (io_uring_cqe_get_data(cqe) == condy::MagicData::IGNORE) {
+                return;
+            }
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(
                 io_uring_cqe_get_data(cqe));
             handle_ptr->set_result(42, 0);
@@ -174,7 +181,7 @@ TEST_CASE("test op_awaiter - multishot op") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     bool handle_called = false;
     auto handle_multishot = [&](int res) -> condy::Coro<void> {
@@ -202,7 +209,6 @@ TEST_CASE("test op_awaiter - multishot op") {
 
     mock_multishot_event_loop(unfinished);
     REQUIRE(unfinished == 0);
-    REQUIRE(!ring.has_outstanding_ops());
     REQUIRE(handle_called == true);
 
     context.reset();
@@ -214,11 +220,11 @@ TEST_CASE("test op_awaiter - select buffer op") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
     auto &context = condy::Context::current();
-    context.init(&ring);
+    context.init(&ring, &runtime);
 
     condy::detail::ProvidedBufferPoolImplPtr buffers_impl =
-        std::make_shared<condy::detail::ProvidedBufferPoolImpl>(ring.ring(), 0, 4,
-                                                             32, 0);
+        std::make_shared<condy::detail::ProvidedBufferPoolImpl>(ring.ring(), 0,
+                                                                4, 32, 0);
 
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
@@ -243,7 +249,6 @@ TEST_CASE("test op_awaiter - select buffer op") {
 
     event_loop(unfinished);
     REQUIRE(unfinished == 0);
-    REQUIRE(!ring.has_outstanding_ops());
 
     context.reset();
 }

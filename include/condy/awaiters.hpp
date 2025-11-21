@@ -4,6 +4,7 @@
 #include "condy/context.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/ring.hpp"
+#include "condy/runtime.hpp"
 #include <coroutine>
 #include <cstddef>
 #include <tuple>
@@ -64,20 +65,12 @@ public:
     void register_operation(unsigned int flags) {
         auto &context = Context::current();
         auto *ring = context.ring();
+
         finish_handle_.get().set_ring(ring);
-        ring->register_op(
-            [&](io_uring_sqe *sqe) {
-                std::apply(
-                    [&](auto &&...args) {
-                        prep_func_(sqe, std::forward<decltype(args)>(args)...);
-                    },
-                    args_);
-                io_uring_sqe_set_flags(sqe, flags | this->flags_);
-                if (bgid_ >= 0) {
-                    sqe->buf_group = bgid_;
-                }
-            },
-            &finish_handle_.get());
+        context.runtime()->pend_work();
+        io_uring_sqe *sqe = ring->get_sqe();
+        prep_op_(sqe, flags);
+        ring->maybe_submit();
     }
 
 public:
@@ -97,12 +90,24 @@ public:
 
     void set_bgid(int bgid) { bgid_ = bgid; }
 
+private:
+    void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
+        sqe->buf_group = bgid_;
+        std::apply(
+            [&](auto &&...args) {
+                prep_func_(sqe, std::forward<decltype(args)>(args)...);
+            },
+            args_);
+        io_uring_sqe_set_flags(sqe, flags | this->flags_);
+        io_uring_sqe_set_data(sqe, &finish_handle_.get());
+    }
+
 protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     HandleBox<Handle> finish_handle_;
     unsigned int flags_ = 0;
-    int bgid_ = -1;
+    int bgid_ = 0;
 };
 
 template <typename Func, typename... Args>
@@ -146,9 +151,9 @@ public:
     using Base =
         OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>, Func,
                       Args...>;
-    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
-                                   detail::ProvidedBufferPoolImplPtr buffers_impl,
-                                   Func func, Args... args)
+    MultiShotSelectBufferOpAwaiter(
+        MultiShotFunc multishot_func,
+        detail::ProvidedBufferPoolImplPtr buffers_impl, Func func, Args... args)
         : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc>(
                    std::move(multishot_func), std::move(buffers_impl)),
                func, args...) {}

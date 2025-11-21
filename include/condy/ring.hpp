@@ -9,6 +9,11 @@
 
 namespace condy {
 
+struct MagicData {
+    inline static void *const IGNORE = reinterpret_cast<void *>(0x1);
+    inline static void *const NOTIFY = reinterpret_cast<void *>(0x2);
+};
+
 class FdTable {
 public:
     FdTable(io_uring &ring) : ring_(ring) {}
@@ -177,67 +182,29 @@ public:
         }
     }
 
-    template <typename Func> void register_op(Func &&prep_func, void *handle) {
-        io_uring_sqe *sqe = get_sqe_();
-        std::move(prep_func)(sqe);
-        io_uring_sqe_set_data(sqe, handle);
-        if (handle != IGNORE_DATA && handle != NOTIFY_DATA) {
-            outstanding_ops_count_++;
-        }
-        maybe_submit_();
-    }
-
-    void cancel_op(void *handle) {
-        io_uring_sqe *sqe = get_sqe_();
-        io_uring_prep_cancel(sqe, handle, 0);
-        io_uring_sqe_set_data(sqe, IGNORE_DATA);
-        maybe_submit_();
-    }
-
     void submit() {
         unsubmitted_count_ = 0;
         io_uring_submit(&ring_);
     }
 
-    template <typename Func>
-    size_t reap_completions(Func &&process_func, size_t timeout_us = 0) {
+    void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
+
+    void maybe_submit() {
+        if (unsubmitted_count_++ >= submit_batch_size_) {
+            submit();
+        }
+    }
+
+    template <typename Func> size_t reap_completions(Func &&process_func) {
         size_t reaped = 0;
         io_uring_cqe *cqe;
         int r;
-        if (timeout_us > 0) {
-            __kernel_timespec ts;
-            ts.tv_sec = timeout_us / 1000000;
-            ts.tv_nsec = (timeout_us % 1000000) * 1000;
-            r = io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);
-            if (r == -ETIME || r == -EINTR) {
-                return 0; // Timeout without any completions
-            } else if (r < 0) {
-                throw std::runtime_error("io_uring_wait_cqe_timeout failed");
-            }
-
-            if (reap_one_(cqe, process_func)) {
-                reaped++;
-            }
-        }
         while ((r = io_uring_peek_cqe(&ring_, &cqe)) == 0) {
-            if (reap_one_(cqe, process_func)) {
-                reaped++;
-            }
+            process_func(cqe);
+            io_uring_cqe_seen(&ring_, cqe);
+            reaped++;
         }
         return reaped;
-    }
-
-    bool has_outstanding_ops() const { return outstanding_ops_count_ > 0; }
-
-    template <typename Func> size_t wait_all_completions(Func &&process_func) {
-        size_t total_reaped = 0;
-        submit(); // Ensure all outstanding ops are submitted
-        while (has_outstanding_ops()) {
-            io_uring_cqe *cqe;
-            io_uring_wait_cqe(&ring_, &cqe);
-            total_reaped += reap_completions(std::forward<Func>(process_func));
-        }
-        return total_reaped;
     }
 
     void reserve_space(size_t n) {
@@ -247,12 +214,9 @@ public:
             if (space_left >= n) {
                 return;
             }
-            unsubmitted_count_ = 0;
-            io_uring_submit(&ring_);
-        } while (1);
+            submit();
+        } while (true);
     }
-
-    void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
 
     io_uring *ring() { return &ring_; }
 
@@ -260,24 +224,7 @@ public:
 
     BufferTable &buffer_table() { return buffer_table_; }
 
-private:
-    template <typename Func>
-    bool reap_one_(io_uring_cqe *cqe, Func &&process_func) {
-        void *data = io_uring_cqe_get_data(cqe);
-        if (data == IGNORE_DATA) {
-            io_uring_cqe_seen(&ring_, cqe);
-            return false;
-        }
-        bool unfinished = cqe->flags & IORING_CQE_F_MORE;
-        if (!unfinished && data != NOTIFY_DATA) {
-            outstanding_ops_count_--;
-        }
-        process_func(cqe);
-        io_uring_cqe_seen(&ring_, cqe);
-        return true;
-    }
-
-    io_uring_sqe *get_sqe_() {
+    io_uring_sqe *get_sqe() {
         int r;
         io_uring_sqe *sqe;
         do {
@@ -298,25 +245,16 @@ private:
                                              std::string(strerror(-r)));
                 }
             }
-        } while (1);
+        } while (true);
         return sqe;
-    }
-
-    void maybe_submit_() {
-        if (unsubmitted_count_++ >= submit_batch_size_) {
-            submit();
-        }
     }
 
 public:
     inline static void *const IGNORE_DATA = reinterpret_cast<void *>(0x1);
-    inline static void *const NOTIFY_DATA = reinterpret_cast<void *>(0x2);
 
 private:
-    // SQ may be accessed from multiple threads, so protect it
     bool initialized_ = false;
     io_uring ring_;
-    size_t outstanding_ops_count_ = 0;
     bool sqpoll_mode_ = false;
     size_t unsubmitted_count_ = 0;
 
