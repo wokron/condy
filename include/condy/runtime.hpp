@@ -65,8 +65,7 @@ public:
 
         notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
         if (notify_fd_ < 0) {
-            throw std::runtime_error("Failed to create eventfd for runtime: " +
-                                     std::string(std::strerror(errno)));
+            throw_exception("Failed to create eventfd for runtime");
         }
     }
 

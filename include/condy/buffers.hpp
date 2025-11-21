@@ -1,12 +1,12 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
+#include "condy/utils.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <sys/mman.h>
 #include <utility>
@@ -41,8 +41,7 @@ public:
         int r = io_uring_register_buf_ring(ring_, &reg, flags);
         if (r != 0) {
             munmap(data_, data_size_);
-            throw std::runtime_error("io_uring_register_buf_ring failed: " +
-                                     std::string(strerror(-r)));
+            throw_exception("io_uring_register_buf_ring failed", -r);
         }
         buffers_base_ = reinterpret_cast<char *>(data_) +
                         sizeof(io_uring_buf) * num_buffers_;

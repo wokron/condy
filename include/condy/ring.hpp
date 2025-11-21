@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/condy_uring.hpp"
+#include "condy/utils.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -27,8 +28,7 @@ public:
     void init(size_t capacity) {
         int r = io_uring_register_files_sparse(&ring_, capacity);
         if (r < 0) {
-            throw std::runtime_error("io_uring_register_files_sparse failed: " +
-                                     std::string(strerror(-r)));
+            throw_exception("io_uring_register_files_sparse failed", -r);
         }
         capacity_ = capacity;
         alloc_range_offset_ = 0;
@@ -40,8 +40,7 @@ public:
         check_initialized_();
         int r = io_uring_register_files_update(&ring_, fixed_fd, &fd, 1);
         if (r < 0) {
-            throw std::runtime_error("io_uring_register_files_update failed: " +
-                                     std::string(strerror(-r)));
+            throw_exception("io_uring_register_files_update failed", -r);
         }
     }
 
@@ -55,8 +54,7 @@ public:
         int r =
             io_uring_register_files_update(&ring_, fixed_fd, &invalid_fd, 1);
         if (r < 0) {
-            throw std::runtime_error("io_uring_register_files_update failed: " +
-                                     std::string(strerror(-r)));
+            throw_exception("io_uring_register_files_update failed", -r);
         }
     }
 
@@ -66,9 +64,7 @@ public:
         alloc_range_size_ = size;
         int r = io_uring_register_file_alloc_range(&ring_, offset, size);
         if (r < 0) {
-            throw std::runtime_error(
-                "io_uring_register_file_alloc_range failed: " +
-                std::string(strerror(-r)));
+            throw_exception("io_uring_register_file_alloc_range failed", -r);
         }
     }
 
@@ -81,7 +77,7 @@ public:
 private:
     void check_initialized_() {
         if (!initialized_) {
-            throw std::runtime_error("FdTable not initialized");
+            throw std::logic_error("FdTable not initialized");
         }
     }
 
@@ -106,9 +102,7 @@ public:
     void init(size_t capacity) {
         int r = io_uring_register_buffers_sparse(&ring_, capacity);
         if (r < 0) {
-            throw std::runtime_error(
-                "io_uring_register_buffers_sparse failed: " +
-                std::string(strerror(-r)));
+            throw_exception("io_uring_register_buffers_sparse failed", -r);
         }
         capacity_ = capacity;
         initialized_ = true;
@@ -119,9 +113,7 @@ public:
         int r = io_uring_register_buffers_update_tag(&ring_, index, &buf,
                                                      nullptr, 1);
         if (r < 0) {
-            throw std::runtime_error(
-                "io_uring_register_buffers_update failed: " +
-                std::string(strerror(-r)));
+            throw_exception("io_uring_register_buffers_update failed", -r);
         }
     }
 
@@ -131,9 +123,7 @@ public:
         int r = io_uring_register_buffers_update_tag(&ring_, index, &vec,
                                                      nullptr, 1);
         if (r < 0) {
-            throw std::runtime_error(
-                "io_uring_register_buffers_update failed: " +
-                std::string(strerror(-r)));
+            throw_exception("io_uring_register_buffers_update failed", -r);
         }
     }
 
@@ -142,7 +132,7 @@ public:
 private:
     void check_initialized_() {
         if (!initialized_) {
-            throw std::runtime_error("BufferTable not initialized");
+            throw std::logic_error("BufferTable not initialized");
         }
     }
 
@@ -168,8 +158,7 @@ public:
         assert(!initialized_);
         r = io_uring_queue_init_params(entries, &ring_, params);
         if (r < 0) {
-            throw std::runtime_error("io_uring_queue_init_params failed: " +
-                                     std::string(strerror(-r)));
+            throw_exception("io_uring_queue_init_params failed", -r);
         }
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
         initialized_ = true;
@@ -234,15 +223,13 @@ public:
             }
             r = io_uring_submit(&ring_);
             if (r < 0) {
-                throw std::runtime_error("io_uring_submit failed: " +
-                                         std::string(strerror(-r)));
+                throw_exception("io_uring_submit failed", -r);
             }
             unsubmitted_count_ = 0;
             if (sqpoll_mode_) {
                 r = io_uring_sqring_wait(&ring_);
                 if (r < 0) {
-                    throw std::runtime_error("io_uring_sqring_wait failed: " +
-                                             std::string(strerror(-r)));
+                    throw_exception("io_uring_sqring_wait failed", -r);
                 }
             }
         } while (true);

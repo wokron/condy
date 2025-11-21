@@ -2,9 +2,11 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <iostream>
+#include <stdexcept>
 #include <utility>
 
 #if defined(__has_feature) && __has_feature(thread_sanitizer)
@@ -98,5 +100,20 @@ private:
     bool initialized_ = false;
     alignas(T) unsigned char storage_[sizeof(T)];
 };
+
+template <typename ExceptionType = std::runtime_error>
+[[noreturn]] inline void throw_exception(const char *msg, int error_code) {
+    std::string full_msg;
+    full_msg += msg;
+    full_msg += ": ";
+    full_msg += std::strerror(error_code);
+    throw ExceptionType(full_msg);
+}
+
+template <typename ExceptionType = std::runtime_error>
+[[noreturn]] inline void throw_exception(const char *msg) {
+    int error_code = errno;
+    throw_exception<ExceptionType>(msg, error_code);
+}
 
 } // namespace condy
