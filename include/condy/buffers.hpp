@@ -10,6 +10,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <utility>
+#include <vector>
 
 namespace condy {
 
@@ -158,46 +159,88 @@ private:
     size_t size_ = 0;
 };
 
-// Just buffer
-class Buffer {
+class MutableBuffer {
 public:
-    Buffer(void *data, size_t size) : data_(data), size_(size) {}
+    MutableBuffer() = default;
+    MutableBuffer(void *data, size_t size) : data_(data), size_(size) {}
 
     void *data() const { return data_; }
 
     size_t size() const { return size_; }
 
 private:
-    void *data_;
-    size_t size_;
+    void *data_ = nullptr;
+    size_t size_ = 0;
 };
 
 class ConstBuffer {
 public:
+    ConstBuffer() = default;
     ConstBuffer(const void *data, size_t size) : data_(data), size_(size) {}
-    ConstBuffer(Buffer buf) : data_(buf.data()), size_(buf.size()) {}
+
+    ConstBuffer(MutableBuffer buf) : data_(buf.data()), size_(buf.size()) {}
+    ConstBuffer &operator=(MutableBuffer buf) {
+        data_ = buf.data();
+        size_ = buf.size();
+        return *this;
+    }
 
     const void *data() const { return data_; }
 
     size_t size() const { return size_; }
 
 private:
-    const void *data_;
-    size_t size_;
+    const void *data_ = nullptr;
+    size_t size_ = 0;
 };
 
-inline Buffer buffer(void *data, size_t size) { return Buffer(data, size); }
+inline MutableBuffer buffer(void *data, size_t size) {
+    return MutableBuffer(data, size);
+}
 
 inline ConstBuffer buffer(const void *data, size_t size) {
     return ConstBuffer(data, size);
 }
 
-template <size_t N> inline Buffer buffer(char (&arr)[N]) {
-    return Buffer(static_cast<void *>(arr), N);
+template <typename PodType, size_t N>
+inline MutableBuffer buffer(PodType (&arr)[N]) {
+    return MutableBuffer(static_cast<void *>(arr), sizeof(PodType) * N);
 }
 
-template <size_t N> inline ConstBuffer buffer(const char (&arr)[N]) {
-    return ConstBuffer(static_cast<const void *>(arr), N);
+template <typename PodType, size_t N>
+inline ConstBuffer buffer(const PodType (&arr)[N]) {
+    return ConstBuffer(static_cast<const void *>(arr), sizeof(PodType) * N);
+}
+
+template <typename PodType, size_t N>
+inline MutableBuffer buffer(std::array<PodType, N> &arr) {
+    return MutableBuffer(static_cast<void *>(arr.data()), sizeof(PodType) * N);
+}
+
+template <typename PodType, size_t N>
+inline ConstBuffer buffer(const std::array<PodType, N> &arr) {
+    return ConstBuffer(static_cast<const void *>(arr.data()),
+                       sizeof(PodType) * N);
+}
+
+template <typename PodType>
+inline MutableBuffer buffer(std::vector<PodType> &vec) {
+    return MutableBuffer(static_cast<void *>(vec.data()),
+                         sizeof(PodType) * vec.size());
+}
+
+template <typename PodType>
+inline ConstBuffer buffer(const std::vector<PodType> &vec) {
+    return ConstBuffer(static_cast<const void *>(vec.data()),
+                       sizeof(PodType) * vec.size());
+}
+
+inline MutableBuffer buffer(std::string &str) {
+    return MutableBuffer(static_cast<void *>(str.data()), str.size());
+}
+
+inline ConstBuffer buffer(const std::string &str) {
+    return ConstBuffer(static_cast<const void *>(str.data()), str.size());
 }
 
 } // namespace condy

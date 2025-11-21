@@ -36,7 +36,7 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
     int bid = -1;
 
     ring.wait_all_completions([&](io_uring_cqe *cqe) {
-        auto* data = io_uring_cqe_get_data(cqe);
+        auto *data = io_uring_cqe_get_data(cqe);
         REQUIRE(data == nullptr);
         r = cqe->res;
         REQUIRE(r > 0);
@@ -46,6 +46,50 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
 
     REQUIRE(r != -1);
 
-    char* buf = reinterpret_cast<char*>(impl.get_buffer(bid));
+    char *buf = reinterpret_cast<char *>(impl.get_buffer(bid));
     REQUIRE(std::memcmp(buf, "test", 4) == 0);
+}
+
+TEST_CASE("test buffers - buffer mutable/const") {
+    char data[16] = {};
+    condy::MutableBuffer mbuf = condy::buffer(data, sizeof(data));
+    REQUIRE(mbuf.data() == data);
+    REQUIRE(mbuf.size() == sizeof(data));
+
+    condy::ConstBuffer cb1 = condy::buffer(data, sizeof(data));
+    REQUIRE(cb1.data() == data);
+    REQUIRE(cb1.size() == sizeof(data));
+
+    condy::ConstBuffer cb2 = mbuf;
+    REQUIRE(cb2.data() == data);
+    REQUIRE(cb2.size() == sizeof(data));
+}
+
+TEST_CASE("test buffers - buffer pod array") {
+    int arr[4] = {1, 2, 3, 4};
+    condy::MutableBuffer mbuf = condy::buffer(arr);
+    REQUIRE(mbuf.data() == reinterpret_cast<void *>(arr));
+    REQUIRE(mbuf.size() == sizeof(arr));
+
+    condy::ConstBuffer cbuf = condy::buffer(arr);
+    REQUIRE(cbuf.data() == reinterpret_cast<const void *>(arr));
+    REQUIRE(cbuf.size() == sizeof(arr));
+}
+
+TEST_CASE("test buffers - buffer string") {
+    std::string str = "hello";
+    condy::ConstBuffer cbuf = condy::buffer(str);
+    REQUIRE(cbuf.data() == reinterpret_cast<const void *>(str.data()));
+    REQUIRE(cbuf.size() == str.size());
+}
+
+TEST_CASE("test buffers - buffer vector") {
+    std::vector<int> vec = {1, 2, 3, 4};
+    condy::MutableBuffer mbuf = condy::buffer(vec);
+    REQUIRE(mbuf.data() == reinterpret_cast<void *>(vec.data()));
+    REQUIRE(mbuf.size() == sizeof(int) * vec.size());
+
+    condy::ConstBuffer cbuf = condy::buffer(vec);
+    REQUIRE(cbuf.data() == reinterpret_cast<const void *>(vec.data()));
+    REQUIRE(cbuf.size() == sizeof(int) * vec.size());
 }
