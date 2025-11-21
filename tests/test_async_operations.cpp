@@ -250,8 +250,7 @@ TEST_CASE("test async_operations - read fixed buffer") {
         auto &buffer_table = condy::current_buffer_table();
         buffer_table.init(1);
         char buf_storage[64];
-        buffer_table.register_buffer(
-            0, {.iov_base = buf_storage, .iov_len = sizeof(buf_storage)});
+        buffer_table.register_buffer(0, condy::buffer(buf_storage));
 
         ssize_t n = co_await condy::async_read(
             pipe_fds[0], condy::fixed(0, condy::buffer(buf_storage, 64)), 0);
@@ -296,7 +295,7 @@ TEST_CASE("test async_operations - write fixed buffer") {
     auto func = [&]() -> condy::Coro<void> {
         auto &buffer_table = condy::current_buffer_table();
         buffer_table.init(1);
-        buffer_table.register_buffer(0, {.iov_base = msg, .iov_len = msg_len});
+        buffer_table.register_buffer(0, condy::buffer(msg, msg_len));
 
         ssize_t n = co_await condy::async_write(
             pipe_fds[1], condy::fixed(0, condy::buffer(msg, msg_len)), 0);

@@ -24,8 +24,8 @@ TEST_CASE("test buffer_table - register/unregister buffer") {
         char buffer1[16];
         char buffer2[32];
 
-        buffer_table.register_buffer(0, iovec{buffer1, sizeof(buffer1)});
-        buffer_table.register_buffer(1, iovec{buffer2, sizeof(buffer2)});
+        buffer_table.register_buffer(0, condy::buffer(buffer1));
+        buffer_table.register_buffer(1, condy::buffer(buffer2));
 
         buffer_table.unregister_buffer(0);
         buffer_table.unregister_buffer(1);
@@ -45,11 +45,11 @@ TEST_CASE("test buffer_table - use registered buffer") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        char write_buf[] = "hello";
+        const char write_buf[] = "hello";
         char read_buf[sizeof(write_buf)] = {0};
 
-        buffer_table.register_buffer(0, iovec{read_buf, sizeof(read_buf)});
-        buffer_table.register_buffer(1, iovec{write_buf, sizeof(write_buf)});
+        buffer_table.register_buffer(0, condy::buffer(read_buf));
+        buffer_table.register_buffer(1, condy::buffer(write_buf));
 
         auto write_op =
             condy::make_op_awaiter(io_uring_prep_write_fixed, pipes[1],

@@ -108,9 +108,10 @@ public:
         initialized_ = true;
     }
 
-    void register_buffer(int index, const iovec &buf) {
+    template <typename Buffer> void register_buffer(int index, Buffer &&buf) {
         check_initialized_();
-        int r = io_uring_register_buffers_update_tag(&ring_, index, &buf,
+        iovec vec{const_cast<void *>(buf.data()), buf.size()};
+        int r = io_uring_register_buffers_update_tag(&ring_, index, &vec,
                                                      nullptr, 1);
         if (r < 0) {
             throw_exception("io_uring_register_buffers_update failed", -r);
