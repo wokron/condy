@@ -143,9 +143,7 @@ public:
             if (pending_works_ == 0) {
                 break;
             }
-
-            ring_.submit();
-            flush_ring_();
+            flush_ring_(true);
         }
     }
 
@@ -172,9 +170,9 @@ private:
         io_uring_sqe_set_data(sqe, MagicData::IGNORE);
     }
 
-    size_t flush_ring_() {
+    size_t flush_ring_(bool submit_and_wait = false) {
         return ring_.reap_completions(
-            [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
+            [this](io_uring_cqe *cqe) { process_cqe_(cqe); }, submit_and_wait);
     }
 
     void process_cqe_(io_uring_cqe *cqe) {

@@ -185,10 +185,24 @@ public:
         }
     }
 
-    template <typename Func> size_t reap_completions(Func &&process_func) {
+    template <typename Func>
+    size_t reap_completions(Func &&process_func, bool submit_and_wait = false) {
+        int r;
+        if (submit_and_wait) {
+            do {
+                r = io_uring_submit_and_wait(&ring_, 1);
+                if (r >= 0) {
+                    break;
+                } else if (r == -EINTR) {
+                    continue;
+                } else {
+                    throw_exception("io_uring_submit_and_wait failed", -r);
+                }
+            } while (true);
+        }
+
         size_t reaped = 0;
         io_uring_cqe *cqe;
-        int r;
         while ((r = io_uring_peek_cqe(&ring_, &cqe)) == 0) {
             process_func(cqe);
             io_uring_cqe_seen(&ring_, cqe);
