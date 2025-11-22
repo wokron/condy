@@ -160,7 +160,7 @@ public:
         if (try_push_inner_(std::move(item))) {
             return true;
         }
-        finish_handle->set_item(item);
+        finish_handle->set_item(std::move(item));
         assert(pop_awaiters_.empty());
         push_awaiters_.push_back(finish_handle);
         return false;
