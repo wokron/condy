@@ -50,8 +50,9 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
 }
 
 template <typename Func, typename... Args>
-auto make_select_buffer_op_awaiter(detail::ProvidedBufferPoolImplPtr buffers_impl,
-                                   Func &&func, Args &&...args) {
+auto make_select_buffer_op_awaiter(
+    detail::ProvidedBufferPoolImplPtr buffers_impl, Func &&func,
+    Args &&...args) {
     int bgid = buffers_impl->bgid();
     auto op = SelectBufferOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
         std::move(buffers_impl), std::forward<Func>(func),
@@ -63,8 +64,9 @@ auto make_select_buffer_op_awaiter(detail::ProvidedBufferPoolImplPtr buffers_imp
 
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_select_buffer_op_awaiter(
-    MultiShotFunc &&multishot_func, detail::ProvidedBufferPoolImplPtr buffers_impl,
-    Func &&func, Args &&...args) {
+    MultiShotFunc &&multishot_func,
+    detail::ProvidedBufferPoolImplPtr buffers_impl, Func &&func,
+    Args &&...args) {
     int bgid = buffers_impl->bgid();
     auto op = MultiShotSelectBufferOpAwaiter<
         std::decay_t<MultiShotFunc>, std::decay_t<Func>, std::decay_t<Args>...>(
@@ -84,10 +86,9 @@ auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
         std::forward<Args>(args)...);
 }
 
-template <typename Func, typename... Args>
-auto make_drained_op_awaiter(OpAwaiter<Func, Args...> op) {
-    op.add_flags(IOSQE_IO_DRAIN);
-    return op;
+template <typename Awaiter> auto make_drained_op_awaiter(Awaiter &&awaiter) {
+    return DrainedOpAwaiter<std::decay_t<Awaiter>>(
+        std::forward<Awaiter>(awaiter));
 }
 
 template <bool Cancel, typename... Awaiters>

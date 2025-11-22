@@ -178,6 +178,26 @@ public:
         : Base(HandleBox<TimerFinishHandle>(timer_handle), func, args...) {}
 };
 
+template <typename Awaiter>
+class [[nodiscard]] DrainedOpAwaiter : public Awaiter {
+public:
+    using Base = Awaiter;
+    DrainedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
+
+    void register_operation(unsigned int flags) {
+        auto *runtime = Context::current().runtime();
+        runtime->notify(); // Ensure every operation before drain will complete
+        Base::register_operation(flags | IOSQE_IO_DRAIN);
+    }
+
+    template <typename PromiseType>
+    void await_suspend(std::coroutine_handle<PromiseType> h) {
+        Base::init_finish_handle();
+        Base::get_handle()->set_invoker(&h.promise());
+        register_operation(0);
+    }
+};
+
 template <typename Handle, typename Awaiter>
 class [[nodiscard]] RangedParallelAwaiter {
 public:

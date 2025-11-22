@@ -82,8 +82,10 @@ public:
 public:
     void done() {
         pending_works_--;
-        eventfd_write(notify_fd_, 1);
+        notify();
     }
+
+    void notify() { eventfd_write(notify_fd_, 1); }
 
     void schedule(WorkInvoker *work) {
         auto *runtime = Context::current().runtime();
