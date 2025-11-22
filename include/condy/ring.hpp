@@ -208,6 +208,13 @@ public:
             io_uring_cqe_seen(&ring_, cqe);
             reaped++;
         }
+
+        // Any overflow in the completion queue results in inconsistent state
+        // that the application cannot recover from.
+        if (io_uring_cq_has_overflow(&ring_)) {
+            throw std::runtime_error("CQ overflow detected");
+        }
+
         return reaped;
     }
 
