@@ -285,34 +285,39 @@ TEST_CASE("test task - detach") {
     REQUIRE(finished);
 }
 
-TEST_CASE("test task - spawn task with custom allocator") {
-    struct CustomAllocator {
-        using value_type = char;
-        value_type *allocate(size_t size) {
-            allocated_size = size;
-            allocated = true;
-            return reinterpret_cast<value_type *>(::malloc(size));
-        }
-        void deallocate(value_type *ptr, size_t size) {
-            REQUIRE(size == allocated_size);
-            ::free(ptr);
-        }
-        size_t allocated_size = 0;
-        bool allocated = false;
-    };
+namespace {
 
+struct CustomAllocator {
+    using value_type = char;
+    value_type *allocate(size_t size) {
+        allocated_size = size;
+        allocated = true;
+        return reinterpret_cast<value_type *>(::malloc(size));
+    }
+    void deallocate(value_type *ptr, size_t size) {
+        REQUIRE(size == allocated_size);
+        ::free(ptr);
+    }
+    size_t allocated_size = 0;
+    bool allocated = false;
+};
+
+condy::Coro<void, CustomAllocator> test_allocator(CustomAllocator &allocator,
+                                                  bool &finished) {
+    finished = true;
+    co_return;
+}
+
+} // namespace
+
+TEST_CASE("test task - spawn task with custom allocator") {
     CustomAllocator allocator;
 
     condy::Runtime runtime(options);
     bool finished = false;
 
-    auto func = [&](auto &) -> condy::Coro<void, CustomAllocator> {
-        finished = true;
-        co_return;
-    };
-
     auto main = [&]() -> condy::Coro<void> {
-        auto task = condy::co_spawn(func(allocator));
+        auto task = condy::co_spawn(test_allocator(allocator, finished));
         co_await std::move(task);
     };
 

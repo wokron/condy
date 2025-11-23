@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace condy {
@@ -115,9 +116,13 @@ public:
 private:
     static T *container_of_(SingleLinkEntry *entry) noexcept {
         constexpr T *dummy = 0;
+#ifdef __clang__
         constexpr auto *offset = &(dummy->*Member);
-        return reinterpret_cast<T *>(reinterpret_cast<size_t>(entry) -
-                                     reinterpret_cast<size_t>(offset));
+#else
+        auto *offset = &(dummy->*Member);
+#endif
+        return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(entry) -
+                                     reinterpret_cast<intptr_t>(offset));
     }
 
 private:
@@ -211,9 +216,13 @@ public:
 private:
     static T *container_of_(DoubleLinkEntry *entry) noexcept {
         constexpr T *dummy = 0;
+#ifdef __clang__
         constexpr auto *offset = &(dummy->*Member);
-        return reinterpret_cast<T *>(reinterpret_cast<size_t>(entry) -
-                                     reinterpret_cast<size_t>(offset));
+#else
+        auto *offset = &(dummy->*Member);
+#endif
+        return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(entry) -
+                                     reinterpret_cast<intptr_t>(offset));
     }
 
 private:

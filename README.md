@@ -64,7 +64,7 @@ target_link_libraries(my_app PRIVATE condy)
 ```
 
 > [!NOTE]
-> * Condy currently only supports Clang as the compiler. C++20 is required because Condy uses coroutines.
+> * C++20 is required because Condy uses coroutines.
 > * Condy is a **header-only library** but depends on **liburing ≥ 2.3**.
 > * If `LINK_LIBURING=ON` (default), Condy will build and link the bundled liburing from `third_party/liburing`.
 > * If `LINK_LIBURING=OFF`, you need to install liburing in your system and link it explicitly.
