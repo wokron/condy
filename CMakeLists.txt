@@ -5,6 +5,8 @@ project(condy VERSION 0.1.0 LANGUAGES CXX)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BUILD_TESTS "Build tests" OFF)
+option(LINK_LIBURING "Use liburing from third_party and link it to condy" ON)
+
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(condy INTERFACE)
 target_include_directories(condy INTERFACE include)
 
-if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS)
+if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS OR LINK_LIBURING)
     # liburing
     set(LIBURING_SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing)
     message(STATUS "Configuring liburing in ${LIBURING_SOURCE_DIR}")
@@ -37,6 +39,10 @@ if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS)
     set_target_properties(uring PROPERTIES IMPORTED_LOCATION ${LIBURING_SOURCE_DIR}/src/liburing.a)
     target_include_directories(uring INTERFACE ${LIBURING_SOURCE_DIR}/src/include)
     add_dependencies(uring build_uring)
+endif()
+
+if(LINK_LIBURING)
+    target_link_libraries(condy INTERFACE uring)
 endif()
 
 if(BUILD_EXAMPLES)
