@@ -9,11 +9,20 @@
 #include <stdexcept>
 #include <utility>
 
-#if defined(__has_feature) && __has_feature(thread_sanitizer)
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
 #include <sanitizer/tsan_interface.h>
 #else
-#define __tsan_acquire(addr) (void)0
-#define __tsan_release(addr) (void)0
+extern "C" {
+inline void __tsan_acquire(void *addr) { (void)addr; }
+inline void __tsan_release(void *addr) { (void)addr; }
+}
+#endif
+#else
+extern "C" {
+inline void __tsan_acquire(void *addr) { (void)addr; }
+inline void __tsan_release(void *addr) { (void)addr; }
+}
 #endif
 
 namespace condy {

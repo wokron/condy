@@ -210,105 +210,121 @@ TEST_CASE("test coro - return no default constructible type") {
     REQUIRE(finished);
 }
 
+namespace {
+
+struct CustomAllocator {
+    using value_type = char;
+
+    value_type *allocate(size_t size) {
+        allocated_size = size;
+        allocated = true;
+        return reinterpret_cast<value_type *>(::malloc(size));
+    }
+
+    void deallocate(value_type *ptr, size_t size) {
+        REQUIRE(size == allocated_size);
+        ::free(ptr);
+    }
+
+    size_t allocated_size = 0;
+    bool allocated = false;
+};
+
+condy::Coro<void, CustomAllocator>
+test_custom_allocator_func(CustomAllocator &allocator, bool &finished) {
+    finished = true;
+    co_return;
+}
+
+} // namespace
+
 TEST_CASE("test coro - custom allocator") {
-    struct CustomAllocator {
-        using value_type = char;
-
-        value_type *allocate(size_t size) {
-            allocated_size = size;
-            allocated = true;
-            return reinterpret_cast<value_type *>(::malloc(size));
-        }
-
-        void deallocate(value_type *ptr, size_t size) {
-            REQUIRE(size == allocated_size);
-            ::free(ptr);
-        }
-
-        size_t allocated_size = 0;
-        bool allocated = false;
-    };
-
     bool finished = false;
-
-    auto func = [&](auto &) -> condy::Coro<void, CustomAllocator> {
-        finished = true;
-        co_return;
-    };
-
     CustomAllocator allocator;
-    auto coro1 = func(allocator);
-    coro1.release().resume();
+    auto coro = test_custom_allocator_func(allocator, finished);
+    coro.release().resume();
     REQUIRE(finished);
     REQUIRE(allocator.allocated);
 }
 
+namespace {
+
+condy::pmr::Coro<void> test_pmr_func(auto &, bool &finished) {
+    finished = true;
+    co_return;
+}
+
+} // namespace
+
 TEST_CASE("test coro - pmr allocator") {
     std::pmr::monotonic_buffer_resource pool;
     std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
-
     bool finished = false;
-
-    auto func = [&](auto &) -> condy::pmr::Coro<void> {
-        finished = true;
-        co_return;
-    };
-
-    auto coro1 = func(allocator);
-    coro1.release().resume();
+    auto coro = test_pmr_func(allocator, finished);
+    coro.release().resume();
     REQUIRE(finished);
 }
 
+namespace {
+struct AllocatorA {
+    using value_type = char;
+    value_type *allocate(size_t size) {
+        allocated_size = size;
+        allocated = true;
+        return reinterpret_cast<value_type *>(::malloc(size));
+    }
+    void deallocate(value_type *ptr, size_t size) {
+        REQUIRE(size == allocated_size);
+        ::free(ptr);
+    }
+    size_t allocated_size = 0;
+    bool allocated = false;
+};
+
+struct AllocatorB {
+    using value_type = char;
+    value_type *allocate(size_t size) {
+        allocated_size = size;
+        allocated = true;
+        return reinterpret_cast<value_type *>(::malloc(size));
+    }
+    void deallocate(value_type *ptr, size_t size) {
+        REQUIRE(size == allocated_size);
+        ::free(ptr);
+    }
+    size_t allocated_size = 0;
+    bool allocated = false;
+};
+
+condy::Coro<void, AllocatorA> test_allocator_func1(AllocatorA &allocatorA,
+                                                   bool &finished1) {
+    finished1 = true;
+    co_return;
+}
+
+condy::Coro<void, AllocatorB> test_allocator_func2(AllocatorB &allocatorB,
+                                                   AllocatorA &allocatorA,
+                                                   bool &finished2,
+                                                   bool &finished1) {
+    finished2 = true;
+    co_await test_allocator_func1(allocatorA, finished1);
+    co_return;
+}
+
+} // namespace
+
 TEST_CASE("test coro - different allocators") {
-    struct AllocatorA {
-        using value_type = char;
-        value_type *allocate(size_t size) {
-            allocated_size = size;
-            allocated = true;
-            return reinterpret_cast<value_type *>(::malloc(size));
-        }
-        void deallocate(value_type *ptr, size_t size) {
-            REQUIRE(size == allocated_size);
-            ::free(ptr);
-        }
-        size_t allocated_size = 0;
-        bool allocated = false;
-    };
-
-    struct AllocatorB {
-        using value_type = char;
-        value_type *allocate(size_t size) {
-            allocated_size = size;
-            allocated = true;
-            return reinterpret_cast<value_type *>(::malloc(size));
-        }
-        void deallocate(value_type *ptr, size_t size) {
-            REQUIRE(size == allocated_size);
-            ::free(ptr);
-        }
-        size_t allocated_size = 0;
-        bool allocated = false;
-    };
-
     bool finished1 = false;
     bool finished2 = false;
 
     AllocatorA allocatorA;
     AllocatorB allocatorB;
 
-    auto func1 = [&](auto &) -> condy::Coro<void, AllocatorA> {
-        finished1 = true;
-        co_return;
-    };
-
-    auto func2 = [&](auto &) -> condy::Coro<void, AllocatorB> {
-        finished2 = true;
-        co_await func1(allocatorA);
-        co_return;
-    };
-
-    auto coro1 = func2(allocatorB);
-    coro1.release().resume();
+    auto coro =
+        test_allocator_func2(allocatorB, allocatorA, finished2, finished1);
+    REQUIRE(!finished1);
+    REQUIRE(!finished2);
+    coro.release().resume();
     REQUIRE(finished1);
     REQUIRE(finished2);
     REQUIRE(allocatorA.allocated);

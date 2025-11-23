@@ -51,18 +51,22 @@ TEST_CASE("test sync_wait - exception handling") {
     }
 }
 
+namespace {
+
+condy::pmr::Coro<int> test_pmr_func(auto &, bool &finished) {
+    finished = true;
+    co_return 42;
+}
+
+} // namespace
+
 TEST_CASE("test sync_wait - with allocator") {
     bool finished = false;
-
-    auto func = [&](auto &) -> condy::pmr::Coro<int> {
-        finished = true;
-        co_return 42;
-    };
 
     std::pmr::monotonic_buffer_resource pool;
     std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
 
-    auto result = condy::sync_wait(func(allocator));
+    auto result = condy::sync_wait(test_pmr_func(allocator, finished));
     REQUIRE(result == 42);
     REQUIRE(finished);
 }
