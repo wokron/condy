@@ -149,8 +149,6 @@ TEST_CASE("test channel - wait two channel") {
         runtime.run();
     });
 
-    runtime.block_until_running();
-
     REQUIRE(!finished);
 
     REQUIRE(ch1.try_push(42));
@@ -187,8 +185,6 @@ TEST_CASE("test channel - channel cancel pop") {
         runtime.done();
         runtime.run();
     });
-
-    runtime.block_until_running();
 
     REQUIRE(!finished);
     REQUIRE(ch2.try_push(42));
@@ -238,9 +234,6 @@ TEST_CASE("test channel - cross runtimes") {
     std::thread t1([&]() { runtime1.run(); });
 
     std::thread t2([&]() { runtime2.run(); });
-
-    runtime1.block_until_running();
-    runtime2.block_until_running();
 
     auto task1 = condy::co_spawn(runtime1, consumer());
     auto task2 = condy::co_spawn(runtime2, producer());

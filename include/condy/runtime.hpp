@@ -94,7 +94,7 @@ public:
             return;
         }
 
-        if (runtime != nullptr) {
+        if (runtime != nullptr && this->ring_enabled_) {
             __tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
@@ -111,14 +111,9 @@ public:
 
     void resume_work() { pending_works_--; }
 
-    bool is_running() const { return running_.load(); }
-
-    void block_until_running() { running_.wait(false); }
-
     void run() {
         io_uring_enable_rings(ring_.ring());
-        running_.store(true);
-        running_.notify_all();
+        ring_enabled_ = true;
 
         Context::current().init(&ring_, this);
         auto d = defer([]() { Context::current().reset(); });
@@ -211,13 +206,13 @@ private:
     }
 
 private:
-    std::atomic_bool running_ = false;
     // Global state
     std::mutex mutex_;
+    WorkListQueue global_queue_;
     eventfd_t dummy_;
     int notify_fd_;
-    WorkListQueue global_queue_;
     std::atomic_size_t pending_works_ = 1;
+    std::atomic_bool ring_enabled_ = false;
 
     // Local state
     WorkListQueue local_queue_;
