@@ -3,6 +3,7 @@
 #include "condy/coro.hpp"
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
+#include "condy/sync_wait.hpp"
 #include "condy/task.hpp"
 #include <atomic>
 #include <cstddef>
@@ -276,4 +277,75 @@ TEST_CASE("test channel - force push") {
 
     channel.force_push(42);
     REQUIRE(channel.size() == 1);
+}
+
+namespace {
+
+condy::Coro<void> producer_task(condy::Channel<int> &channel,
+                                size_t num_messages) {
+    for (size_t i = 0; i < num_messages; ++i) {
+        co_await channel.push(static_cast<int>(i));
+    }
+    co_return;
+}
+
+condy::Coro<void> consumer_task(condy::Channel<int> &channel,
+                                size_t num_messages) {
+    for (size_t i = 0; i < num_messages; ++i) {
+        auto value = co_await channel.pop();
+        REQUIRE(value == static_cast<int>(i));
+    }
+    co_return;
+}
+
+condy::Coro<void>
+launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
+                 size_t num_pairs, size_t num_messages) {
+    std::vector<condy::Task<void>> tasks;
+    for (auto &channel : channels) {
+        tasks.emplace_back(
+            condy::co_spawn(producer_task(*channel, num_messages)));
+    }
+    for (auto &task : tasks) {
+        co_await std::move(task);
+    }
+    co_return;
+}
+
+condy::Coro<void>
+launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
+                 size_t num_pairs, size_t num_messages) {
+    std::vector<condy::Task<void>> tasks;
+    for (auto &channel : channels) {
+        tasks.emplace_back(
+            condy::co_spawn(consumer_task(*channel, num_messages)));
+    }
+    for (auto &task : tasks) {
+        co_await std::move(task);
+    }
+    co_return;
+}
+
+} // namespace
+
+TEST_CASE("test channel - two runtime") {
+    const size_t num_pairs = 2;
+    const size_t num_messages = 1025;
+    const size_t buffer_size = 1024;
+
+    std::vector<std::unique_ptr<condy::Channel<int>>> channels;
+    for (size_t i = 0; i < num_pairs; ++i) {
+        channels.push_back(std::make_unique<condy::Channel<int>>(buffer_size));
+    }
+
+    condy::Runtime runtime1, runtime2;
+    std::thread rt1([&]() {
+        condy::sync_wait(runtime1,
+                         launch_producers(channels, num_pairs, num_messages));
+    });
+
+    condy::sync_wait(runtime2,
+                     launch_consumers(channels, num_pairs, num_messages));
+
+    rt1.join();
 }
