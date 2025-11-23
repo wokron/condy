@@ -147,6 +147,8 @@ public:
         if (impl_ != nullptr) {
             impl_->add_buffer(data_);
             impl_.reset();
+            data_ = nullptr;
+            size_ = 0;
         }
     }
 
