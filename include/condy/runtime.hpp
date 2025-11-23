@@ -140,6 +140,9 @@ public:
             }
             flush_ring_(true);
         }
+
+        // Ensure all notifications sqes are submitted
+        ring_.submit();
     }
 
     size_t next_bgid() { return next_bgid_++; }
