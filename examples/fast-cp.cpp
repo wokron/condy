@@ -1,3 +1,4 @@
+#include "condy/runtime.hpp"
 #include <condy.hpp>
 #include <cstddef>
 #include <cstring>
@@ -7,48 +8,32 @@
 #include <sys/types.h>
 
 constexpr size_t TASK_NUM = 64;
-constexpr size_t BLOCK_ALIGN = 512;
-constexpr size_t CHUNK_SIZE = 256 * 1024 * 1024; // 256 MiB
+constexpr size_t CHUNK_SIZE = 128 * 1024;
 
-struct raw_deleter {
-    void operator()(void *ptr) const { std::free(ptr); }
-};
-
-condy::Coro<> copy_file_task(int infd, int outfd, off_t &offset,
-                             off_t file_size) {
+condy::Coro<> copy_file_task(off_t &offset, off_t file_size, void *ptr) {
     using condy::operators::operator>>;
 
-    void *raw_ptr;
-    if (posix_memalign(&raw_ptr, BLOCK_ALIGN, CHUNK_SIZE) != 0) {
-        std::fprintf(stderr, "posix_memalign failed\n");
-        exit(1);
-    }
-    std::unique_ptr<char[], raw_deleter> buffer(static_cast<char *>(raw_ptr));
+    auto buffer = condy::buffer(ptr, CHUNK_SIZE);
+
+    auto fixed_buffer = condy::fixed(0, buffer);
+    auto infd = condy::fixed(0);
+    auto outfd = condy::fixed(1);
 
     while (offset < file_size) {
         off_t current_offset = offset;
-        bool partial_copy = current_offset + CHUNK_SIZE > file_size;
         offset += CHUNK_SIZE;
 
-        int r1, r2;
-        if (!partial_copy) {
-            std::tie(r1, r2) = co_await (
-                condy::async_read(infd, condy::buffer(buffer.get(), CHUNK_SIZE),
-                                  current_offset) >>
-                condy::async_write(outfd,
-                                   condy::buffer(buffer.get(), CHUNK_SIZE),
-                                   current_offset));
-
-        } else {
-            r1 = co_await condy::async_read(
-                infd, condy::buffer(buffer.get(), CHUNK_SIZE), current_offset);
-            r2 = co_await condy::async_write(
-                outfd, condy::buffer(buffer.get(), CHUNK_SIZE), current_offset);
-        }
+        auto [r1, r2] =
+            co_await (condy::async_read(infd, fixed_buffer, current_offset) >>
+                      condy::async_write(outfd, fixed_buffer, current_offset));
         if (r1 < 0) {
             std::fprintf(stderr, "Read error at offset %lld: %s\n",
                          (long long)current_offset, std::strerror(-r1));
             exit(1);
+        }
+        if (r1 < CHUNK_SIZE) {
+            r2 = co_await condy::async_write(
+                outfd, condy::fixed(0, condy::buffer(ptr, r1)), current_offset);
         }
         if (r2 < 0) {
             std::fprintf(stderr, "Write error at offset %lld: %s\n",
@@ -60,6 +45,8 @@ condy::Coro<> copy_file_task(int infd, int outfd, off_t &offset,
 
 condy::Coro<> co_main(const char *infile, const char *outfile) {
     using condy::operators::operator&&;
+
+    auto start = std::chrono::high_resolution_clock::now();
 
     struct statx statx_buf;
     auto [infd, outfd, r] = co_await (
@@ -87,18 +74,47 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
     off_t file_size = statx_buf.stx_size;
     off_t offset = 0;
 
+    void *raw_buffer =
+        mmap(nullptr, TASK_NUM * CHUNK_SIZE, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (raw_buffer == MAP_FAILED) {
+        std::fprintf(stderr, "Failed to allocate aligned buffer: %s\n",
+                     std::strerror(errno));
+        exit(1);
+    }
+
+    auto &fd_table = condy::current_fd_table();
+    fd_table.init(2);
+    fd_table.register_fd(0, infd);
+    fd_table.register_fd(1, outfd);
+
+    auto &buffer_table = condy::current_buffer_table();
+    buffer_table.init(1);
+    buffer_table.register_buffer(
+        0, condy::buffer(raw_buffer, TASK_NUM * CHUNK_SIZE));
+
     std::vector<condy::Task<>> tasks;
     for (int i = 0; i < TASK_NUM; i++) {
+        char *buffer = static_cast<char *>(raw_buffer) + i * CHUNK_SIZE;
         tasks.emplace_back(
-            condy::co_spawn(copy_file_task(infd, outfd, offset, file_size)));
+            condy::co_spawn(copy_file_task(offset, file_size, buffer)));
     }
 
     for (auto &task : tasks) {
         co_await std::move(task);
     }
 
-    ftruncate(outfd, file_size);
-    co_await (condy::async_close(infd) && condy::async_close(outfd));
+    co_await (condy::async_close(condy::fixed(0)) &&
+              condy::async_close(condy::fixed(1)));
+
+    munmap(raw_buffer, TASK_NUM * CHUNK_SIZE);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    double mb_copied = static_cast<double>(file_size) / (1024.0 * 1024.0);
+    std::printf("Copied %.2f MiB in %.2f seconds (%.2f MiB/s)\n", mb_copied,
+                elapsed.count(), mb_copied / elapsed.count());
+    co_return;
 }
 
 int main(int argc, char **argv) {
@@ -113,5 +129,6 @@ int main(int argc, char **argv) {
                        .submit_batch_size(2 * TASK_NUM);
     condy::Runtime runtime(options);
     condy::sync_wait(runtime, co_main(argv[1], argv[2]));
+
     return 0;
 }
