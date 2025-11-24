@@ -188,10 +188,13 @@ public:
     template <typename Func>
     size_t reap_completions(Func &&process_func, bool submit_and_wait = false) {
         int r;
+        unsigned head;
+        io_uring_cqe *cqe;
+        size_t reaped = 0;
         if (submit_and_wait) {
             do {
                 r = io_uring_submit_and_wait(&ring_, 1);
-                if (r >= 0) {
+                if (r >= 0) [[likely]] {
                     break;
                 } else if (r == -EINTR) {
                     continue;
@@ -199,20 +202,21 @@ public:
                     throw_exception("io_uring_submit_and_wait failed", -r);
                 }
             } while (true);
+
+            io_uring_for_each_cqe(&ring_, head, cqe) {
+                process_func(cqe);
+                reaped++;
+            }
+            io_uring_cq_advance(&ring_, reaped);
+            return reaped;
         }
 
-        size_t reaped = 0;
-        io_uring_cqe *cqe;
-        while ((r = io_uring_peek_cqe(&ring_, &cqe)) == 0) {
-            process_func(cqe);
-            io_uring_cqe_seen(&ring_, cqe);
-            reaped++;
-        }
-
-        // Any overflow in the completion queue results in inconsistent state
-        // that the application cannot recover from.
-        if (io_uring_cq_has_overflow(&ring_)) {
-            throw std::runtime_error("CQ overflow detected");
+        if (io_uring_peek_cqe(&ring_, &cqe) == 0) {
+            io_uring_for_each_cqe(&ring_, head, cqe) {
+                process_func(cqe);
+                reaped++;
+            }
+            io_uring_cq_advance(&ring_, reaped);
         }
 
         return reaped;
@@ -257,9 +261,6 @@ public:
         } while (true);
         return sqe;
     }
-
-public:
-    inline static void *const IGNORE_DATA = reinterpret_cast<void *>(0x1);
 
 private:
     bool initialized_ = false;
