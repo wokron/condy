@@ -6,3 +6,6 @@ target_link_libraries(channel PRIVATE condy uring)
 
 add_executable(overhead overhead.cpp)
 target_link_libraries(overhead PRIVATE condy uring)
+
+add_executable(post post.cpp)
+target_link_libraries(post PRIVATE condy uring)
