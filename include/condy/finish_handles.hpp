@@ -51,11 +51,11 @@ public:
     }
 
 protected:
-    MultiShotFunc multishot_func_ = nullptr;
-    Ring *ring_ = nullptr;
     int res_;
-    int flags_;
     Invoker *invoker_ = nullptr;
+    Ring *ring_ = nullptr;
+    MultiShotFunc multishot_func_ = nullptr;
+    int flags_;
 };
 
 class TimerFinishHandle : public OpFinishHandle {};
