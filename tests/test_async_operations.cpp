@@ -205,11 +205,14 @@ TEST_CASE("test async_operations - cancel fd") {
         REQUIRE(r == 0);
     };
 
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
     auto func = [&]() -> condy::Coro<void> {
-        auto t = condy::co_spawn(canceller(STDIN_FILENO));
+        auto t = condy::co_spawn(canceller(pipe_fds[0]));
         char buffer[128];
 
-        auto r = co_await condy::async_read(STDIN_FILENO,
+        auto r = co_await condy::async_read(pipe_fds[0],
                                             condy::buffer(buffer, 128), 0);
         REQUIRE(r == -ECANCELED);
 
@@ -220,6 +223,8 @@ TEST_CASE("test async_operations - cancel fd") {
 }
 
 TEST_CASE("test async_operations - link timeout") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
     using condy::operators::operator>>;
     auto func = [&]() -> condy::Coro<void> {
         char buffer[128];
@@ -228,7 +233,7 @@ TEST_CASE("test async_operations - link timeout") {
             .tv_nsec = 1,
         };
         auto [r1, r2] = co_await (
-            condy::async_read(STDIN_FILENO, condy::buffer(buffer, 128), 0) >>
+            condy::async_read(pipe_fds[0], condy::buffer(buffer, 128), 0) >>
             condy::async_link_timeout(&ts, 0));
         REQUIRE(r1 == -ECANCELED);
         REQUIRE(r2 == -ETIME);
