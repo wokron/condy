@@ -1,0 +1,68 @@
+name: Build and Test Condy
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { cc: clang, cxx: clang++ }
+          - { cc: gcc, cxx: g++ }
+
+    steps:
+      - name: Checkout Repository and Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Configure LLVM
+        if: matrix.compiler.cc == 'clang'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+
+      - name: Configure CMake
+        run: |
+          COMPILER=$(${{matrix.compiler.cc}} --version | head -n 1)
+          echo "Using compiler: $COMPILER"
+          cmake -B ${{github.workspace}}/build \
+              -DBUILD_BENCHMARKS=ON \
+              -DBUILD_TESTS=ON \
+              -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} \
+              -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}} \
+              -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j$(nproc)
+
+      - name: Run Tests
+        timeout-minutes: 5
+        working-directory: ${{github.workspace}}/build
+        run: ctest --verbose -C ${{env.BUILD_TYPE}}
+
+      - name: Run Benchmarks
+        timeout-minutes: 5
+        working-directory: ${{github.workspace}}/build/benchmarks
+        run: |
+          set -e
+          ALL_BENCHMARKS="channel overhead post spawn_tasks"
+          for BENCHMARK in $ALL_BENCHMARKS; do
+            echo "::group::Running benchmark: $BENCHMARK"
+            timeout 60s ./$BENCHMARK || {
+              echo "::error::$BENCHMARK failed or timed out"
+              continue
+            }
+            echo "::endgroup::"
+          done
