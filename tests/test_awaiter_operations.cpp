@@ -324,9 +324,13 @@ TEST_CASE("test awaiter_operations - ranged +=") {
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         auto awaiter =
             condy::make_ranged_all_awaiter(std::vector<decltype(aw1)>{});
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+        // This is a false positive warning in GCC
         awaiter += std::move(aw1);
         awaiter += std::move(aw2);
         awaiter += std::move(aw3);
+#pragma GCC diagnostic pop
         auto r = co_await std::move(awaiter);
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});

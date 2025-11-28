@@ -249,7 +249,8 @@ TEST_CASE("test async_operations - read fixed buffer") {
     const char *msg = "Hello, condy!";
     ssize_t msg_len = std::strlen(msg);
 
-    ::write(pipe_fds[1], msg, msg_len);
+    int r = ::write(pipe_fds[1], msg, msg_len);
+    REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
         auto &buffer_table = condy::current_buffer_table();
@@ -275,7 +276,8 @@ TEST_CASE("test async_operations - read provided buffer") {
     const char *msg = "Hello, condy provided buffer!";
     ssize_t msg_len = std::strlen(msg);
 
-    ::write(pipe_fds[1], msg, msg_len);
+    int r = ::write(pipe_fds[1], msg, msg_len);
+    REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferPool buf_pool(2, 64);
