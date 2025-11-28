@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: ["master"]
 
-env:
-  BUILD_TYPE: Release
-
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
@@ -20,6 +17,7 @@ jobs:
         compiler:
           - { cc: clang, cxx: clang++ }
           - { cc: gcc, cxx: g++ }
+        build-type: [Release, Debug]
 
     steps:
       - name: Checkout Repository and Submodules
@@ -42,15 +40,15 @@ jobs:
               -DBUILD_TESTS=ON \
               -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} \
               -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}} \
-              -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+              -DCMAKE_BUILD_TYPE=${{matrix.build-type}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j$(nproc)
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.build-type}} -j$(nproc)
 
       - name: Run Tests
         timeout-minutes: 5
         working-directory: ${{github.workspace}}/build
-        run: ctest --verbose -C ${{env.BUILD_TYPE}}
+        run: ctest --verbose -C ${{matrix.build-type}}
 
       - name: Run Benchmarks
         timeout-minutes: 5
