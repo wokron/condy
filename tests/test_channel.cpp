@@ -299,7 +299,8 @@ condy::Coro<void> consumer_task(condy::Channel<int> &channel,
 }
 
 condy::Coro<void>
-launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels, size_t num_messages) {
+launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
+                 size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
     for (auto &channel : channels) {
         tasks.emplace_back(
@@ -312,7 +313,8 @@ launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels, si
 }
 
 condy::Coro<void>
-launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels, size_t num_messages) {
+launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
+                 size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
     for (auto &channel : channels) {
         tasks.emplace_back(
@@ -338,12 +340,10 @@ TEST_CASE("test channel - two runtime") {
 
     condy::Runtime runtime1, runtime2;
     std::thread rt1([&]() {
-        condy::sync_wait(runtime1,
-                         launch_producers(channels, num_messages));
+        condy::sync_wait(runtime1, launch_producers(channels, num_messages));
     });
 
-    condy::sync_wait(runtime2,
-                     launch_consumers(channels, num_messages));
+    condy::sync_wait(runtime2, launch_consumers(channels, num_messages));
 
     rt1.join();
 }

@@ -109,7 +109,7 @@ TEST_CASE("test async_operations - recvmsg multishot") {
     };
 
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr{};
+        struct msghdr msg_hdr {};
         msg_hdr.msg_iov = nullptr;
         msg_hdr.msg_iovlen = 0;
 
@@ -169,7 +169,7 @@ TEST_CASE("test async_operations - accept direct") {
 
         auto client_task = condy::co_spawn(client());
 
-        struct sockaddr_in addr{};
+        struct sockaddr_in addr {};
         socklen_t addrlen = sizeof(addr);
         int fd1 = co_await condy::async_accept_direct(
             listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
