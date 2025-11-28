@@ -16,8 +16,7 @@ struct SetFinishInvoker
     bool finished = false;
 };
 
-condy::RuntimeOptions options =
-    condy::RuntimeOptions().sq_size(8).cq_size(16);
+condy::RuntimeOptions options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 } // namespace
 

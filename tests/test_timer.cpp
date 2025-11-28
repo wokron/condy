@@ -75,7 +75,7 @@ TEST_CASE("test timer - sleep with update") {
         auto duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
                 .count();
-        REQUIRE(duration < 100);  // Less than 20 milliseconds
+        REQUIRE(duration < 100); // Less than 20 milliseconds
         co_return;
     };
 

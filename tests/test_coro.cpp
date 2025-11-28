@@ -235,8 +235,8 @@ struct CustomAllocator {
     bool allocated = false;
 };
 
-condy::Coro<void, CustomAllocator>
-test_custom_allocator_func(CustomAllocator &, bool &finished) {
+condy::Coro<void, CustomAllocator> test_custom_allocator_func(CustomAllocator &,
+                                                              bool &finished) {
     finished = true;
     co_return;
 }

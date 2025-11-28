@@ -24,7 +24,7 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
     REQUIRE(pipe(pipefd) == 0);
 
     int r;
-    
+
     r = ::write(pipefd[1], "test", 4);
     REQUIRE(r == 4);
 

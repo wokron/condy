@@ -2,7 +2,6 @@
 #include <doctest/doctest.h>
 
 namespace {
-    
 
 struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
     void invoke() { finished = true; }
@@ -21,9 +20,7 @@ struct SimpleFinishHandle {
 
     int extract_result() { return res_; }
 
-    void set_invoker(condy::Invoker *invoker) {
-        invoker_ = invoker;
-    }
+    void set_invoker(condy::Invoker *invoker) { invoker_ = invoker; }
 
     int res_;
     int cancelled_ = 0;
