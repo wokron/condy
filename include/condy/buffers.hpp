@@ -21,8 +21,9 @@ public:
     ProvidedBufferPoolImpl(io_uring *ring, uint16_t bgid,
                            size_t log_num_buffers, size_t buffer_size,
                            unsigned int flags)
-        : ring_(ring), num_buffers_(1 << log_num_buffers), bgid_(bgid),
-          buffer_size_(buffer_size), buf_ring_mask_(num_buffers_ - 1) {
+        : ring_(ring), num_buffers_(1 << log_num_buffers),
+          buffer_size_(buffer_size), bgid_(bgid),
+          buf_ring_mask_(num_buffers_ - 1) {
         assert(log_num_buffers <= 15);
         data_size_ = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
         data_ = mmap(NULL, data_size_, PROT_READ | PROT_WRITE,
@@ -92,9 +93,9 @@ private:
     size_t num_buffers_;
     size_t buffer_size_;
     uint16_t bgid_;
+    size_t buf_ring_mask_;
 
     size_t next_bid_ = 0;
-    size_t buf_ring_mask_;
 
     io_uring_buf_ring *buf_ring_;
     char *buffers_base_;

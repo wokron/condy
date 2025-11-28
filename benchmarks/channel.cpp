@@ -52,7 +52,6 @@ launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
     double throughput = num_messages * num_pairs / duration.count(); // ops/s
-    double bandwidth = throughput * sizeof(int) / (1024 * 1024);     // MB/s
     std::printf("Total time: %.4f seconds\n", duration.count());
     std::printf("Throughput: %.2f M msg/s\n", throughput / 1'000'000);
     co_return;

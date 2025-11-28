@@ -87,10 +87,6 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     context.init(&ring, &runtime);
 
     condy::OpFinishHandle handle1, handle2;
-    auto on_finish = [](void *self, size_t no) {
-        auto *unfinished_ptr = static_cast<size_t *>(self);
-        (*unfinished_ptr)--;
-    };
     handle1.set_invoker(&invoker);
     handle2.set_invoker(&invoker);
     handle1.set_ring(&ring);

@@ -5,9 +5,9 @@
 
 namespace condy {
 
-struct Ring;
-struct Runtime;
-struct WorkInvoker;
+class Ring;
+class Runtime;
+class WorkInvoker;
 
 class Context : public ThreadLocalSingleton<Context> {
 public:
