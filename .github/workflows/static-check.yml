@@ -1,0 +1,21 @@
+name: Static Check
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  static-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Formatting Check
+        uses: jidicula/clang-format-action@v4.16.0
+        with:
+          clang-format-version: '18'
