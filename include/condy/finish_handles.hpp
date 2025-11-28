@@ -14,7 +14,7 @@
 
 namespace condy {
 
-struct Ring;
+class Ring;
 
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
@@ -276,7 +276,7 @@ public:
 
     ReturnType extract_result() {
         auto result = std::apply(
-            [this](auto *...handle_ptrs) {
+            [](auto *...handle_ptrs) {
                 return std::make_tuple(handle_ptrs->extract_result()...);
             },
             handles_);

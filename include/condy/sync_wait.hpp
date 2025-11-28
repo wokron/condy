@@ -14,7 +14,7 @@ T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     return t.wait();
 }
 
-static RuntimeOptions &default_runtime_options() {
+inline static RuntimeOptions &default_runtime_options() {
     static RuntimeOptions options;
     return options;
 }

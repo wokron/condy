@@ -49,8 +49,8 @@ public:
     using HandleType = Handle;
 
     OpAwaiterBase(HandleBox<Handle> handle, Func func, Args... args)
-        : finish_handle_(std::move(handle)), prep_func_(func),
-          args_(std::make_tuple(std::move(args)...)) {}
+        : prep_func_(func), args_(std::make_tuple(std::move(args)...)),
+          finish_handle_(std::move(handle)) {}
     OpAwaiterBase(OpAwaiterBase &&) = default;
 
     OpAwaiterBase(const OpAwaiterBase &) = delete;

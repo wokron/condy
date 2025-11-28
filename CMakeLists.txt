@@ -45,6 +45,9 @@ if(LINK_LIBURING)
     target_link_libraries(condy INTERFACE uring)
 endif()
 
+# Warnings as errors
+add_compile_options(-Wall -Werror)
+
 if(BUILD_EXAMPLES)
     message(STATUS "Configuring examples in ${CMAKE_CURRENT_SOURCE_DIR}/examples")
     add_subdirectory(examples)

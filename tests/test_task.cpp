@@ -354,7 +354,6 @@ TEST_CASE("test task - co_switch") {
     };
 
     auto main = [&]() -> condy::Coro<void> {
-        auto prev_id = std::this_thread::get_id();
         co_await condy::co_spawn(func());
         REQUIRE(finished1);
         REQUIRE(finished2);
