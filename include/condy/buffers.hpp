@@ -38,6 +38,8 @@ public:
             .ring_addr = reinterpret_cast<unsigned long>(buf_ring_),
             .ring_entries = static_cast<unsigned>(num_buffers_),
             .bgid = bgid_,
+            .flags = 0,
+            .resv = {},
         };
         int r = io_uring_register_buf_ring(ring_, &reg, flags);
         if (r != 0) {

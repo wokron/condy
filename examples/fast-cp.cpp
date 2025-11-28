@@ -31,7 +31,7 @@ condy::Coro<> copy_file_task(off_t &offset, off_t file_size, void *ptr) {
                          (long long)current_offset, std::strerror(-r1));
             exit(1);
         }
-        if (r1 < CHUNK_SIZE) {
+        if (static_cast<size_t>(r1) < CHUNK_SIZE) {
             r2 = co_await condy::async_write(
                 outfd, condy::fixed(0, condy::buffer(ptr, r1)), current_offset);
         }
@@ -94,7 +94,7 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
         0, condy::buffer(raw_buffer, TASK_NUM * CHUNK_SIZE));
 
     std::vector<condy::Task<>> tasks;
-    for (int i = 0; i < TASK_NUM; i++) {
+    for (size_t i = 0; i < TASK_NUM; i++) {
         char *buffer = static_cast<char *>(raw_buffer) + i * CHUNK_SIZE;
         tasks.emplace_back(
             condy::co_spawn(copy_file_task(offset, file_size, buffer)));

@@ -3,7 +3,7 @@
 #include <memory_resource>
 #include <vector>
 
-condy::pmr::Coro<void> task_func(auto &alloc) { co_return; }
+condy::pmr::Coro<void> task_func(auto &) { co_return; }
 
 condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
     std::vector<condy::pmr::Task<void>> tasks;

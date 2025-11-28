@@ -41,7 +41,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType>) {
         // Do nothing, since it will not be called in this test
     }
 
@@ -53,7 +53,7 @@ public:
         handle_ptr_->set_stealable(stealable);
     }
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int) {
         // Do nothing
     }
 

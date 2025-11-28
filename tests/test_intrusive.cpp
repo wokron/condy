@@ -7,7 +7,7 @@ TEST_CASE("test intrusive - single list") {
 
     struct Item {
         int value;
-        SingleLinkEntry link;
+        SingleLinkEntry link = {};
     };
 
     IntrusiveSingleList<Item, &Item::link> list;
@@ -89,7 +89,7 @@ TEST_CASE("test intrusive - double list") {
 
     struct Item {
         int value;
-        DoubleLinkEntry link;
+        DoubleLinkEntry link = {};
     };
 
     IntrusiveDoubleList<Item, &Item::link> list;

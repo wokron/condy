@@ -53,14 +53,14 @@ TEST_CASE("test channel - push and pop with coroutines") {
 
     size_t finished = 0;
     auto producer = [&]() -> condy::Coro<void> {
-        for (int i = 1; i <= max_items; ++i) {
-            co_await channel.push(i);
+        for (size_t i = 1; i <= max_items; ++i) {
+            co_await channel.push(static_cast<int>(i));
         }
         finished++;
     };
 
     auto consumer = [&]() -> condy::Coro<void> {
-        for (int i = 1; i <= max_items; ++i) {
+        for (size_t i = 1; i <= max_items; ++i) {
             int item = co_await channel.pop();
             REQUIRE(item == i);
         }
@@ -89,7 +89,7 @@ TEST_CASE("test channel - multi producer and consumer") {
 
     size_t finished = 0;
     auto producer = [&](size_t id) -> condy::Coro<void> {
-        for (int i = 1; i <= items_per_producer; ++i) {
+        for (size_t i = 1; i <= items_per_producer; ++i) {
             co_await channel.push(static_cast<int>(id * 100 + i));
         }
         finished++;
@@ -299,8 +299,7 @@ condy::Coro<void> consumer_task(condy::Channel<int> &channel,
 }
 
 condy::Coro<void>
-launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
-                 size_t num_pairs, size_t num_messages) {
+launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels, size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
     for (auto &channel : channels) {
         tasks.emplace_back(
@@ -313,8 +312,7 @@ launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
 }
 
 condy::Coro<void>
-launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
-                 size_t num_pairs, size_t num_messages) {
+launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels, size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
     for (auto &channel : channels) {
         tasks.emplace_back(
@@ -341,11 +339,11 @@ TEST_CASE("test channel - two runtime") {
     condy::Runtime runtime1, runtime2;
     std::thread rt1([&]() {
         condy::sync_wait(runtime1,
-                         launch_producers(channels, num_pairs, num_messages));
+                         launch_producers(channels, num_messages));
     });
 
     condy::sync_wait(runtime2,
-                     launch_consumers(channels, num_pairs, num_messages));
+                     launch_consumers(channels, num_messages));
 
     rt1.join();
 }

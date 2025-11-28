@@ -28,7 +28,7 @@ public:
 #ifdef __clang__
     template <typename... Args>
         requires(first_is_not_allocator<Allocator, Args...>::value)
-    static void *operator new(size_t size, Args &&...args) {
+    static void *operator new(size_t, Args &&...) {
         // If user didn't provide a signature like (Allocator&, ...), clang will
         // fall back to ::new, we don't want that.
         static_assert(always_false<Args...>::value,

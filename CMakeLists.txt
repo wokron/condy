@@ -46,7 +46,7 @@ if(LINK_LIBURING)
 endif()
 
 # Warnings as errors
-add_compile_options(-Wall -Werror)
+add_compile_options(-Wall -Wextra -Werror)
 
 if(BUILD_EXAMPLES)
     message(STATUS "Configuring examples in ${CMAKE_CURRENT_SOURCE_DIR}/examples")
