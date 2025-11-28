@@ -25,7 +25,7 @@ condy::Coro<void> consumer_task(condy::Channel<int> &channel,
 
 condy::Coro<void>
 launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
-                 size_t num_pairs, size_t num_messages) {
+                 size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
     for (auto &channel : channels) {
         tasks.emplace_back(
@@ -39,7 +39,8 @@ launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
 
 condy::Coro<void>
 launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
-                 size_t num_pairs, size_t num_messages) {
+                 size_t num_messages) {
+    size_t num_pairs = channels.size();
     std::vector<condy::Task<void>> tasks;
     auto start = std::chrono::high_resolution_clock::now();
     for (auto &channel : channels) {
@@ -69,12 +70,10 @@ int main() {
 
     condy::Runtime runtime1, runtime2;
     std::thread rt1([&]() {
-        condy::sync_wait(runtime1,
-                         launch_producers(channels, num_pairs, num_messages));
+        condy::sync_wait(runtime1, launch_producers(channels, num_messages));
     });
 
-    condy::sync_wait(runtime2,
-                     launch_consumers(channels, num_pairs, num_messages));
+    condy::sync_wait(runtime2, launch_consumers(channels, num_messages));
 
     rt1.join();
 

@@ -48,12 +48,12 @@ struct FixedFd {
 };
 
 template <typename OpAwaiter>
-void maybe_add_fixed_fd_flag(OpAwaiter &op, const FixedFd &fixed_fd) {
+void maybe_add_fixed_fd_flag(OpAwaiter &op, const FixedFd &) {
     op.add_flags(IOSQE_FIXED_FILE);
 }
 
 template <typename OpAwaiter>
-void maybe_add_fixed_fd_flag(OpAwaiter &op, int fd) { /* No-op */ }
+void maybe_add_fixed_fd_flag(OpAwaiter &, int) { /* No-op */ }
 
 template <typename Fd>
 constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
@@ -370,8 +370,7 @@ inline void prep_sendto_fixed(io_uring_sqe *sqe, int sockfd, const void *buf,
 
 inline void prep_sendto_zc(io_uring_sqe *sqe, int sockfd, const void *buf,
                            size_t len, int flags, const struct sockaddr *addr,
-                           socklen_t addrlen, unsigned zc_flags,
-                           int buf_index) {
+                           socklen_t addrlen, unsigned zc_flags) {
     io_uring_prep_send_zc(sqe, sockfd, buf, len, flags, zc_flags);
     io_uring_prep_send_set_addr(sqe, addr, addrlen);
 }
@@ -380,8 +379,7 @@ inline void prep_sendto_zc_fixed(io_uring_sqe *sqe, int sockfd, const void *buf,
                                  size_t len, int flags,
                                  const struct sockaddr *addr, socklen_t addrlen,
                                  unsigned zc_flags, int buf_index) {
-    prep_sendto_zc(sqe, sockfd, buf, len, flags, addr, addrlen, zc_flags,
-                   buf_index);
+    prep_sendto_zc(sqe, sockfd, buf, len, flags, addr, addrlen, zc_flags);
     sqe->ioprio |= IORING_RECVSEND_FIXED_BUF;
     sqe->buf_index = buf_index;
 }
