@@ -210,6 +210,11 @@ TEST_CASE("test coro - return no default constructible type") {
     REQUIRE(finished);
 }
 
+#if !__clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
+
 namespace {
 
 struct CustomAllocator {
@@ -231,7 +236,7 @@ struct CustomAllocator {
 };
 
 condy::Coro<void, CustomAllocator>
-test_custom_allocator_func(CustomAllocator &allocator, bool &finished) {
+test_custom_allocator_func(CustomAllocator &, bool &finished) {
     finished = true;
     co_return;
 }
@@ -296,13 +301,13 @@ struct AllocatorB {
     bool allocated = false;
 };
 
-condy::Coro<void, AllocatorA> test_allocator_func1(AllocatorA &allocatorA,
+condy::Coro<void, AllocatorA> test_allocator_func1(AllocatorA &,
                                                    bool &finished1) {
     finished1 = true;
     co_return;
 }
 
-condy::Coro<void, AllocatorB> test_allocator_func2(AllocatorB &allocatorB,
+condy::Coro<void, AllocatorB> test_allocator_func2(AllocatorB &,
                                                    AllocatorA &allocatorA,
                                                    bool &finished2,
                                                    bool &finished1) {
@@ -330,3 +335,7 @@ TEST_CASE("test coro - different allocators") {
     REQUIRE(allocatorA.allocated);
     REQUIRE(allocatorB.allocated);
 }
+
+#if !__clang__
+#pragma GCC diagnostic pop
+#endif
