@@ -23,7 +23,10 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
 
-    ::write(pipefd[1], "test", 4);
+    int r;
+    
+    r = ::write(pipefd[1], "test", 4);
+    REQUIRE(r == 4);
 
     auto *sqe = ring.get_sqe();
     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
@@ -31,7 +34,7 @@ TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
     sqe->buf_group = 0;
     io_uring_sqe_set_data(sqe, nullptr);
 
-    int r = -1;
+    r = -1;
     int bid = -1;
 
     size_t reaped = 0;
