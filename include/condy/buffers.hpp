@@ -210,6 +210,11 @@ public:
     uint16_t bgid() const { return bgid_; }
 
     template <typename Buffer> void submit_buffer(Buffer &&buf) {
+        // User's responsibility to ensure buffer count does not exceed capacity
+        if (size_ >= num_buffers_) {
+            throw std::runtime_error(
+                "SubmittedBufferQueueImpl capacity exceeded");
+        }
         void *ptr = buf.data();
         size_t size = buf.size();
         size_t bid = next_bid_;
@@ -217,12 +222,18 @@ public:
         if constexpr (buffer_should_set_destructor<Buffer>::value) {
             destructors_[bid] = std::forward<Buffer>(buf);
         }
+        size_++;
     }
 
     void remove_buffer(size_t bid) {
         auto destructor = std::move(destructors_[bid]);
         (void)destructor;
+        size_--;
     }
+
+    size_t size() const { return size_; }
+
+    size_t capacity() const { return num_buffers_; }
 
 private:
     void add_buffer_(void *ptr, size_t size) {
@@ -239,6 +250,7 @@ private:
     size_t buf_ring_mask_;
 
     size_t next_bid_ = 0;
+    size_t size_ = 0;
 
     io_uring_buf_ring *buf_ring_;
     std::unique_ptr<ErasedDestructor[]> destructors_;
