@@ -79,8 +79,9 @@ cmake -B build -S . \
     -DBUILD_BENCHMARKS=ON \
     -DBUILD_TESTS=ON \
     -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++
-cmake --build build -j
+    -DCMAKE_CXX_COMPILER=clang++ \
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j$(nproc)
 ```
 
 After building:
