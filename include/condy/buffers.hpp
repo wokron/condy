@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <sys/mman.h>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -34,13 +35,11 @@ public:
         buf_ring_ = reinterpret_cast<io_uring_buf_ring *>(data_);
         io_uring_buf_ring_init(buf_ring_);
 
-        io_uring_buf_reg reg = {
-            .ring_addr = reinterpret_cast<unsigned long>(buf_ring_),
-            .ring_entries = static_cast<unsigned>(num_buffers_),
-            .bgid = bgid_,
-            .flags = 0,
-            .resv = {},
-        };
+        io_uring_buf_reg reg;
+        memset(&reg, 0, sizeof(reg));
+        reg.ring_addr = reinterpret_cast<unsigned long>(buf_ring_);
+        reg.ring_entries = static_cast<unsigned>(num_buffers_);
+        reg.bgid = bgid_;
         int r = io_uring_register_buf_ring(ring_, &reg, flags);
         if (r != 0) {
             munmap(data_, data_size_);
@@ -162,6 +161,93 @@ private:
     void *data_ = nullptr;
     size_t size_ = 0;
 };
+
+namespace detail {
+
+template <typename T> struct buffer_should_set_destructor : std::false_type {};
+
+template <>
+struct buffer_should_set_destructor<ProvidedBuffer> : std::true_type {};
+
+class SubmittedBufferQueueImpl {
+public:
+    SubmittedBufferQueueImpl(io_uring *ring, uint16_t bgid,
+                             size_t log_num_buffers, unsigned int flags)
+        : ring_(ring), num_buffers_(1 << log_num_buffers), bgid_(bgid),
+          buf_ring_mask_(num_buffers_ - 1),
+          destructors_(std::make_unique<ErasedDestructor[]>(num_buffers_)) {
+        assert(log_num_buffers <= 15);
+        data_size_ = num_buffers_ * sizeof(io_uring_buf);
+        data_ = mmap(NULL, data_size_, PROT_READ | PROT_WRITE,
+                     MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+        if (data_ == MAP_FAILED) {
+            throw std::bad_alloc();
+        }
+        buf_ring_ = reinterpret_cast<io_uring_buf_ring *>(data_);
+        io_uring_buf_ring_init(buf_ring_);
+
+        io_uring_buf_reg reg;
+        memset(&reg, 0, sizeof(reg));
+        reg.ring_addr = reinterpret_cast<unsigned long>(buf_ring_);
+        reg.ring_entries = static_cast<unsigned>(num_buffers_);
+        reg.bgid = bgid_;
+        int r = io_uring_register_buf_ring(ring_, &reg, flags);
+        if (r != 0) {
+            munmap(data_, data_size_);
+            throw_exception("io_uring_register_buf_ring failed", -r);
+        }
+    }
+
+    SubmittedBufferQueueImpl(const SubmittedBufferQueueImpl &) = delete;
+    SubmittedBufferQueueImpl &
+    operator=(const SubmittedBufferQueueImpl &) = delete;
+    SubmittedBufferQueueImpl(SubmittedBufferQueueImpl &&) = delete;
+    SubmittedBufferQueueImpl &operator=(SubmittedBufferQueueImpl &&) = delete;
+
+    ~SubmittedBufferQueueImpl() { munmap(data_, data_size_); }
+
+public:
+    uint16_t bgid() const { return bgid_; }
+
+    template <typename Buffer> void submit_buffer(Buffer &&buf) {
+        void *ptr = buf.data();
+        size_t size = buf.size();
+        size_t bid = next_bid_;
+        add_buffer_(ptr, size);
+        if constexpr (buffer_should_set_destructor<Buffer>::value) {
+            destructors_[bid] = std::forward<Buffer>(buf);
+        }
+    }
+
+    void remove_buffer(size_t bid) {
+        auto destructor = std::move(destructors_[bid]);
+        (void)destructor;
+    }
+
+private:
+    void add_buffer_(void *ptr, size_t size) {
+        io_uring_buf_ring_add(buf_ring_, ptr, size, next_bid_, buf_ring_mask_,
+                              0);
+        io_uring_buf_ring_advance(buf_ring_, 1);
+        next_bid_ = (next_bid_ + 1) & buf_ring_mask_;
+    }
+
+private:
+    io_uring *ring_;
+    size_t num_buffers_;
+    uint16_t bgid_;
+    size_t buf_ring_mask_;
+
+    size_t next_bid_ = 0;
+
+    io_uring_buf_ring *buf_ring_;
+    std::unique_ptr<ErasedDestructor[]> destructors_;
+
+    void *data_;
+    size_t data_size_;
+};
+
+} // namespace detail
 
 class MutableBuffer {
 public:
