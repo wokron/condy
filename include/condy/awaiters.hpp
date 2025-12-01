@@ -170,6 +170,17 @@ public:
 };
 
 template <typename Func, typename... Args>
+class [[nodiscard]] SelectBufferSendOpAwaiter
+    : public OpAwaiterBase<SelectBufferSendOpFinishHandle, Func, Args...> {
+public:
+    using Base = OpAwaiterBase<SelectBufferSendOpFinishHandle, Func, Args...>;
+    SelectBufferSendOpAwaiter(detail::SubmittedBufferQueueImplPtr buffers_impl,
+                              Func func, Args... args)
+        : Base(SelectBufferSendOpFinishHandle(std::move(buffers_impl)), func,
+               args...) {}
+};
+
+template <typename Func, typename... Args>
 class [[nodiscard]] TimerOpAwaiter
     : public OpAwaiterBase<TimerFinishHandle, Func, Args...> {
 public:

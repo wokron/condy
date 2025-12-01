@@ -147,6 +147,33 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
 
+// TODO: Rename these related classes' names
+template <typename HandleBase> class SelectBufferSendMixin : public HandleBase {
+public:
+    using ReturnType = int;
+
+    template <typename... Args>
+    SelectBufferSendMixin(detail::SubmittedBufferQueueImplPtr buffers_impl,
+                          Args &&...args)
+        : HandleBase(std::forward<Args>(args)...),
+          buffers_impl_(std::move(buffers_impl)) {}
+
+    ReturnType extract_result() {
+        int res = this->res_;
+        if (this->flags_ & IORING_CQE_F_BUFFER) {
+            assert(res >= 0);
+            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+            buffers_impl_->remove_buffer(bid);
+        }
+        return res;
+    }
+
+private:
+    detail::SubmittedBufferQueueImplPtr buffers_impl_;
+};
+
+using SelectBufferSendOpFinishHandle = SelectBufferSendMixin<OpFinishHandle>;
+
 template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;

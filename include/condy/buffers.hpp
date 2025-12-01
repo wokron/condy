@@ -259,6 +259,8 @@ private:
     size_t data_size_;
 };
 
+using SubmittedBufferQueueImplPtr = std::shared_ptr<SubmittedBufferQueueImpl>;
+
 } // namespace detail
 
 class MutableBuffer {
