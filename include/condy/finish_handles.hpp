@@ -101,7 +101,12 @@ public:
             void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
             size_t size = buffers_impl_->buffer_size();
             detail::ProvidedBufferPoolImplPtr buffers_impl = nullptr;
-            buffers_impl = buffers_impl_;
+            if (!(this->flags_ & IORING_CQE_F_BUF_MORE)) {
+                // NOTE: No std::move here, since buffers_impl_ may be used
+                // multiple times (multishot)
+                buffers_impl = buffers_impl_; // The entire buffer is consumed
+                // TODO: Add test for this
+            }
             entry = ProvidedBuffer(buffers_impl, data, size);
         }
         return std::make_pair(res, std::move(entry));
@@ -162,7 +167,11 @@ public:
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            buffers_impl_->remove_buffer(bid);
+            if (!(this->flags_ & IORING_CQE_F_BUF_MORE)) {
+                // Entire buffer has been sent, remove it from the queue
+                // TODO: Add test for this
+                buffers_impl_->remove_buffer(bid);
+            }
         }
         return res;
     }

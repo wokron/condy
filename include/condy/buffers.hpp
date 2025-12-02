@@ -69,6 +69,7 @@ public:
 
     void *get_buffer(size_t bid) const {
         assert(bid < num_buffers_);
+        assert(buf_ring_->bufs[bid].bid == bid);
         auto *addr = reinterpret_cast<void *>(buf_ring_->bufs[bid].addr);
         return addr;
     }
@@ -226,6 +227,8 @@ public:
     }
 
     void remove_buffer(size_t bid) {
+        assert(bid < num_buffers_);
+        assert(buf_ring_->bufs[bid].bid == bid);
         auto destructor = std::move(destructors_[bid]);
         (void)destructor;
         size_--;
