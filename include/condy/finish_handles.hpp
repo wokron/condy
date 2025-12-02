@@ -84,7 +84,7 @@ using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
 
 template <typename HandleBase> class SelectBufferRecvMixin : public HandleBase {
 public:
-    using ReturnType = std::pair<int, ProvidedBuffer>;
+    using ReturnType = std::pair<int, std::vector<ProvidedBuffer>>;
 
     template <typename... Args>
     SelectBufferRecvMixin(detail::ProvidedBufferPoolImplPtr buffers_impl,
@@ -94,33 +94,76 @@ public:
 
     ReturnType extract_result() {
         int res = this->res_;
-        ProvidedBuffer entry;
+        std::vector<ProvidedBuffer> entries;
+        const size_t buf_size = buffers_impl_->buffer_size();
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
-            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
-            size_t size = buffers_impl_->buffer_size();
-            detail::ProvidedBufferPoolImplPtr buffers_impl = nullptr;
-            if (!(this->flags_ & IORING_CQE_F_BUF_MORE)) {
-                // NOTE: No std::move here, since buffers_impl_ may be used
-                // multiple times (multishot)
-                buffers_impl = buffers_impl_; // The entire buffer is consumed
-                // TODO: Add test for this
+            if (this->flags_ & IORING_CQE_F_BUF_MORE) {
+                // Must be partial consumption
+                assert(static_cast<size_t>(res) < buf_size);
+                int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+                void *data =
+                    buffers_impl_->get_buffer(static_cast<size_t>(bid));
+                entries.emplace_back(nullptr, data, buf_size);
+            } else {
+                // One or more full buffers consumed
+                const size_t buf_mask = buf_size - 1;
+                size_t num_buffers = (res + buf_size - 1) / buf_size;
+                int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+                for (size_t i = 0; i < num_buffers; i++) {
+                    void *data =
+                        buffers_impl_->get_buffer(static_cast<size_t>(bid));
+                    // NOTE: No std::move here, since buffers_impl_ may be used
+                    // multiple times (multishot)
+                    entries.emplace_back(buffers_impl_, data, buf_size);
+                    bid = (bid + 1) & buf_mask;
+                }
             }
-            entry = ProvidedBuffer(buffers_impl, data, size);
         }
-        return std::make_pair(res, std::move(entry));
+        return std::make_pair(res, std::move(entries));
     }
 
 private:
     detail::ProvidedBufferPoolImplPtr buffers_impl_;
 };
 
+template <typename HandleBase>
+class SelectBufferNoBundleRecvMixin : public SelectBufferRecvMixin<HandleBase> {
+public:
+    using ReturnType = std::pair<int, ProvidedBuffer>;
+
+    using Base = SelectBufferRecvMixin<HandleBase>;
+
+    template <typename... Args>
+    SelectBufferNoBundleRecvMixin(
+        detail::ProvidedBufferPoolImplPtr buffers_impl, Args &&...args)
+        : SelectBufferRecvMixin<HandleBase>(std::move(buffers_impl),
+                                            std::forward<Args>(args)...) {}
+
+    ReturnType extract_result() {
+        auto result = Base::extract_result();
+        auto &[res, entries] = result;
+        if (entries.empty()) {
+            assert(res < 0);
+            return std::make_pair(res, ProvidedBuffer{});
+        }
+        assert(entries.size() == 1);
+        return std::make_pair(res, std::move(entries[0]));
+    }
+};
+
 using SelectBufferRecvOpFinishHandle = SelectBufferRecvMixin<OpFinishHandle>;
+
+using SelectBufferNoBundleRecvOpFinishHandle =
+    SelectBufferNoBundleRecvMixin<OpFinishHandle>;
 
 template <typename MultiShotFunc>
 using MultiShotSelectBufferRecvOpFinishHandle =
     MultiShotMixin<MultiShotFunc, SelectBufferRecvOpFinishHandle>;
+
+template <typename MultiShotFunc>
+using MultiShotSelectBufferNoBundleRecvOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, SelectBufferNoBundleRecvOpFinishHandle>;
 
 template <typename Func, typename HandleBase>
 class ZeroCopyMixin : public HandleBase {

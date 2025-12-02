@@ -60,6 +60,21 @@ auto make_select_buffer_recv_op_awaiter(
             std::forward<Args>(args)...);
     op.add_flags(IOSQE_BUFFER_SELECT);
     op.set_bgid(bgid);
+    // TODO: Add bundle flag
+    return op;
+}
+
+template <typename Func, typename... Args>
+auto make_select_buffer_no_bundle_recv_op_awaiter(
+    detail::ProvidedBufferPoolImplPtr buffers_impl, Func &&func,
+    Args &&...args) {
+    int bgid = buffers_impl->bgid();
+    auto op = SelectBufferNoBundleRecvOpAwaiter<std::decay_t<Func>,
+                                                std::decay_t<Args>...>(
+        std::move(buffers_impl), std::forward<Func>(func),
+        std::forward<Args>(args)...);
+    op.add_flags(IOSQE_BUFFER_SELECT);
+    op.set_bgid(bgid);
     return op;
 }
 
@@ -70,6 +85,22 @@ auto make_multishot_select_buffer_recv_op_awaiter(
     Args &&...args) {
     int bgid = buffers_impl->bgid();
     auto op = MultiShotSelectBufferRecvOpAwaiter<
+        std::decay_t<MultiShotFunc>, std::decay_t<Func>, std::decay_t<Args>...>(
+        std::forward<MultiShotFunc>(multishot_func), std::move(buffers_impl),
+        std::forward<Func>(func), std::forward<Args>(args)...);
+    op.add_flags(IOSQE_BUFFER_SELECT);
+    op.set_bgid(bgid);
+    // TODO: Add bundle flag
+    return op;
+}
+
+template <typename MultiShotFunc, typename Func, typename... Args>
+auto make_multishot_select_buffer_no_bundle_recv_op_awaiter(
+    MultiShotFunc &&multishot_func,
+    detail::ProvidedBufferPoolImplPtr buffers_impl, Func &&func,
+    Args &&...args) {
+    int bgid = buffers_impl->bgid();
+    auto op = MultiShotSelectBufferNoBundleRecvOpAwaiter<
         std::decay_t<MultiShotFunc>, std::decay_t<Func>, std::decay_t<Args>...>(
         std::forward<MultiShotFunc>(multishot_func), std::move(buffers_impl),
         std::forward<Func>(func), std::forward<Args>(args)...);

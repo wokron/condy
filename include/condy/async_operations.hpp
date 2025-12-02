@@ -190,7 +190,7 @@ inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
 template <typename Fd, typename MultiShotFunc, typename Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
                                     Buffer &&buf_pool, MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_recv_op_awaiter(
+    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf_pool).copy_impl(),
         io_uring_prep_recvmsg_multishot, fd, msg, flags);
@@ -332,7 +332,7 @@ inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
     auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
         io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
     };
-    auto op = make_multishot_select_buffer_recv_op_awaiter(
+    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -540,7 +540,7 @@ inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
 template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
                                  MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_recv_op_awaiter(
+    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv_multishot,
         sockfd, nullptr, 0, flags);
