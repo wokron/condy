@@ -133,28 +133,29 @@ public:
 };
 
 template <typename Func, typename... Args>
-class [[nodiscard]] SelectBufferOpAwaiter
-    : public OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...> {
+class [[nodiscard]] SelectBufferRecvOpAwaiter
+    : public OpAwaiterBase<SelectBufferRecvOpFinishHandle, Func, Args...> {
 public:
-    using Base = OpAwaiterBase<SelectBufferOpFinishHandle, Func, Args...>;
-    SelectBufferOpAwaiter(detail::ProvidedBufferPoolImplPtr buffers_impl,
-                          Func func, Args... args)
-        : Base(SelectBufferOpFinishHandle(std::move(buffers_impl)), func,
+    using Base = OpAwaiterBase<SelectBufferRecvOpFinishHandle, Func, Args...>;
+    SelectBufferRecvOpAwaiter(detail::ProvidedBufferPoolImplPtr buffers_impl,
+                              Func func, Args... args)
+        : Base(SelectBufferRecvOpFinishHandle(std::move(buffers_impl)), func,
                args...) {}
 };
 
 template <typename MultiShotFunc, typename Func, typename... Args>
-class [[nodiscard]] MultiShotSelectBufferOpAwaiter
-    : public OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>,
-                           Func, Args...> {
+class [[nodiscard]] MultiShotSelectBufferRecvOpAwaiter
+    : public OpAwaiterBase<
+          MultiShotSelectBufferRecvOpFinishHandle<MultiShotFunc>, Func,
+          Args...> {
 public:
     using Base =
-        OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc>, Func,
-                      Args...>;
-    MultiShotSelectBufferOpAwaiter(
+        OpAwaiterBase<MultiShotSelectBufferRecvOpFinishHandle<MultiShotFunc>,
+                      Func, Args...>;
+    MultiShotSelectBufferRecvOpAwaiter(
         MultiShotFunc multishot_func,
         detail::ProvidedBufferPoolImplPtr buffers_impl, Func func, Args... args)
-        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc>(
+        : Base(MultiShotSelectBufferRecvOpFinishHandle<MultiShotFunc>(
                    std::move(multishot_func), std::move(buffers_impl)),
                func, args...) {}
 };
@@ -174,7 +175,7 @@ class [[nodiscard]] SelectBufferSendOpAwaiter
     : public OpAwaiterBase<SelectBufferSendOpFinishHandle, Func, Args...> {
 public:
     using Base = OpAwaiterBase<SelectBufferSendOpFinishHandle, Func, Args...>;
-    SelectBufferSendOpAwaiter(detail::SubmittedBufferQueueImplPtr buffers_impl,
+    SelectBufferSendOpAwaiter(detail::ProvidedBufferQueueImplPtr buffers_impl,
                               Func func, Args... args)
         : Base(SelectBufferSendOpFinishHandle(std::move(buffers_impl)), func,
                args...) {}

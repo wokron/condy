@@ -82,13 +82,13 @@ private:
 template <typename MultiShotFunc>
 using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
 
-template <typename HandleBase> class SelectBufferMixin : public HandleBase {
+template <typename HandleBase> class SelectBufferRecvMixin : public HandleBase {
 public:
     using ReturnType = std::pair<int, ProvidedBuffer>;
 
     template <typename... Args>
-    SelectBufferMixin(detail::ProvidedBufferPoolImplPtr buffers_impl,
-                      Args &&...args)
+    SelectBufferRecvMixin(detail::ProvidedBufferPoolImplPtr buffers_impl,
+                          Args &&...args)
         : HandleBase(std::forward<Args>(args)...),
           buffers_impl_(std::move(buffers_impl)) {}
 
@@ -111,11 +111,11 @@ private:
     detail::ProvidedBufferPoolImplPtr buffers_impl_;
 };
 
-using SelectBufferOpFinishHandle = SelectBufferMixin<OpFinishHandle>;
+using SelectBufferRecvOpFinishHandle = SelectBufferRecvMixin<OpFinishHandle>;
 
 template <typename MultiShotFunc>
-using MultiShotSelectBufferOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferOpFinishHandle>;
+using MultiShotSelectBufferRecvOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, SelectBufferRecvOpFinishHandle>;
 
 template <typename Func, typename HandleBase>
 class ZeroCopyMixin : public HandleBase {
@@ -147,13 +147,12 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
 
-// TODO: Rename these related classes' names
 template <typename HandleBase> class SelectBufferSendMixin : public HandleBase {
 public:
     using ReturnType = int;
 
     template <typename... Args>
-    SelectBufferSendMixin(detail::SubmittedBufferQueueImplPtr buffers_impl,
+    SelectBufferSendMixin(detail::ProvidedBufferQueueImplPtr buffers_impl,
                           Args &&...args)
         : HandleBase(std::forward<Args>(args)...),
           buffers_impl_(std::move(buffers_impl)) {}
@@ -169,7 +168,7 @@ public:
     }
 
 private:
-    detail::SubmittedBufferQueueImplPtr buffers_impl_;
+    detail::ProvidedBufferQueueImplPtr buffers_impl_;
 };
 
 using SelectBufferSendOpFinishHandle = SelectBufferSendMixin<OpFinishHandle>;

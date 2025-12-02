@@ -169,10 +169,10 @@ template <typename T> struct buffer_should_set_destructor : std::false_type {};
 template <>
 struct buffer_should_set_destructor<ProvidedBuffer> : std::true_type {};
 
-class SubmittedBufferQueueImpl {
+class ProvidedBufferQueueImpl {
 public:
-    SubmittedBufferQueueImpl(io_uring *ring, uint16_t bgid,
-                             size_t log_num_buffers, unsigned int flags)
+    ProvidedBufferQueueImpl(io_uring *ring, uint16_t bgid,
+                            size_t log_num_buffers, unsigned int flags)
         : ring_(ring), num_buffers_(1 << log_num_buffers), bgid_(bgid),
           buf_ring_mask_(num_buffers_ - 1),
           destructors_(std::make_unique<ErasedDestructor[]>(num_buffers_)) {
@@ -198,13 +198,13 @@ public:
         }
     }
 
-    SubmittedBufferQueueImpl(const SubmittedBufferQueueImpl &) = delete;
-    SubmittedBufferQueueImpl &
-    operator=(const SubmittedBufferQueueImpl &) = delete;
-    SubmittedBufferQueueImpl(SubmittedBufferQueueImpl &&) = delete;
-    SubmittedBufferQueueImpl &operator=(SubmittedBufferQueueImpl &&) = delete;
+    ProvidedBufferQueueImpl(const ProvidedBufferQueueImpl &) = delete;
+    ProvidedBufferQueueImpl &
+    operator=(const ProvidedBufferQueueImpl &) = delete;
+    ProvidedBufferQueueImpl(ProvidedBufferQueueImpl &&) = delete;
+    ProvidedBufferQueueImpl &operator=(ProvidedBufferQueueImpl &&) = delete;
 
-    ~SubmittedBufferQueueImpl() { munmap(data_, data_size_); }
+    ~ProvidedBufferQueueImpl() { munmap(data_, data_size_); }
 
 public:
     uint16_t bgid() const { return bgid_; }
@@ -259,7 +259,7 @@ private:
     size_t data_size_;
 };
 
-using SubmittedBufferQueueImplPtr = std::shared_ptr<SubmittedBufferQueueImpl>;
+using ProvidedBufferQueueImplPtr = std::shared_ptr<ProvidedBufferQueueImpl>;
 
 } // namespace detail
 

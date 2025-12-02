@@ -234,7 +234,7 @@ TEST_CASE("test op_awaiter - select buffer op") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto [res, buf] = co_await condy::make_select_buffer_op_awaiter(
+        auto [res, buf] = co_await condy::make_select_buffer_recv_op_awaiter(
             buffers_impl, io_uring_prep_read, pipefd[0], nullptr, 0, 0);
         REQUIRE(res >= 0);
         REQUIRE(buf.size() == 32);

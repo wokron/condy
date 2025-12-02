@@ -62,7 +62,7 @@ TEST_CASE("test buffers - SubmittedBufferQueueImpl construct") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    condy::detail::SubmittedBufferQueueImpl impl(ring.ring(), 0, 4, 0);
+    condy::detail::ProvidedBufferQueueImpl impl(ring.ring(), 0, 4, 0);
 }
 
 TEST_CASE("test buffers - SubmittedBufferQueueImpl buffer destruct") {
@@ -93,7 +93,7 @@ TEST_CASE("test buffers - SubmittedBufferQueueImpl buffer destruct") {
         io_uring_sqe_set_data(sqe, nullptr);
     };
 
-    condy::detail::SubmittedBufferQueueImpl queue_impl(ring.ring(), 1, 1, 0);
+    condy::detail::ProvidedBufferQueueImpl queue_impl(ring.ring(), 1, 1, 0);
     prep_read();
     prep_read();
 

@@ -44,7 +44,7 @@ private:
 class ProvidedBufferQueue {
 public:
     ProvidedBufferQueue(size_t log_num_buffers, unsigned int flags = 0)
-        : impl_(std::make_shared<detail::SubmittedBufferQueueImpl>(
+        : impl_(std::make_shared<detail::ProvidedBufferQueueImpl>(
               Context::current().ring()->ring(),
               Context::current().runtime()->next_bgid(), log_num_buffers,
               flags)) {}
@@ -56,13 +56,13 @@ public:
     ProvidedBufferQueue &operator=(ProvidedBufferQueue &&) = delete;
 
 public:
-    detail::SubmittedBufferQueueImplPtr copy_impl() const & { return impl_; }
-    detail::SubmittedBufferQueueImplPtr copy_impl() && {
+    detail::ProvidedBufferQueueImplPtr copy_impl() const & { return impl_; }
+    detail::ProvidedBufferQueueImplPtr copy_impl() && {
         return std::move(impl_);
     }
 
 private:
-    detail::SubmittedBufferQueueImplPtr impl_;
+    detail::ProvidedBufferQueueImplPtr impl_;
 };
 
 namespace detail {
@@ -84,11 +84,11 @@ template <typename Fd>
 constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
 
 template <typename Buffer>
-constexpr bool is_provided_buffers_v =
+constexpr bool is_provided_buffer_pool_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
 
 template <typename Buffer>
-constexpr bool is_provided_buffers_queue_v =
+constexpr bool is_provided_buffer_queue_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBufferQueue>;
 
 template <typename BufferBase> class FixedBuffer : public BufferBase {
@@ -190,7 +190,7 @@ inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
 template <typename Fd, typename MultiShotFunc, typename Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
                                     Buffer &&buf_pool, MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_op_awaiter(
+    auto op = make_multishot_select_buffer_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf_pool).copy_impl(),
         io_uring_prep_recvmsg_multishot, fd, msg, flags);
@@ -309,8 +309,8 @@ inline auto async_close(detail::FixedFd fd) {
 template <typename Fd, typename Buffer>
 inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
     auto op = [&] {
-        if constexpr (detail::is_provided_buffers_v<Buffer>) {
-            return make_select_buffer_op_awaiter(
+        if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
+            return make_select_buffer_no_bundle_recv_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_read, fd,
                 nullptr, 0, offset);
         } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
@@ -332,7 +332,7 @@ inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
     auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
         io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
     };
-    auto op = make_multishot_select_buffer_op_awaiter(
+    auto op = make_multishot_select_buffer_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -346,7 +346,7 @@ inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
                                    buf.size(), offset, buf.buf_index());
-        } else if constexpr (detail::is_provided_buffers_queue_v<Buffer>) {
+        } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_write, fd,
                 nullptr, 0, offset);
@@ -425,7 +425,7 @@ inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(detail::prep_send_fixed, sockfd, buf.data(),
                                    buf.size(), flags, buf.buf_index());
-        } else if constexpr (detail::is_provided_buffers_queue_v<Buffer>) {
+        } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_send,
                 sockfd, nullptr, 0, flags);
@@ -446,7 +446,7 @@ inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
             return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
                                    buf.data(), buf.size(), flags, addr, addrlen,
                                    buf.buf_index());
-        } else if constexpr (detail::is_provided_buffers_queue_v<Buffer>) {
+        } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), detail::prep_sendto,
                 sockfd, nullptr, 0, flags, addr, addrlen);
@@ -521,8 +521,8 @@ inline void prep_recv_fixed(io_uring_sqe *sqe, int sockfd, void *buf,
 template <typename Fd, typename Buffer>
 inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
-        if constexpr (detail::is_provided_buffers_v<Buffer>) {
-            return make_select_buffer_op_awaiter(
+        if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
+            return make_select_buffer_no_bundle_recv_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv,
                 sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
@@ -540,7 +540,7 @@ inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
 template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
                                  MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_op_awaiter(
+    auto op = make_multishot_select_buffer_recv_op_awaiter(
         std::forward<MultiShotFunc>(func),
         std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv_multishot,
         sockfd, nullptr, 0, flags);
