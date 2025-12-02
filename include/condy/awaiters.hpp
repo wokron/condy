@@ -7,6 +7,7 @@
 #include "condy/runtime.hpp"
 #include <coroutine>
 #include <cstddef>
+#include <cstdint>
 #include <tuple>
 
 namespace condy {
@@ -88,6 +89,8 @@ public:
 public:
     void add_flags(unsigned int flags) { flags_ |= flags; }
 
+    void add_ioprio(unsigned int ioprio) { ioprio_ |= ioprio; }
+
     void set_bgid(int bgid) { bgid_ = bgid; }
 
 private:
@@ -98,7 +101,8 @@ private:
                 prep_func_(sqe, std::forward<decltype(args)>(args)...);
             },
             args_);
-        io_uring_sqe_set_flags(sqe, flags | this->flags_);
+        sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
+        sqe->ioprio |= ioprio_;
         io_uring_sqe_set_data(sqe, &finish_handle_.get());
     }
 
@@ -106,8 +110,9 @@ protected:
     Func prep_func_;
     std::tuple<Args...> args_;
     HandleBox<Handle> finish_handle_;
-    unsigned int flags_ = 0;
-    int bgid_ = 0;
+    uint16_t bgid_ = 0;
+    uint16_t ioprio_ = 0;
+    uint8_t flags_ = 0;
 };
 
 template <typename Func, typename... Args>

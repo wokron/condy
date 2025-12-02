@@ -83,6 +83,28 @@ void maybe_add_fixed_fd_flag(OpAwaiter &, int) { /* No-op */ }
 template <typename Fd>
 constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
 
+template <typename ProvidedBuffer> class BundleProvidedBuffer {
+public:
+    BundleProvidedBuffer(ProvidedBuffer &buffer) : buffer_(buffer) {}
+
+    ProvidedBuffer &get() & { return buffer_; }
+    ProvidedBuffer get() && { return std::move(buffer_); }
+
+private:
+    ProvidedBuffer &buffer_;
+};
+
+template <typename Buffer>
+struct is_bundle_provided_buffer : public std::false_type {};
+
+template <typename Buffer>
+struct is_bundle_provided_buffer<BundleProvidedBuffer<Buffer>>
+    : public std::true_type {};
+
+template <typename Buffer>
+constexpr bool is_bundle_provided_buffer_v =
+    is_bundle_provided_buffer<std::decay_t<Buffer>>::value;
+
 template <typename Buffer>
 constexpr bool is_provided_buffer_pool_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
@@ -119,6 +141,10 @@ inline auto fixed(int fd) { return detail::FixedFd{fd}; }
 template <typename Buffer> auto fixed(int buf_index, Buffer &&buf) {
     return detail::FixedBuffer<std::decay_t<Buffer>>(buf_index,
                                                      std::forward<Buffer>(buf));
+}
+
+template <typename ProvidedBuffer> auto bundled(ProvidedBuffer &buffer) {
+    return detail::BundleProvidedBuffer<std::decay_t<ProvidedBuffer>>(buffer);
 }
 
 template <typename Fd1, typename Fd2>
@@ -309,7 +335,11 @@ inline auto async_close(detail::FixedFd fd) {
 template <typename Fd, typename Buffer>
 inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
     auto op = [&] {
-        if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
+        if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_select_buffer_recv_op_awaiter(
+                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_read,
+                fd, nullptr, 0, offset);
+        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
             return make_select_buffer_no_bundle_recv_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_read, fd,
                 nullptr, 0, offset);
@@ -332,9 +362,17 @@ inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
     auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
         io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
     };
-    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
-        std::forward<MultiShotFunc>(func),
-        std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+    auto op = [&] {
+        if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_multishot_select_buffer_recv_op_awaiter(
+                std::forward<MultiShotFunc>(func),
+                std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+        } else {
+            return make_multishot_select_buffer_no_bundle_recv_op_awaiter(
+                std::forward<MultiShotFunc>(func),
+                std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+        }
+    }();
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
@@ -521,7 +559,11 @@ inline void prep_recv_fixed(io_uring_sqe *sqe, int sockfd, void *buf,
 template <typename Fd, typename Buffer>
 inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
-        if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
+        if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_select_buffer_recv_op_awaiter(
+                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_recv,
+                sockfd, nullptr, 0, flags);
+        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
             return make_select_buffer_no_bundle_recv_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv,
                 sockfd, nullptr, 0, flags);
@@ -540,10 +582,19 @@ inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
 template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
                                  MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
-        std::forward<MultiShotFunc>(func),
-        std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv_multishot,
-        sockfd, nullptr, 0, flags);
+    auto op = [&] {
+        if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_multishot_select_buffer_recv_op_awaiter(
+                std::forward<MultiShotFunc>(func),
+                std::forward<Buffer>(buf).get().copy_impl(),
+                io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
+        } else {
+            return make_multishot_select_buffer_no_bundle_recv_op_awaiter(
+                std::forward<MultiShotFunc>(func),
+                std::forward<Buffer>(buf).copy_impl(),
+                io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
+        }
+    }();
     detail::maybe_add_fixed_fd_flag(op, sockfd);
     return op;
 }
