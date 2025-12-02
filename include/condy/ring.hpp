@@ -169,6 +169,7 @@ public:
         if (r < 0) {
             throw_exception("io_uring_queue_init_params failed", -r);
         }
+        features_ = params->features;
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
         initialized_ = true;
     }
@@ -270,6 +271,8 @@ public:
         return sqe;
     }
 
+    uint32_t features() const { return features_; }
+
 private:
     bool initialized_ = false;
     io_uring ring_;
@@ -281,6 +284,8 @@ private:
 
     // Configuration
     size_t submit_batch_size_ = 128;
+
+    uint32_t features_ = 0;
 };
 
 } // namespace condy

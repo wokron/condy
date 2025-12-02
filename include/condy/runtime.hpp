@@ -26,6 +26,8 @@ inline auto &current_buffer_table() {
 
 inline auto &current_runtime() { return *Context::current().runtime(); }
 
+inline auto current_features() { return Context::current().ring()->features(); }
+
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
