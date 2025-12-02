@@ -1,12 +1,11 @@
 #pragma once
 
 #include "condy/buffers.hpp"
+#include "condy/condy_uring.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include <array>
 #include <cstddef>
-#include <liburing.h>
-#include <liburing/io_uring.h>
 #include <limits>
 #include <tuple>
 #include <variant>
@@ -93,37 +92,42 @@ public:
           buffers_impl_(std::move(buffers_impl)) {}
 
     ReturnType extract_result() {
-        int res = this->res_;
         std::vector<ProvidedBuffer> entries;
-        const size_t buf_size = buffers_impl_->buffer_size();
         if (this->flags_ & IORING_CQE_F_BUFFER) {
-            assert(res >= 0);
-            if (this->flags_ & IORING_CQE_F_BUF_MORE) {
-                // Must be partial consumption
-                assert(static_cast<size_t>(res) < buf_size);
-                int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-                void *data =
-                    buffers_impl_->get_buffer(static_cast<size_t>(bid));
-                entries.emplace_back(nullptr, data, buf_size);
-            } else {
-                // One or more full buffers consumed
-                const size_t buf_mask = buf_size - 1;
-                size_t num_buffers = (res + buf_size - 1) / buf_size;
-                int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-                for (size_t i = 0; i < num_buffers; i++) {
-                    void *data =
-                        buffers_impl_->get_buffer(static_cast<size_t>(bid));
-                    // NOTE: No std::move here, since buffers_impl_ may be used
-                    // multiple times (multishot)
-                    entries.emplace_back(buffers_impl_, data, buf_size);
-                    bid = (bid + 1) & buf_mask;
-                }
-            }
+            extract_buffers_(entries);
         }
-        return std::make_pair(res, std::move(entries));
+        return std::make_pair(this->res_, std::move(entries));
     }
 
 private:
+    void extract_buffers_(std::vector<ProvidedBuffer> &entries) {
+        int res = this->res_;
+        assert(res >= 0);
+        const size_t buf_size = buffers_impl_->buffer_size();
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+        if (this->flags_ & IORING_CQE_F_BUF_MORE) {
+            // Must be partial consumption
+            assert(static_cast<size_t>(res) < buf_size);
+            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
+            entries.emplace_back(nullptr, data, buf_size);
+            return;
+        }
+#endif
+        // One or more full buffers consumed
+        const size_t buf_mask = buf_size - 1;
+        size_t num_buffers = (res + buf_size - 1) / buf_size;
+        int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
+        for (size_t i = 0; i < num_buffers; i++) {
+            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
+            // NOTE: No std::move here, since buffers_impl_ may be used
+            // multiple times (multishot)
+            entries.emplace_back(buffers_impl_, data, buf_size);
+            bid = (bid + 1) & buf_mask;
+        }
+    }
+
     detail::ProvidedBufferPoolImplPtr buffers_impl_;
 };
 
@@ -211,13 +215,16 @@ public:
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
             size_t sent_size = static_cast<size_t>(res);
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
             if (this->flags_ & IORING_CQE_F_BUF_MORE) {
                 // Must be partial consumption
                 buffers_impl_->partial_remove_buffer(bid, sent_size);
-            } else {
-                // Entire buffer(s) has been sent, remove it/them from the queue
-                buffers_impl_->remove_buffer(bid, sent_size);
+                return res;
             }
+#endif
+            // Entire buffer(s) has been sent, remove it/them from the queue
+            buffers_impl_->remove_buffer(bid, sent_size);
         }
         return res;
     }

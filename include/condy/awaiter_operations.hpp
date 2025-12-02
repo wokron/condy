@@ -60,7 +60,9 @@ auto make_select_buffer_recv_op_awaiter(
             std::forward<Args>(args)...);
     op.add_flags(IOSQE_BUFFER_SELECT);
     op.set_bgid(bgid);
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
     op.add_ioprio(IORING_RECVSEND_BUNDLE);
+#endif
     return op;
 }
 
@@ -90,7 +92,9 @@ auto make_multishot_select_buffer_recv_op_awaiter(
         std::forward<Func>(func), std::forward<Args>(args)...);
     op.add_flags(IOSQE_BUFFER_SELECT);
     op.set_bgid(bgid);
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
     op.add_ioprio(IORING_RECVSEND_BUNDLE);
+#endif
     return op;
 }
 
