@@ -226,12 +226,30 @@ public:
         size_++;
     }
 
-    void remove_buffer(size_t bid) {
+    void partial_remove_buffer(size_t bid, size_t size) {
         assert(bid < num_buffers_);
-        assert(buf_ring_->bufs[bid].bid == bid);
-        auto destructor = std::move(destructors_[bid]);
-        (void)destructor;
-        size_--;
+        [[maybe_unused]] auto &buf = buf_ring_->bufs[bid];
+        assert(buf.bid == bid);
+        assert(buffer_head_ + size < buf.len);
+        buffer_head_ += size;
+    }
+
+    void remove_buffer(size_t bid, size_t size) {
+        assert(bid < num_buffers_);
+
+        ssize_t remain = size;
+        while (remain > 0) {
+            auto &buf = buf_ring_->bufs[bid];
+            assert(buf.bid == bid);
+            size_t buf_remain = buf.len - buffer_head_;
+            do_destruction_(bid);
+            size_--;
+            remain -= buf_remain;
+            buffer_head_ = 0;
+            bid = (bid + 1) & buf_ring_mask_;
+        }
+        assert(remain == 0);           // Should comsume the entire buffer(s)
+        assert(size_ <= num_buffers_); // No underflow
     }
 
     size_t size() const { return size_; }
@@ -239,6 +257,11 @@ public:
     size_t capacity() const { return num_buffers_; }
 
 private:
+    void do_destruction_(size_t bid) {
+        auto destructor = std::move(destructors_[bid]);
+        (void)destructor;
+    }
+
     void add_buffer_(void *ptr, size_t size) {
         io_uring_buf_ring_add(buf_ring_, ptr, size, next_bid_, buf_ring_mask_,
                               0);
@@ -257,6 +280,8 @@ private:
 
     io_uring_buf_ring *buf_ring_;
     std::unique_ptr<ErasedDestructor[]> destructors_;
+
+    size_t buffer_head_ = 0;
 
     void *data_;
     size_t data_size_;

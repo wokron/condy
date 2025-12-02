@@ -129,7 +129,7 @@ TEST_CASE("test buffers - SubmittedBufferQueueImpl buffer destruct") {
         });
     }
 
-    queue_impl.remove_buffer(0);
+    queue_impl.remove_buffer(0, impl->buffer_size());
 
     prep_read();
     reaped = 0;

@@ -384,6 +384,10 @@ inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
                                    buf.size(), offset, buf.buf_index());
+        } else if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_select_buffer_bundle_send_op_awaiter(
+                std::forward<Buffer>(buf).get().copy_impl(),
+                io_uring_prep_write, fd, nullptr, 0, offset);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_write, fd,
@@ -463,6 +467,10 @@ inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(detail::prep_send_fixed, sockfd, buf.data(),
                                    buf.size(), flags, buf.buf_index());
+        } else if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_select_buffer_bundle_send_op_awaiter(
+                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_send,
+                sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), io_uring_prep_send,
@@ -484,6 +492,10 @@ inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
             return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
                                    buf.data(), buf.size(), flags, addr, addrlen,
                                    buf.buf_index());
+        } else if constexpr (detail::is_bundle_provided_buffer_v<Buffer>) {
+            return make_select_buffer_bundle_send_op_awaiter(
+                std::forward<Buffer>(buf).get().copy_impl(),
+                detail::prep_sendto, sockfd, nullptr, 0, flags, addr, addrlen);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_send_op_awaiter(
                 std::forward<Buffer>(buf).copy_impl(), detail::prep_sendto,

@@ -210,10 +210,13 @@ public:
         if (this->flags_ & IORING_CQE_F_BUFFER) {
             assert(res >= 0);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            if (!(this->flags_ & IORING_CQE_F_BUF_MORE)) {
-                // Entire buffer has been sent, remove it from the queue
-                // TODO: Add test for this
-                buffers_impl_->remove_buffer(bid);
+            size_t sent_size = static_cast<size_t>(res);
+            if (this->flags_ & IORING_CQE_F_BUF_MORE) {
+                // Must be partial consumption
+                buffers_impl_->partial_remove_buffer(bid, sent_size);
+            } else {
+                // Entire buffer(s) has been sent, remove it/them from the queue
+                buffers_impl_->remove_buffer(bid, sent_size);
             }
         }
         return res;
