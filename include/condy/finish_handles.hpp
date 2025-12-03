@@ -218,6 +218,7 @@ public:
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
             if (this->flags_ & IORING_CQE_F_BUF_MORE) {
+                // TODO: Any use case for send partial buffer?
                 // Must be partial consumption
                 buffers_impl_->partial_remove_buffer(bid, sent_size);
                 return res;

@@ -56,6 +56,10 @@ public:
     ProvidedBufferQueue &operator=(ProvidedBufferQueue &&) = delete;
 
 public:
+    template <typename Buffer> void push(Buffer &&buffer) {
+        impl_->submit_buffer(std::forward<Buffer>(buffer));
+    }
+
     detail::ProvidedBufferQueueImplPtr copy_impl() const & { return impl_; }
     detail::ProvidedBufferQueueImplPtr copy_impl() && {
         return std::move(impl_);
