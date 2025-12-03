@@ -70,8 +70,7 @@ public:
     void *get_buffer(size_t bid) const {
         assert(bid < num_buffers_);
         assert(buf_ring_->bufs[bid].bid == bid);
-        auto *addr = reinterpret_cast<void *>(buf_ring_->bufs[bid].addr);
-        return addr;
+        return buffers_base_ + bid * buffer_size_;
     }
 
     void add_buffer(void *ptr) {
@@ -158,7 +157,7 @@ public:
         size_ = 0;
     }
 
-    bool owns_buffer() const { return impl_ != nullptr; }
+    bool owns_buffer() const { return owns_buffer_; }
 
 private:
     detail::ProvidedBufferPoolImplPtr impl_ = nullptr;
