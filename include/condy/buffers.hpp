@@ -114,26 +114,29 @@ class ProvidedBuffer {
 public:
     ProvidedBuffer() = default;
     ProvidedBuffer(detail::ProvidedBufferPoolImplPtr impl, void *data,
-                   size_t size)
-        : impl_(std::move(impl)), data_(data), size_(size) {}
+                   size_t size, bool owns_buffer = true)
+        : impl_(std::move(impl)), data_(data), size_(size),
+          owns_buffer_(owns_buffer) {}
     ProvidedBuffer(ProvidedBuffer &&other)
         : impl_(std::move(other.impl_)),
           data_(std::exchange(other.data_, nullptr)),
-          size_(std::exchange(other.size_, 0)) {}
+          size_(std::exchange(other.size_, 0)),
+          owns_buffer_(std::exchange(other.owns_buffer_, false)) {}
     ProvidedBuffer &operator=(ProvidedBuffer &&other) {
         if (this != &other) {
-            if (impl_ != nullptr) {
+            if (impl_ != nullptr && owns_buffer_) {
                 impl_->add_buffer(data_);
             }
             impl_ = std::move(other.impl_);
             data_ = std::exchange(other.data_, nullptr);
             size_ = std::exchange(other.size_, 0);
+            owns_buffer_ = std::exchange(other.owns_buffer_, false);
         }
         return *this;
     }
 
     ~ProvidedBuffer() {
-        if (impl_ != nullptr) {
+        if (impl_ != nullptr && owns_buffer_) {
             impl_->add_buffer(data_);
         }
     }
@@ -147,12 +150,12 @@ public:
     size_t size() const { return size_; }
 
     void reset() {
-        if (impl_ != nullptr) {
+        if (impl_ != nullptr && owns_buffer_) {
             impl_->add_buffer(data_);
-            impl_.reset();
-            data_ = nullptr;
-            size_ = 0;
         }
+        impl_.reset();
+        data_ = nullptr;
+        size_ = 0;
     }
 
     bool owns_buffer() const { return impl_ != nullptr; }
@@ -161,6 +164,7 @@ private:
     detail::ProvidedBufferPoolImplPtr impl_ = nullptr;
     void *data_ = nullptr;
     size_t size_ = 0;
+    bool owns_buffer_ = false;
 };
 
 namespace detail {

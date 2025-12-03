@@ -111,7 +111,7 @@ private:
             assert(static_cast<size_t>(res) < buf_size);
             int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
             void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
-            entries.emplace_back(nullptr, data, buf_size);
+            entries.emplace_back(buffers_impl_, data, buf_size, false);
             return;
         }
 #endif
