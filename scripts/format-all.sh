@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 usage() {
     echo "Usage: $0 [-i]"
