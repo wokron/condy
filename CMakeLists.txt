@@ -5,6 +5,7 @@ project(condy LANGUAGES CXX)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BUILD_TESTS "Build tests" OFF)
+option(TESTS_STATIC_LINK "Use static linking for tests" OFF)
 option(LINK_LIBURING "Use liburing from third_party and link it to condy" ON)
 
 
