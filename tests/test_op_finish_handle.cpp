@@ -55,7 +55,6 @@ TEST_CASE("test op_finish_handle - basic usage") {
     SetFinishInvoker invoker;
     condy::OpFinishHandle handle;
     handle.set_invoker(&invoker);
-    handle.set_ring(&ring);
 
     auto *sqe = ring.get_sqe();
     io_uring_prep_nop(sqe);
@@ -89,8 +88,6 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     condy::OpFinishHandle handle1, handle2;
     handle1.set_invoker(&invoker);
     handle2.set_invoker(&invoker);
-    handle1.set_ring(&ring);
-    handle2.set_ring(&ring);
 
     auto *sqe1 = ring.get_sqe();
     io_uring_prep_nop(sqe1);
@@ -124,8 +121,6 @@ TEST_CASE("test op_finish_handle - cancel op") {
         finish_handle;
     finish_handle.init(&handle1, &handle2);
     finish_handle.set_invoker(&invoker);
-    handle1.set_ring(&ring);
-    handle2.set_ring(&ring);
 
     auto *sqe = ring.get_sqe();
     __kernel_timespec ts{

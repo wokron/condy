@@ -2,6 +2,7 @@
 
 #include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
+#include "condy/context.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include <array>
@@ -23,12 +24,12 @@ public:
     OpFinishHandle() { is_operation_ = true; }
 
     void cancel() {
-        assert(ring_ != nullptr);
-        io_uring_sqe *sqe = ring_->get_sqe();
+        auto *ring = Context::current().ring();
+        io_uring_sqe *sqe = ring->get_sqe();
         io_uring_prep_cancel(sqe, this, 0);
         io_uring_sqe_set_data(sqe, MagicData::IGNORE);
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-        ring_->maybe_submit();
+        ring->maybe_submit();
     }
 
     void set_result(int res, int flags) {
@@ -42,8 +43,6 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void set_ring(Ring *ring) { ring_ = ring; }
-
     void multishot() {
         assert(multishot_func_ != nullptr);
         multishot_func_(this);
@@ -52,7 +51,6 @@ public:
 protected:
     int res_;
     Invoker *invoker_ = nullptr;
-    Ring *ring_ = nullptr;
     MultiShotFunc multishot_func_ = nullptr;
     int flags_;
 };

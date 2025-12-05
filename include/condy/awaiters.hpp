@@ -67,7 +67,6 @@ public:
         auto &context = Context::current();
         auto *ring = context.ring();
 
-        finish_handle_.get().set_ring(ring);
         context.runtime()->pend_work();
         io_uring_sqe *sqe = ring->get_sqe();
         prep_op_(sqe, flags);
