@@ -25,12 +25,6 @@ jobs:
         with:
           submodules: true
 
-      - name: Configure LLVM
-        if: matrix.compiler.cc == 'clang'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang llvm
-
       - name: Configure CMake
         run: |
           COMPILER=$(${{matrix.compiler.cc}} --version | head -n 1)
