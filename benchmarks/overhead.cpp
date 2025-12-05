@@ -30,6 +30,7 @@ void run_condy_nop(size_t times) {
     condy::sync_wait(runtime, run_condy_nop_coro(times));
 }
 
+// This is the worst case, normal workloads could batch these operations
 int main() {
     const size_t iterations = 10'000'000;
 
@@ -42,8 +43,8 @@ int main() {
         duration_condy =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
                 .count();
-        std::printf("Condy NOP: %zu iterations took %ld ns\n", iterations,
-                    duration_condy);
+        std::printf("Condy NOP: %zu iterations took %ld ns (%ld ns per op)\n",
+                    iterations, duration_condy, duration_condy / iterations);
     }
 
     {
@@ -53,16 +54,14 @@ int main() {
         duration_raw =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
                 .count();
-        std::printf("Raw NOP: %zu iterations took %ld ns\n", iterations,
-                    duration_raw);
+        std::printf("Raw NOP: %zu iterations took %ld ns (%ld ns per op)\n",
+                    iterations, duration_raw, duration_raw / iterations);
     }
 
     long overhead = duration_condy - duration_raw;
-    long over_head_per_op = overhead / iterations;
-    double overhead_ratio =
-        static_cast<double>(overhead) / duration_raw * 100.0;
-    std::printf("Overhead: %ld ns per operation\n", over_head_per_op);
-    std::printf("Overhead Ratio: %.2f%%\n", overhead_ratio);
+    long overhead_per_op = overhead / iterations;
+    std::printf("Overhead: %ld ns per operation (%.2f%%)\n", overhead_per_op,
+                (static_cast<double>(overhead) / duration_raw) * 100.0);
 
     return 0;
 }
