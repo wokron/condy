@@ -2,13 +2,33 @@
 
 set -euo pipefail
 
+
 usage() {
-    echo "Usage: $0 <bzImage> <static-executable>"
+    echo "Usage: $0 [-hk] <bzImage> <static-executable>"
     echo "Run a VM with the specified kernel image and static executable."
+    echo "  -h                   Show this help message."
+    echo "  -k                   Enable KVM acceleration."
     echo "  <bzImage>            Path to the kernel image."
     echo "  <static-executable>  Path to the static executable to run inside the VM."
     exit 1
 }
+
+KVM_ENABLED=false
+
+while getopts "hk" opt; do
+    case $opt in
+        k)
+            KVM_ENABLED=true
+            ;;
+        h)
+            usage
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND -1))
 
 if [ $# -ne 2 ]; then
     usage
@@ -50,8 +70,14 @@ else
     echo "Using cached initrd image at $CACHE_DIR/$INITRD_OUTPUT"
 fi
 
+KVM_FLAG=""
+if [ "$KVM_ENABLED" = true ]; then
+    KVM_FLAG="-enable-kvm"
+fi
+
 # Run the VM,
 qemu-system-x86_64 \
+    $KVM_FLAG \
     -m 512M \
     -kernel "$KERNEL_IMAGE" \
     -initrd "$CACHE_DIR/$INITRD_OUTPUT" \

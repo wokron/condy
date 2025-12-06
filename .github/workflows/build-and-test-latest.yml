@@ -1,0 +1,82 @@
+name: Build and Test Condy on Latest Kernel
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  KERNEL_VERSION: 6.17.10
+  LIBURING_VERSION: 2.12
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository and Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      
+      - name: Checkout Liburing to Latest Version
+        run: |
+          cd ./third_party/liburing
+          git fetch --tags
+          git checkout liburing-${{ env.LIBURING_VERSION }}
+          cd ../../
+
+      - name: Update Apt Packages
+        run: sudo apt-get update
+
+      - name: Setup QEMU
+        run: |
+          sudo apt-get install -y qemu-system-x86
+          qemu-system-x86_64 --version # Verify installation
+
+      - name: Cache Kernel bzImage
+        id: cache-kernel
+        uses: actions/cache@v4
+        with:
+          path: .cache/bzImage
+          key: bzImage-${{ env.KERNEL_VERSION }}-${{ hashFiles('scripts/light-kernel.sh') }}-${{ runner.os }}
+
+      - name: Build Linux Kernel
+        timeout-minutes: 20
+        if: steps.cache-kernel.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y \
+            build-essential \
+            libncurses-dev \
+            bison \
+            flex \
+            libssl-dev \
+            libelf-dev \
+            bc \
+            kmod \
+            cpio \
+            rsync \
+            wget
+
+          mkdir -p .cache
+          KERNEL_ARCHIVE_URL=https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${{ env.KERNEL_VERSION }}.tar.xz
+          bash ./scripts/light-kernel.sh -o .cache/bzImage "$KERNEL_ARCHIVE_URL"
+
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build \
+              -DBUILD_TESTS=ON \
+              -DCMAKE_C_COMPILER=clang \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DTESTS_STATIC_LINK=ON
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config Release -j$(nproc)
+
+      - name: Run Tests on QEMU
+        timeout-minutes: 15
+        run: |
+          bash ./scripts/vm-run.sh ./.cache/bzImage ./build/tests/tests
