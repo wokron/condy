@@ -79,4 +79,10 @@ jobs:
       - name: Run Tests on QEMU
         timeout-minutes: 15
         run: |
-          bash ./scripts/vm-run.sh ./.cache/bzImage ./build/tests/tests
+          bash ./scripts/vm-run.sh ./.cache/bzImage ./build/tests/tests 2>&1 | tee vm-run.log
+          if grep -q "SUCCESS!" vm-run.log; then
+            echo "::notice:: All tests passed"
+          else
+            echo "::error::Tests failed"
+            exit 1
+          fi

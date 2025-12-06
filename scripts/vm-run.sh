@@ -8,17 +8,22 @@ usage() {
     echo "Run a VM with the specified kernel image and static executable."
     echo "  -h                   Show this help message."
     echo "  -k                   Enable KVM acceleration."
+    echo "  -q                   Quiet mode (no output)."
     echo "  <bzImage>            Path to the kernel image."
     echo "  <static-executable>  Path to the static executable to run inside the VM."
     exit 1
 }
 
 KVM_ENABLED=false
+QUIET_MODE=false
 
 while getopts "hk" opt; do
     case $opt in
         k)
             KVM_ENABLED=true
+            ;;
+        q)
+            QUIET_MODE=true
             ;;
         h)
             usage
@@ -75,11 +80,16 @@ if [ "$KVM_ENABLED" = true ]; then
     KVM_FLAG="-enable-kvm"
 fi
 
+KERNEL_ARGS="console=ttyS0"
+if [ "$QUIET_MODE" = true ]; then
+    KERNEL_ARGS="$KERNEL_ARGS quiet"
+fi
+
 # Run the VM,
 qemu-system-x86_64 \
     $KVM_FLAG \
     -m 512M \
     -kernel "$KERNEL_IMAGE" \
     -initrd "$CACHE_DIR/$INITRD_OUTPUT" \
-    -append "console=ttyS0 quiet" \
+    -append "$KERNEL_ARGS" \
     -nographic

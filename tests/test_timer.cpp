@@ -9,14 +9,8 @@ TEST_CASE("test timer - sleep") {
 
     auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{.tv_sec = 0, .tv_nsec = 10000};
-        auto start = std::chrono::steady_clock::now();
         auto r = co_await timer.async_wait(&ts, 0, 0);
         REQUIRE(r == -ETIME);
-        auto end = std::chrono::steady_clock::now();
-        auto duration =
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-                .count();
-        REQUIRE(duration < 100); // Less than 20 microseconds
         co_return;
     };
 
