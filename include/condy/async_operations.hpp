@@ -176,15 +176,7 @@ inline auto async_tee(Fd1 fd_in, Fd2 fd_out, unsigned int nbytes,
 
 template <typename Fd>
 inline auto async_readv(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                        __u64 offset) {
-    auto op = make_op_awaiter(io_uring_prep_readv, fd, iovecs, nr_vecs, offset);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-
-template <typename Fd>
-inline auto async_readv2(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                         __u64 offset, int flags) {
+                        __u64 offset, int flags) {
     auto op = make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs, offset,
                               flags);
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -193,16 +185,7 @@ inline auto async_readv2(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
 
 template <typename Fd>
 inline auto async_writev(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                         __u64 offset) {
-    auto op =
-        make_op_awaiter(io_uring_prep_writev, fd, iovecs, nr_vecs, offset);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-
-template <typename Fd>
-inline auto async_writev2(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                          __u64 offset, int flags) {
+                         __u64 offset, int flags) {
     auto op = make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs,
                               offset, flags);
     detail::maybe_add_fixed_fd_flag(op, fd);
