@@ -71,7 +71,6 @@ public:
         context.runtime()->pend_work();
         io_uring_sqe *sqe = ring->get_sqe();
         prep_op_(sqe, flags);
-        ring->maybe_submit();
     }
 
 public:

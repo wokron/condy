@@ -14,11 +14,6 @@ public:
         return *this;
     }
 
-    Self &submit_batch_size(size_t v) {
-        submit_batch_size_ = v;
-        return *this;
-    }
-
     Self &enable_sqpoll(size_t idle_time_ms = 1000) {
         if (enable_defer_taskrun_ || enable_coop_taskrun_) {
             throw std::logic_error(
@@ -59,7 +54,6 @@ public:
 
 protected:
     size_t event_interval_ = 61;
-    size_t submit_batch_size_ = 128;
     bool enable_sqpoll_ = false;
     size_t sqpoll_idle_time_ms_ = 1000;
     bool enable_defer_taskrun_ = false;

@@ -24,9 +24,7 @@ condy::Coro<void> run_condy_nop_coro(size_t times) {
 }
 
 void run_condy_nop(size_t times) {
-    condy::Runtime runtime(
-        condy::RuntimeOptions{}.sq_size(256).cq_size(512).submit_batch_size(
-            256));
+    condy::Runtime runtime(condy::RuntimeOptions{}.sq_size(256).cq_size(512));
     condy::sync_wait(runtime, run_condy_nop_coro(times));
 }
 

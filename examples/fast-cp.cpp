@@ -123,10 +123,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    auto options = condy::RuntimeOptions()
-                       .sq_size(2 * TASK_NUM)
-                       .cq_size(4 * TASK_NUM)
-                       .submit_batch_size(2 * TASK_NUM);
+    auto options =
+        condy::RuntimeOptions().sq_size(2 * TASK_NUM).cq_size(4 * TASK_NUM);
     condy::Runtime runtime(options);
     condy::sync_wait(runtime, co_main(argv[1], argv[2]));
 

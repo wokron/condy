@@ -28,7 +28,6 @@ public:
         io_uring_prep_cancel(sqe, this, 0);
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-        ring->maybe_submit();
     }
 
     void set_result(int res, int flags) {

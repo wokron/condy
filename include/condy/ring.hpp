@@ -181,14 +181,6 @@ public:
         io_uring_submit(&ring_);
     }
 
-    void set_submit_batch_size(size_t size) { submit_batch_size_ = size; }
-
-    void maybe_submit() {
-        if (unsubmitted_count_++ >= submit_batch_size_) {
-            submit();
-        }
-    }
-
     template <typename Func>
     size_t reap_completions(Func &&process_func, bool submit_and_wait = false) {
         int r;
@@ -276,9 +268,6 @@ private:
 
     FdTable fd_table_{ring_};
     BufferTable buffer_table_{ring_};
-
-    // Configuration
-    size_t submit_batch_size_ = 128;
 
     uint32_t features_ = 0;
 };

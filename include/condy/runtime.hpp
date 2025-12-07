@@ -62,7 +62,6 @@ public:
         }
 
         ring_.init(ring_entries, &params);
-        ring_.set_submit_batch_size(options.submit_batch_size_);
 
         event_interval_ = options.event_interval_;
 
@@ -101,7 +100,6 @@ public:
             __tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
-            runtime->ring_.maybe_submit();
             return;
         }
 
@@ -156,7 +154,6 @@ private:
         eventfd_read(notify_fd_, &dummy_);
         io_uring_sqe *sqe = ring_.get_sqe();
         prep_read_notify_fd_(sqe);
-        ring_.maybe_submit();
     }
 
     void prep_read_notify_fd_(io_uring_sqe *sqe) {
