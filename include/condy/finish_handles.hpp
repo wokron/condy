@@ -5,6 +5,7 @@
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
+#include "condy/work_type.hpp"
 #include <array>
 #include <cstddef>
 #include <limits>
@@ -18,6 +19,7 @@ class Ring;
 
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
+    static constexpr WorkType work_type = WorkType::Common;
     using ReturnType = int;
     using MultiShotFunc = void (*)(void *);
 
@@ -27,7 +29,7 @@ public:
         auto *ring = Context::current().ring();
         io_uring_sqe *sqe = ring->get_sqe();
         io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, MagicData::IGNORE);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
         ring->maybe_submit();
     }
@@ -60,6 +62,8 @@ class TimerFinishHandle : public OpFinishHandle {};
 template <typename Func, typename HandleBase>
 class MultiShotMixin : public HandleBase {
 public:
+    static constexpr WorkType work_type = WorkType::MultiShot;
+
     template <typename... Args>
     MultiShotMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
@@ -170,6 +174,8 @@ using MultiShotSelectBufferNoBundleRecvOpFinishHandle =
 template <typename Func, typename HandleBase>
 class ZeroCopyMixin : public HandleBase {
 public:
+    static constexpr WorkType work_type = WorkType::ZeroCopy;
+
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {

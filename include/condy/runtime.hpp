@@ -8,6 +8,7 @@
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
 #include "condy/utils.hpp"
+#include "condy/work_type.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -160,14 +161,15 @@ private:
 
     void prep_read_notify_fd_(io_uring_sqe *sqe) {
         io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
-        io_uring_sqe_set_data(sqe, MagicData::NOTIFY);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Notify));
     }
 
     void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work) {
+        auto data = encode_work(work, WorkType::Schedule);
         io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
-                               reinterpret_cast<uint64_t>(work), 0);
+                               reinterpret_cast<uint64_t>(data), 0);
         sqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
-        io_uring_sqe_set_data(sqe, MagicData::IGNORE);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
     }
 
     size_t flush_ring_(bool submit_and_wait = false) {
@@ -176,11 +178,13 @@ private:
     }
 
     void process_cqe_(io_uring_cqe *cqe) {
-        auto *data = io_uring_cqe_get_data(cqe);
-        if (data == MagicData::IGNORE) {
+        auto *data_raw = io_uring_cqe_get_data(cqe);
+
+        auto [data, type] = decode_work(data_raw);
+        if (type == WorkType::Ignore) {
             return;
         }
-        if (data == MagicData::NOTIFY) {
+        if (type == WorkType::Notify) {
             std::lock_guard<std::mutex> lock(mutex_);
             flush_global_queue_();
             return;
@@ -188,26 +192,42 @@ private:
 
         auto *work = static_cast<WorkInvoker *>(data);
         __tsan_acquire(work);
-        if (!work->is_operation()) {
+
+        if (type == WorkType::Schedule) {
             local_queue_.push_back(work);
             return;
         }
 
         auto *handle = static_cast<OpFinishHandle *>(work);
         handle->set_result(cqe->res, cqe->flags);
-        if (cqe->flags & IORING_CQE_F_MORE) {
-            handle->multishot();
+
+        if (type == WorkType::MultiShot) {
+            if (cqe->flags & IORING_CQE_F_MORE) {
+                handle->multishot();
+            } else {
+                pending_works_--;
+                local_queue_.push_back(handle);
+            }
             return;
         }
 
-        pending_works_--;
-
-        if (cqe->flags & IORING_CQE_F_NOTIF) {
-            // Notify cqe, no need to schedule back to local queue
-            (*handle)();
+        if (type == WorkType::ZeroCopy) {
+            if (cqe->flags & IORING_CQE_F_MORE) {
+                handle->multishot();
+            } else {
+                pending_works_--;
+                (*handle)();
+            }
             return;
         }
-        local_queue_.push_back(handle);
+
+        if (type == WorkType::Common) {
+            pending_works_--;
+            local_queue_.push_back(handle);
+            return;
+        }
+
+        assert(false);
     }
 
 private:

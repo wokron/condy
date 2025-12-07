@@ -27,12 +27,12 @@ void event_loop(size_t &unfinished) {
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
-            if (io_uring_cqe_get_data(cqe) == condy::MagicData::IGNORE) {
+            auto [data, type] = condy::decode_work(io_uring_cqe_get_data(cqe));
+            if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(
-                io_uring_cqe_get_data(cqe));
-            handle_ptr->set_result(cqe->res, 0);
+            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            handle_ptr->set_result(cqe->res, cqe->flags);
             (*handle_ptr)();
         });
     }

@@ -10,11 +10,6 @@
 
 namespace condy {
 
-struct MagicData {
-    inline static void *const IGNORE = reinterpret_cast<void *>(0x1);
-    inline static void *const NOTIFY = reinterpret_cast<void *>(0x2);
-};
-
 class FdTable {
 public:
     FdTable(io_uring &ring) : ring_(ring) {}

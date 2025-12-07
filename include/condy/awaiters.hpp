@@ -5,6 +5,7 @@
 #include "condy/finish_handles.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime.hpp"
+#include "condy/work_type.hpp"
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
@@ -102,7 +103,8 @@ private:
             args_);
         sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
         sqe->ioprio |= ioprio_;
-        io_uring_sqe_set_data(sqe, &finish_handle_.get());
+        io_uring_sqe_set_data(
+            sqe, encode_work(&finish_handle_.get(), Handle::work_type));
     }
 
 protected:
