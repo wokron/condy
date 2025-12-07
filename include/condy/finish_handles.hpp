@@ -21,7 +21,6 @@ class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
     static constexpr WorkType work_type = WorkType::Common;
     using ReturnType = int;
-    using MultiShotFunc = void (*)(void *);
 
     void cancel() {
         auto *ring = Context::current().ring();
@@ -43,16 +42,21 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void multishot() {
-        assert(multishot_func_ != nullptr);
-        multishot_func_(this);
+protected:
+    int res_;
+    int flags_;
+    Invoker *invoker_ = nullptr;
+};
+
+class ExtendOpFinishHandle : public OpFinishHandle {
+public:
+    void invoke_extend() {
+        assert(extend_func_ != nullptr);
+        extend_func_(this);
     }
 
 protected:
-    int res_;
-    Invoker *invoker_ = nullptr;
-    MultiShotFunc multishot_func_ = nullptr;
-    int flags_;
+    Invoker::Func extend_func_ = nullptr;
 };
 
 class TimerFinishHandle : public OpFinishHandle {};
@@ -65,21 +69,22 @@ public:
     template <typename... Args>
     MultiShotMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
-        this->multishot_func_ = &MultiShotMixin::invoke_multishot_;
+        this->extend_func_ = [](void *data) {
+            auto *self = static_cast<MultiShotMixin<Func, HandleBase> *>(data);
+            self->invoke_multishot_();
+        };
     }
 
 private:
-    static void invoke_multishot_(void *data) {
-        auto *self = static_cast<MultiShotMixin<Func, HandleBase> *>(data);
-        self->func_(self->extract_result());
-    }
+    void invoke_multishot_() { func_(HandleBase::extract_result()); }
 
 private:
     Func func_;
 };
 
 template <typename MultiShotFunc>
-using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
+using MultiShotOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, ExtendOpFinishHandle>;
 
 template <typename HandleBase> class SelectBufferRecvMixin : public HandleBase {
 public:
@@ -163,11 +168,12 @@ using SelectBufferNoBundleRecvOpFinishHandle =
 
 template <typename MultiShotFunc>
 using MultiShotSelectBufferRecvOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferRecvOpFinishHandle>;
+    MultiShotMixin<MultiShotFunc, SelectBufferRecvMixin<ExtendOpFinishHandle>>;
 
 template <typename MultiShotFunc>
 using MultiShotSelectBufferNoBundleRecvOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferNoBundleRecvOpFinishHandle>;
+    MultiShotMixin<MultiShotFunc,
+                   SelectBufferNoBundleRecvMixin<ExtendOpFinishHandle>>;
 
 template <typename Func, typename HandleBase>
 class ZeroCopyMixin : public HandleBase {
@@ -177,29 +183,21 @@ public:
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
-        this->multishot_func_ = &ZeroCopyMixin::invoke_multishot_;
-        this->func_ =
-            &ZeroCopyMixin::invoke_notify_; // Override the base invoke
+        this->extend_func_ = [](void *data) {
+            auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
+            self->invoke_notify_();
+        };
     }
 
 private:
-    static void invoke_multishot_(void *data) {
-        auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
-        (*self->invoker_)(); // Resume here
-    }
-
-    static void invoke_notify_(void *data) {
-        auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
-        self->free_func_(self->res_);
-        delete self; // TODO: Better way?
-    }
+    void invoke_notify_() { free_func_(this->res_); }
 
 private:
     Func free_func_;
 };
 
 template <typename FreeFunc>
-using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
+using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
 template <typename HandleBase> class SelectBufferSendMixin : public HandleBase {
 public:

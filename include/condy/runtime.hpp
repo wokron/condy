@@ -191,23 +191,27 @@ private:
             __tsan_acquire(data);
             local_queue_.push_back(work);
         } else if (type == WorkType::MultiShot) {
-            auto *handle = static_cast<OpFinishHandle *>(data);
+            auto *handle = static_cast<ExtendOpFinishHandle *>(data);
             handle->set_result(cqe->res, cqe->flags);
             if (cqe->flags & IORING_CQE_F_MORE) {
-                handle->multishot();
+                handle->invoke_extend();
             } else {
                 pending_works_--;
                 local_queue_.push_back(handle);
             }
         } else if (type == WorkType::ZeroCopy) {
-            auto *handle = static_cast<OpFinishHandle *>(data);
+            auto *handle = static_cast<ExtendOpFinishHandle *>(data);
             handle->set_result(cqe->res, cqe->flags);
-            // TODO: Handle error
             if (cqe->flags & IORING_CQE_F_MORE) {
-                handle->multishot();
+                (*handle)();
             } else {
                 pending_works_--;
-                (*handle)();
+                if (cqe->flags & IORING_CQE_F_NOTIF) {
+                    handle->invoke_extend();
+                } else {
+                    (*handle)();
+                }
+                delete handle;
             }
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandle *>(data);

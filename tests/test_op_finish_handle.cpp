@@ -166,10 +166,11 @@ TEST_CASE("test op_finish_handle - multishot op") {
         invoker();
     };
 
-    condy::MultiShotMixin<decltype(func), condy::OpFinishHandle> handle(func);
+    condy::MultiShotMixin<decltype(func), condy::ExtendOpFinishHandle> handle(
+        func);
     REQUIRE(!invoker.finished);
     handle.set_result(1, 0);
-    handle.multishot();
+    handle.invoke_extend(); // Multishot
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
 }
@@ -181,15 +182,16 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     auto func = [&](int r) { res = r; };
 
     auto *handle =
-        new condy::ZeroCopyMixin<decltype(func), condy::OpFinishHandle>(func);
+        new condy::ZeroCopyMixin<decltype(func), condy::ExtendOpFinishHandle>(
+            func);
     handle->set_invoker(&invoker);
     REQUIRE(!invoker.finished);
     handle->set_result(1, 0);
-    handle->multishot();
+    (*handle)();
     REQUIRE(invoker.finished);
     REQUIRE(handle->extract_result() == 1);
     REQUIRE(res == -1);
     handle->set_result(2, 0);
-    (*handle)();
+    handle->invoke_extend(); // Notify
     REQUIRE(res == 2);
 }
