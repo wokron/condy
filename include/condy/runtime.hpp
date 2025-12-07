@@ -100,6 +100,7 @@ public:
             __tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
+            runtime->pend_work();
             return;
         }
 
@@ -141,9 +142,6 @@ public:
             }
             flush_ring_(true);
         }
-
-        // Ensure all notifications sqes are submitted
-        ring_.submit();
     }
 
     size_t next_bgid() { return next_bgid_++; }
@@ -165,8 +163,7 @@ private:
         auto data = encode_work(work, WorkType::Schedule);
         io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
                                reinterpret_cast<uint64_t>(data), 0);
-        sqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
     size_t flush_ring_(bool submit_and_wait = false) {
@@ -184,9 +181,14 @@ private:
             std::lock_guard<std::mutex> lock(mutex_);
             flush_global_queue_();
         } else if (type == WorkType::Schedule) {
-            auto *work = static_cast<WorkInvoker *>(data);
-            __tsan_acquire(data);
-            local_queue_.push_back(work);
+            if (data == nullptr) {
+                assert(cqe->res == 0);
+                pending_works_--;
+            } else {
+                auto *work = static_cast<WorkInvoker *>(data);
+                __tsan_acquire(data);
+                local_queue_.push_back(work);
+            }
         } else if (type == WorkType::MultiShot) {
             auto *handle = static_cast<ExtendOpFinishHandle *>(data);
             handle->set_result(cqe->res, cqe->flags);
