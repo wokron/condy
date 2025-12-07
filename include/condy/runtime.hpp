@@ -179,55 +179,44 @@ private:
 
     void process_cqe_(io_uring_cqe *cqe) {
         auto *data_raw = io_uring_cqe_get_data(cqe);
-
         auto [data, type] = decode_work(data_raw);
+
         if (type == WorkType::Ignore) {
-            return;
-        }
-        if (type == WorkType::Notify) {
+            // No-op
+        } else if (type == WorkType::Notify) {
             std::lock_guard<std::mutex> lock(mutex_);
             flush_global_queue_();
-            return;
-        }
-
-        auto *work = static_cast<WorkInvoker *>(data);
-        __tsan_acquire(work);
-
-        if (type == WorkType::Schedule) {
+        } else if (type == WorkType::Schedule) {
+            auto *work = static_cast<WorkInvoker *>(data);
+            __tsan_acquire(data);
             local_queue_.push_back(work);
-            return;
-        }
-
-        auto *handle = static_cast<OpFinishHandle *>(work);
-        handle->set_result(cqe->res, cqe->flags);
-
-        if (type == WorkType::MultiShot) {
+        } else if (type == WorkType::MultiShot) {
+            auto *handle = static_cast<OpFinishHandle *>(data);
+            handle->set_result(cqe->res, cqe->flags);
             if (cqe->flags & IORING_CQE_F_MORE) {
                 handle->multishot();
             } else {
                 pending_works_--;
                 local_queue_.push_back(handle);
             }
-            return;
-        }
-
-        if (type == WorkType::ZeroCopy) {
+        } else if (type == WorkType::ZeroCopy) {
+            auto *handle = static_cast<OpFinishHandle *>(data);
+            handle->set_result(cqe->res, cqe->flags);
+            // TODO: Handle error
             if (cqe->flags & IORING_CQE_F_MORE) {
                 handle->multishot();
             } else {
                 pending_works_--;
                 (*handle)();
             }
-            return;
-        }
-
-        if (type == WorkType::Common) {
+        } else if (type == WorkType::Common) {
+            auto *handle = static_cast<OpFinishHandle *>(data);
+            handle->set_result(cqe->res, cqe->flags);
             pending_works_--;
             local_queue_.push_back(handle);
-            return;
+        } else {
+            assert(false && "Invalid work type");
         }
-
-        assert(false);
     }
 
 private:

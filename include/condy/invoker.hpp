@@ -28,11 +28,6 @@ class WorkInvoker : public Invoker {
 public:
     using Invoker::Invoker;
     SingleLinkEntry work_queue_entry_;
-
-    bool is_operation() const { return is_operation_; }
-
-protected:
-    bool is_operation_ = false;
 };
 
 } // namespace condy

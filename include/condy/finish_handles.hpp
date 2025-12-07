@@ -23,8 +23,6 @@ public:
     using ReturnType = int;
     using MultiShotFunc = void (*)(void *);
 
-    OpFinishHandle() { is_operation_ = true; }
-
     void cancel() {
         auto *ring = Context::current().ring();
         io_uring_sqe *sqe = ring->get_sqe();
