@@ -31,9 +31,7 @@ public:
         initialized_ = true;
     }
 
-    void register_fd(unsigned index, int fd) { register_fd(index, &fd, 1); }
-
-    void register_fd(unsigned index_base, const int *fds, unsigned nr_fds) {
+    void update_files(unsigned index_base, const int *fds, unsigned nr_fds) {
         check_initialized_();
         int r = io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
         if (r < 0) {
@@ -41,19 +39,9 @@ public:
         }
     }
 
-    auto async_register_fd(int *fds, unsigned nr_fds, int offset);
+    auto async_update_files(int *fds, unsigned nr_fds, int offset);
 
-    auto async_get_raw_fd(int fixed_fd, unsigned int flags);
-
-    void unregister_fd(unsigned fixed_fd) {
-        check_initialized_();
-        int invalid_fd = -1;
-        int r =
-            io_uring_register_files_update(&ring_, fixed_fd, &invalid_fd, 1);
-        if (r < 0) {
-            throw_exception("io_uring_register_files_update failed", -r);
-        }
-    }
+    auto async_fixed_fd_install(int fixed_fd, unsigned int flags);
 
     void set_alloc_range(unsigned offset, unsigned size) {
         check_initialized_();
@@ -105,27 +93,11 @@ public:
         initialized_ = true;
     }
 
-    void register_buffer(unsigned index_base, const iovec *vecs,
-                         unsigned nr_vecs) {
+    void update_buffers(unsigned index_base, const iovec *vecs,
+                        unsigned nr_vecs) {
         check_initialized_();
         int r = io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
                                                      nullptr, nr_vecs);
-        if (r < 0) {
-            throw_exception("io_uring_register_buffers_update failed", -r);
-        }
-    }
-
-    template <typename Buffer>
-    void register_buffer(unsigned index, Buffer &&buf) {
-        iovec vec{const_cast<void *>(buf.data()), buf.size()};
-        register_buffer(index, &vec, 1);
-    }
-
-    void unregister_buffer(unsigned index) {
-        check_initialized_();
-        iovec vec{nullptr, 0};
-        int r = io_uring_register_buffers_update_tag(&ring_, index, &vec,
-                                                     nullptr, 1);
         if (r < 0) {
             throw_exception("io_uring_register_buffers_update failed", -r);
         }

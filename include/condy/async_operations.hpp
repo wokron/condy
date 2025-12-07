@@ -289,7 +289,7 @@ inline auto async_connect(Fd fd, const struct sockaddr *addr,
     return op;
 }
 
-inline auto FdTable::async_register_fd(int *fds, unsigned nr_fds, int offset) {
+inline auto FdTable::async_update_files(int *fds, unsigned nr_fds, int offset) {
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
 }
 
@@ -737,7 +737,7 @@ inline auto async_futex_waitv(struct futex_waitv *futex, uint32_t nr_futex,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-inline auto FdTable::async_get_raw_fd(int fixed_fd, unsigned int flags) {
+inline auto FdTable::async_fixed_fd_install(int fixed_fd, unsigned int flags) {
     return make_op_awaiter(io_uring_prep_fixed_fd_install, fixed_fd, flags);
 }
 #endif

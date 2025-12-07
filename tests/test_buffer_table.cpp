@@ -24,11 +24,15 @@ TEST_CASE("test buffer_table - register/unregister buffer") {
         char buffer1[16];
         char buffer2[32];
 
-        buffer_table.register_buffer(0, condy::buffer(buffer1));
-        buffer_table.register_buffer(1, condy::buffer(buffer2));
+        iovec iov[2] = {
+            {.iov_base = buffer1, .iov_len = sizeof(buffer1)},
+            {.iov_base = buffer2, .iov_len = sizeof(buffer2)},
+        };
+        buffer_table.update_buffers(0, iov, 2);
 
-        buffer_table.unregister_buffer(0);
-        buffer_table.unregister_buffer(1);
+        iov[0] = {.iov_base = nullptr, .iov_len = 0};
+        iov[1] = {.iov_base = nullptr, .iov_len = 0};
+        buffer_table.update_buffers(0, iov, 2);
 
         co_return;
     };
@@ -48,8 +52,13 @@ TEST_CASE("test buffer_table - use registered buffer") {
         const char write_buf[] = "hello";
         char read_buf[sizeof(write_buf)] = {0};
 
-        buffer_table.register_buffer(0, condy::buffer(read_buf));
-        buffer_table.register_buffer(1, condy::buffer(write_buf));
+        iovec iovs[2] = {
+            {.iov_base = read_buf, .iov_len = sizeof(read_buf)},
+            {.iov_base = const_cast<char *>(write_buf),
+             .iov_len = sizeof(write_buf)},
+        };
+
+        buffer_table.update_buffers(0, iovs, 2);
 
         auto write_op =
             condy::make_op_awaiter(io_uring_prep_write_fixed, pipes[1],

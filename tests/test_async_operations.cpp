@@ -72,9 +72,9 @@ TEST_CASE("test async_operations - splice fixed fd") {
         auto &fd_table = condy::current_fd_table();
         fd_table.init(4);
 
-        auto r = co_await fd_table.async_register_fd(pipe_fds1, 2, 0);
+        auto r = co_await fd_table.async_update_files(pipe_fds1, 2, 0);
         REQUIRE(r == 2);
-        auto r2 = co_await fd_table.async_register_fd(pipe_fds2, 2, 2);
+        auto r2 = co_await fd_table.async_update_files(pipe_fds2, 2, 2);
         REQUIRE(r2 == 2);
 
         // Splice data from pipe_fds1[0] to pipe_fds2[1]
@@ -256,7 +256,11 @@ TEST_CASE("test async_operations - read fixed buffer") {
         auto &buffer_table = condy::current_buffer_table();
         buffer_table.init(1);
         char buf_storage[64];
-        buffer_table.register_buffer(0, condy::buffer(buf_storage));
+        iovec buf_storage_iov{
+            .iov_base = buf_storage,
+            .iov_len = sizeof(buf_storage),
+        };
+        buffer_table.update_buffers(0, &buf_storage_iov, 1);
 
         ssize_t n = co_await condy::async_read(
             pipe_fds[0], condy::fixed(0, condy::buffer(buf_storage, 64)), 0);
@@ -406,7 +410,11 @@ TEST_CASE("test async_operations - write fixed buffer") {
     auto func = [&]() -> condy::Coro<void> {
         auto &buffer_table = condy::current_buffer_table();
         buffer_table.init(1);
-        buffer_table.register_buffer(0, condy::buffer(msg, msg_len));
+        iovec buf_storage_iov{
+            .iov_base = const_cast<char *>(msg),
+            .iov_len = msg_len,
+        };
+        buffer_table.update_buffers(0, &buf_storage_iov, 1);
 
         ssize_t n = co_await condy::async_write(
             pipe_fds[1], condy::fixed(0, condy::buffer(msg, msg_len)), 0);

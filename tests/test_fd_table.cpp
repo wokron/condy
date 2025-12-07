@@ -24,14 +24,15 @@ TEST_CASE("test fd_table - register/unregister fd") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        fd_table.register_fd(0, pipes[0]);
-        fd_table.register_fd(1, pipes[1]);
-
-        fd_table.unregister_fd(0);
-        fd_table.unregister_fd(1);
+        fd_table.update_files(0, pipes, 2);
 
         close(pipes[0]);
         close(pipes[1]);
+
+        pipes[0] = -1;
+        pipes[1] = -1;
+
+        fd_table.update_files(0, pipes, 2);
 
         co_return;
     };
@@ -48,8 +49,7 @@ TEST_CASE("test fd_table - use fixed fd") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        fd_table.register_fd(0, pipes[0]);
-        fd_table.register_fd(1, pipes[1]);
+        fd_table.update_files(0, pipes, 2);
 
         char write_buf[] = "hello";
         char read_buf[sizeof(write_buf)] = {0};

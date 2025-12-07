@@ -85,13 +85,16 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
 
     auto &fd_table = condy::current_fd_table();
     fd_table.init(2);
-    fd_table.register_fd(0, infd);
-    fd_table.register_fd(1, outfd);
+    int fds[2] = {infd, outfd};
+    fd_table.update_files(0, fds, 2);
 
     auto &buffer_table = condy::current_buffer_table();
     buffer_table.init(1);
-    buffer_table.register_buffer(
-        0, condy::buffer(raw_buffer, TASK_NUM * CHUNK_SIZE));
+    iovec iov{
+        .iov_base = raw_buffer,
+        .iov_len = TASK_NUM * CHUNK_SIZE,
+    };
+    buffer_table.update_buffers(0, &iov, 1);
 
     std::vector<condy::Task<>> tasks;
     for (size_t i = 0; i < TASK_NUM; i++) {

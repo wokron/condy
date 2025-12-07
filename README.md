@@ -573,7 +573,7 @@ An io_uring feature: Fixed file descriptors (fixed fd) reduce per-operation over
 
 * Use `current_fd_table()` to get the `FdTable` object of the current Runtime.
 * Call `init` to initialize the table capacity before usage.
-* Use `register_fd` or `async_register_fd` to register a file descriptor, and `unregister_fd` to remove it.
+* Use `update_files` or `async_update_files` to register/unregister a file descriptor
 * In asynchronous operations, pass a fixed fd using `fixed(fd)` to convert an `int` to `FixedFd`.
 * Direct variants of async operations can register the fd at creation, or use `CONDY_FILE_INDEX_ALLOC` to let the system allocate a free slot. If no slot is available, the operation will fail and return `-ENFILE`.
 
@@ -615,7 +615,7 @@ An io_uring feature: fixed buffers reduce per-operation overhead, especially for
 
 * Use `current_buffer_table()` to get the `BufferTable` object of the current Runtime.
 * Call `init` to initialize the table capacity before usage.
-* Use `register_buffer` to register a buffer, and `unregister_buffer` to remove it.
+* Use `update_buffers` to register/unregister a buffer.
 * In asynchronous operations, pass a fixed buffer using `fixed(index, buf)` where `index` is the slot in the registration table. The memory region pointed to by buf must be within the range of the corresponding registered buffer.
 
 Example:
@@ -636,7 +636,11 @@ condy::Coro<int> co_main() {
 
     // Register string in fixed buffer slot 0
     std::string msg = "Hello, condy!\n";
-    table.register_buffer(0, condy::buffer(msg));
+    iovec iov = {
+        .iov_base = msg.data(),
+        .iov_len = msg.size();
+    }
+    table.update_buffers(0, &iov, 1);
 
     // Use fixed buffer in async write operation
     int r = co_await condy::async_write(fd, condy::fixed(0, condy::buffer(msg)), 0);
@@ -645,7 +649,8 @@ condy::Coro<int> co_main() {
     }
 
     // Unregister fixed buffer
-    table.unregister_buffer(0);
+    iov = {.iov_base = nullptr, .iov_len = 0};;
+    table.update_buffers(0, &iov, 1);
 
     co_return 0;
 }
