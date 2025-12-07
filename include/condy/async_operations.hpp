@@ -126,6 +126,11 @@ private:
     int buf_index_;
 };
 
+template <typename Buffer>
+constexpr bool is_basic_buffer =
+    std::is_same_v<std::decay_t<Buffer>, MutableBuffer> ||
+    std::is_same_v<std::decay_t<Buffer>, ConstBuffer>;
+
 template <typename Buffer> struct is_fixed_buffer : public std::false_type {};
 
 template <typename BufferBase>
@@ -134,15 +139,34 @@ struct is_fixed_buffer<FixedBuffer<BufferBase>> : public std::true_type {};
 template <typename Buffer>
 constexpr bool is_fixed_buffer_v = is_fixed_buffer<std::decay_t<Buffer>>::value;
 
+struct FixedIoVec {
+    int buf_index;
+    iovec *iov;
+};
+
+template <typename IoVec> struct is_fixed_iovec : public std::false_type {};
+
+template <> struct is_fixed_iovec<FixedIoVec> : public std::true_type {};
+
+template <typename IoVec>
+constexpr bool is_fixed_iovec_v = is_fixed_iovec<std::decay_t<IoVec>>::value;
+
 } // namespace detail
 
 // Helper to specify a fixed fd
 inline auto fixed(int fd) { return detail::FixedFd{fd}; }
 
 // Helper to specify a fixed buffer
-template <typename Buffer> auto fixed(int buf_index, Buffer &&buf) {
+template <typename Buffer>
+    requires(detail::is_basic_buffer<Buffer>)
+auto fixed(int buf_index, Buffer &&buf) {
     return detail::FixedBuffer<std::decay_t<Buffer>>(buf_index,
                                                      std::forward<Buffer>(buf));
+}
+
+// Helper to specify a fixed iovec
+inline auto fixed(int buf_index, const iovec *iov) {
+    return detail::FixedIoVec{buf_index, const_cast<iovec *>(iov)};
 }
 
 // Helper to bundle provided buffers
@@ -174,20 +198,36 @@ inline auto async_tee(Fd1 fd_in, Fd2 fd_out, unsigned int nbytes,
     return op;
 }
 
-template <typename Fd>
-inline auto async_readv(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                        __u64 offset, int flags) {
-    auto op = make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs, offset,
-                              flags);
+template <typename Fd, typename IoVec>
+inline auto async_readv(Fd fd, IoVec &&iovecs, unsigned nr_vecs, __u64 offset,
+                        int flags) {
+    auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+        if constexpr (detail::is_fixed_iovec_v<IoVec>) {
+            return make_op_awaiter(io_uring_prep_readv_fixed, fd, iovecs.iov,
+                                   nr_vecs, offset, flags, iovecs.buf_index);
+        } else
+#endif
+            return make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs,
+                                   offset, flags);
+    }();
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
 
-template <typename Fd>
-inline auto async_writev(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
-                         __u64 offset, int flags) {
-    auto op = make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs,
-                              offset, flags);
+template <typename Fd, typename IoVec>
+inline auto async_writev(Fd fd, IoVec &&iovecs, unsigned nr_vecs, __u64 offset,
+                         int flags) {
+    auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+        if constexpr (detail::is_fixed_iovec_v<IoVec>) {
+            return make_op_awaiter(io_uring_prep_writev_fixed, fd, iovecs.iov,
+                                   nr_vecs, offset, flags, iovecs.buf_index);
+        } else
+#endif
+            return make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs,
+                                   offset, flags);
+    }();
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }

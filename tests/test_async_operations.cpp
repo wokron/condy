@@ -273,6 +273,51 @@ TEST_CASE("test async_operations - read fixed buffer") {
     close(pipe_fds[1]);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+TEST_CASE("test async_operations - readv fixed buffer") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    const char *msg = "Hello, condy!";
+    ssize_t msg_len = std::strlen(msg);
+
+    int r = ::write(pipe_fds[1], msg, msg_len);
+    REQUIRE(r == msg_len);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &buffer_table = condy::current_buffer_table();
+        buffer_table.init(1);
+        char buf_storage[64];
+        iovec buf_storage_iov{
+            .iov_base = buf_storage,
+            .iov_len = sizeof(buf_storage),
+        };
+        buffer_table.update_buffers(0, &buf_storage_iov, 1);
+
+        ssize_t middle = msg_len / 2;
+        iovec read_iovs[2] = {
+            {
+                .iov_base = buf_storage,
+                .iov_len = static_cast<size_t>(middle),
+            },
+            {
+                .iov_base = static_cast<char *>(buf_storage) + middle,
+                .iov_len = static_cast<size_t>(msg_len - middle),
+            },
+        };
+
+        ssize_t n = co_await condy::async_readv(
+            pipe_fds[0], condy::fixed(0, read_iovs), 2, 0, 0);
+        REQUIRE(n == msg_len);
+        REQUIRE(std::memcmp(buf_storage, msg, msg_len) == 0);
+    };
+    condy::sync_wait(func());
+
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+#endif
+
 TEST_CASE("test async_operations - read provided buffer") {
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
@@ -430,6 +475,51 @@ TEST_CASE("test async_operations - write fixed buffer") {
     close(pipe_fds[0]);
     close(pipe_fds[1]);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+TEST_CASE("test async_operations - writev fixed buffer") {
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    char msg[] = "Hello, condy write fixed!";
+    size_t msg_len = std::strlen(msg);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &buffer_table = condy::current_buffer_table();
+        buffer_table.init(1);
+        iovec buf_storage_iov{
+            .iov_base = const_cast<char *>(msg),
+            .iov_len = msg_len,
+        };
+        buffer_table.update_buffers(0, &buf_storage_iov, 1);
+
+        ssize_t middle = msg_len / 2;
+        iovec write_iovs[2] = {
+            {
+                .iov_base = msg,
+                .iov_len = static_cast<size_t>(middle),
+            },
+            {
+                .iov_base = msg + middle,
+                .iov_len = static_cast<size_t>(msg_len - middle),
+            },
+        };
+
+        ssize_t n = co_await condy::async_writev(
+            pipe_fds[1], condy::fixed(0, write_iovs), 2, 0, 0);
+        REQUIRE(n == msg_len);
+    };
+    condy::sync_wait(func());
+
+    char read_buf[64];
+    ssize_t n = ::read(pipe_fds[0], read_buf, sizeof(read_buf));
+    REQUIRE(n == msg_len);
+    REQUIRE(std::memcmp(read_buf, msg, msg_len) == 0);
+
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 TEST_CASE("test async_operations - send provided buffer") {
