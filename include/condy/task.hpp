@@ -175,11 +175,6 @@ inline auto TaskBase<T, Allocator>::operator co_await() && {
 }
 
 template <typename T, typename Allocator>
-inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
-    return co_spawn(*Context::current().runtime(), std::move(coro));
-}
-
-template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     auto handle = coro.release();
     auto &promise = handle.promise();
@@ -187,6 +182,16 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
 
     runtime.schedule(&promise);
     return {handle};
+}
+
+template <typename T, typename Allocator>
+inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
+    auto *runtime = Context::current().runtime();
+    if (runtime == nullptr) {
+        throw std::logic_error(
+            "No runtime in current context to spawn the task");
+    }
+    return co_spawn(*runtime, std::move(coro));
 }
 
 namespace detail {

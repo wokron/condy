@@ -259,6 +259,34 @@ TEST_CASE("test task - run in different thread") {
     REQUIRE(task_finished);
 }
 
+TEST_CASE("test task - spawn from no runtime") {
+    size_t count = 0;
+    auto func = [&]() -> condy::Coro<void> {
+        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        count++;
+        co_return;
+    };
+
+    condy::Runtime runtime(options);
+
+    std::thread rt_thread([&]() { runtime.run(); });
+
+    std::vector<condy::Task<void>> tasks;
+    for (int i = 0; i < 10; ++i) {
+        auto task = condy::co_spawn(runtime, func());
+        tasks.push_back(std::move(task));
+    }
+
+    for (auto &task : tasks) {
+        task.wait();
+    }
+
+    REQUIRE(count == 10);
+
+    runtime.done();
+    rt_thread.join();
+}
+
 TEST_CASE("test task - detach") {
     condy::Runtime runtime(options);
 

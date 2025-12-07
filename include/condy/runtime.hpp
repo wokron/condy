@@ -104,6 +104,17 @@ public:
             return;
         }
 
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+        if (runtime == nullptr && this->ring_enabled_) {
+            __tsan_release(work);
+            io_uring_sqe sqe = {};
+            prep_msg_ring_(&sqe, work);
+            [[maybe_unused]] int r = io_uring_register_sync_msg(&sqe);
+            assert(r == 0);
+            return;
+        }
+#endif
+
         std::lock_guard<std::mutex> lock(mutex_);
         global_queue_.push_back(work);
         eventfd_write(notify_fd_, 1);
