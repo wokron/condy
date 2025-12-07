@@ -4,6 +4,7 @@ void run_raw_nop(size_t times) {
     io_uring ring;
     io_uring_queue_init(256, &ring,
                         IORING_SETUP_CLAMP | IORING_SETUP_SINGLE_ISSUER);
+    io_uring_register_ring_fd(&ring);
 
     for (size_t i = 0; i < times; ++i) {
         io_uring_sqe *sqe = io_uring_get_sqe(&ring);
@@ -57,7 +58,7 @@ int main() {
     }
 
     long overhead = duration_condy - duration_raw;
-    long overhead_per_op = overhead / iterations;
+    long overhead_per_op = overhead / static_cast<long>(iterations);
     std::printf("Overhead: %ld ns per operation (%.2f%%)\n", overhead_per_op,
                 (static_cast<double>(overhead) / duration_raw) * 100.0);
 

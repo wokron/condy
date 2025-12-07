@@ -125,8 +125,18 @@ public:
     void resume_work() { pending_works_--; }
 
     void run() {
-        io_uring_enable_rings(ring_.ring());
+        int r;
+        r = io_uring_enable_rings(ring_.ring());
+        if (r < 0) {
+            throw_exception("Failed to enable io_uring rings: ", r);
+        }
+
         ring_enabled_ = true;
+
+        r = io_uring_register_ring_fd(ring_.ring());
+        if (r < 0) {
+            throw_exception("Failed to register ring fd: ", r);
+        }
 
         Context::current().init(&ring_, this);
         auto d = defer([]() { Context::current().reset(); });
