@@ -1,7 +1,7 @@
 #pragma once
 
+#include "condy/utils.hpp"
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -75,19 +75,7 @@ public:
             tail_ = nullptr;
         }
         entry->next = nullptr;
-        return reinterpret_cast<T *>(container_of_(entry));
-    }
-
-private:
-    static T *container_of_(SingleLinkEntry *entry) noexcept {
-        constexpr T *dummy = 0;
-#ifdef __clang__
-        constexpr auto *offset = &(dummy->*Member);
-#else
-        auto *offset = &(dummy->*Member);
-#endif
-        return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(entry) -
-                                     reinterpret_cast<intptr_t>(offset));
+        return container_of(Member, entry);
     }
 
 private:
@@ -137,7 +125,7 @@ public:
         assert(entry->owner == this);
         entry->owner = nullptr;
 #endif
-        return reinterpret_cast<T *>(container_of_(entry));
+        return container_of(Member, entry);
     }
 
     bool remove(T *item) noexcept {
@@ -166,18 +154,6 @@ public:
         entry->next = nullptr;
         entry->prev = nullptr;
         return true;
-    }
-
-private:
-    static T *container_of_(DoubleLinkEntry *entry) noexcept {
-        constexpr T *dummy = 0;
-#ifdef __clang__
-        constexpr auto *offset = &(dummy->*Member);
-#else
-        auto *offset = &(dummy->*Member);
-#endif
-        return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(entry) -
-                                     reinterpret_cast<intptr_t>(offset));
     }
 
 private:

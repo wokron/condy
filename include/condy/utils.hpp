@@ -151,4 +151,14 @@ private:
     std::unique_ptr<void, Deleter> ptr_ = {nullptr, fallback_deleter_};
 };
 
+template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
+    constexpr T *dummy = nullptr;
+    return reinterpret_cast<ptrdiff_t>(&(dummy->*member));
+}
+
+template <typename M, typename T> T *container_of(M T::*member, M *ptr) {
+    auto offset = offset_of(member);
+    return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
+}
+
 } // namespace condy
