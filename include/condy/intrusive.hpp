@@ -24,13 +24,11 @@ public:
     IntrusiveSingleList() = default;
     IntrusiveSingleList(IntrusiveSingleList &&other) noexcept
         : head_(std::exchange(other.head_, nullptr)),
-          tail_(std::exchange(other.tail_, nullptr)),
-          size_(std::exchange(other.size_, 0)) {}
+          tail_(std::exchange(other.tail_, nullptr)) {}
     IntrusiveSingleList &operator=(IntrusiveSingleList &&other) noexcept {
         if (this != &other) {
             head_ = std::exchange(other.head_, nullptr);
             tail_ = std::exchange(other.tail_, nullptr);
-            size_ = std::exchange(other.size_, 0);
         }
         return *this;
     }
@@ -50,7 +48,6 @@ public:
             tail_->next = entry;
             tail_ = entry;
         }
-        size_++;
     }
 
     void push_back(IntrusiveSingleList other) noexcept {
@@ -64,7 +61,6 @@ public:
             tail_->next = other.head_;
             tail_ = other.tail_;
         }
-        size_ += other.size_;
     }
 
     bool empty() const noexcept { return head_ == nullptr; }
@@ -79,39 +75,8 @@ public:
             tail_ = nullptr;
         }
         entry->next = nullptr;
-        size_--;
         return reinterpret_cast<T *>(container_of_(entry));
     }
-
-    IntrusiveSingleList pop_front(size_t max_count) noexcept {
-        if (empty() || max_count == 0) {
-            return IntrusiveSingleList();
-        }
-        IntrusiveSingleList batch;
-        SingleLinkEntry *current = head_->next;
-        SingleLinkEntry *prev = head_;
-
-        size_t batch_size = 1;
-        while (current && max_count > 1) {
-            prev = current;
-            current = current->next;
-            max_count--;
-            batch_size++;
-        }
-
-        batch.head_ = head_;
-        batch.tail_ = prev;
-        batch.size_ = batch_size;
-        head_ = current;
-        size_ -= batch_size;
-        if (!head_) {
-            tail_ = nullptr;
-        }
-        batch.tail_->next = nullptr;
-        return batch;
-    }
-
-    size_t size() const noexcept { return size_; }
 
 private:
     static T *container_of_(SingleLinkEntry *entry) noexcept {
@@ -128,7 +93,6 @@ private:
 private:
     SingleLinkEntry *head_ = nullptr;
     SingleLinkEntry *tail_ = nullptr;
-    size_t size_ = 0;
 };
 
 template <typename T, DoubleLinkEntry T::*Member> class IntrusiveDoubleList {
@@ -202,15 +166,6 @@ public:
         entry->next = nullptr;
         entry->prev = nullptr;
         return true;
-    }
-
-    template <typename Func> void for_each(Func &&func) noexcept {
-        DoubleLinkEntry *current = head_;
-        while (current) {
-            T *item = container_of_(current);
-            func(item);
-            current = current->next;
-        }
     }
 
 private:
