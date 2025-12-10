@@ -17,18 +17,6 @@
 
 namespace condy {
 
-inline auto &current_fd_table() {
-    return Context::current().ring()->fd_table();
-}
-
-inline auto &current_buffer_table() {
-    return Context::current().ring()->buffer_table();
-}
-
-inline auto &current_runtime() { return *Context::current().runtime(); }
-
-inline auto current_features() { return Context::current().ring()->features(); }
-
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
@@ -167,6 +155,12 @@ public:
 
     size_t next_bgid() { return next_bgid_++; }
 
+    auto &fd_table() { return ring_.fd_table(); }
+
+    auto &buffer_table() { return ring_.buffer_table(); }
+
+    auto features() { return ring_.features(); }
+
 private:
     void flush_global_queue_() {
         local_queue_.push_back(std::move(global_queue_));
@@ -261,5 +255,13 @@ private:
     // Configurable parameters
     size_t event_interval_ = 61;
 };
+
+inline auto &current_runtime() { return *Context::current().runtime(); }
+
+inline auto &current_fd_table() { return current_runtime().fd_table(); }
+
+inline auto &current_buffer_table() { return current_runtime().buffer_table(); }
+
+inline auto current_features() { return current_runtime().features(); }
 
 } // namespace condy

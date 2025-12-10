@@ -122,6 +122,7 @@ TEST_CASE("test buffer_table - clone buffer table") {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 TEST_CASE("test buffer_table - setup buffer before run") {
     condy::Runtime runtime1, runtime2;
     REQUIRE_NOTHROW(runtime1.buffer_table().init(4));
@@ -134,3 +135,4 @@ TEST_CASE("test buffer_table - setup buffer before run") {
     runtime1.done();
     runtime1.run();
 }
+#endif
