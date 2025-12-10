@@ -6,10 +6,15 @@
 #include <doctest/doctest.h>
 #include <liburing.h>
 
-TEST_CASE("test buffer_table - init") {
+TEST_CASE("test buffer_table - init/destroy") {
     auto func = []() -> condy::Coro<void> {
         auto &buffer_table = condy::Context::current().ring()->buffer_table();
-        buffer_table.init(8);
+        REQUIRE_NOTHROW(buffer_table.init(8));
+        REQUIRE_THROWS(buffer_table.init(8));
+        REQUIRE(buffer_table.capacity() == 8);
+
+        REQUIRE_NOTHROW(buffer_table.destroy());
+        REQUIRE_NOTHROW(buffer_table.destroy());
         co_return;
     };
 
@@ -28,11 +33,13 @@ TEST_CASE("test buffer_table - register/unregister buffer") {
             {.iov_base = buffer1, .iov_len = sizeof(buffer1)},
             {.iov_base = buffer2, .iov_len = sizeof(buffer2)},
         };
-        buffer_table.update_buffers(0, iov, 2);
+        int n = buffer_table.update_buffers(0, iov, 2);
+        REQUIRE(n == 2);
 
         iov[0] = {.iov_base = nullptr, .iov_len = 0};
         iov[1] = {.iov_base = nullptr, .iov_len = 0};
-        buffer_table.update_buffers(0, iov, 2);
+        n = buffer_table.update_buffers(0, iov, 2);
+        REQUIRE(n == 2);
 
         co_return;
     };
@@ -76,4 +83,54 @@ TEST_CASE("test buffer_table - use registered buffer") {
     };
 
     condy::sync_wait(func());
+}
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+TEST_CASE("test buffer_table - clone buffer table") {
+    condy::Ring ring1, ring2;
+    io_uring_params params = {};
+    ring1.init(128, &params);
+    ring2.init(128, &params);
+
+    auto &table1 = ring1.buffer_table();
+    auto &table2 = ring2.buffer_table();
+
+    REQUIRE_THROWS(table2.clone_from(table1));
+
+    table1.init(16);
+
+    REQUIRE_THROWS(table2.clone_from(table1, 0, 8, 16));
+
+    REQUIRE_NOTHROW(table2.clone_from(table1));
+    REQUIRE(table2.capacity() == 16);
+
+    REQUIRE_NOTHROW(table2.clone_from(table1, 8, 0, 16));
+    REQUIRE(table2.capacity() == (16 + 8));
+
+    table2.destroy();
+
+    REQUIRE_NOTHROW(table2.clone_from(table1, 100, 0, table1.capacity()));
+    REQUIRE(table2.capacity() == (100 + 16));
+
+    char buffer[32];
+    iovec vec = {
+        .iov_base = buffer,
+        .iov_len = sizeof(buffer),
+    };
+    int r = table2.update_buffers(1, &vec, 1);
+    REQUIRE(r == 1);
+}
+#endif
+
+TEST_CASE("test buffer_table - setup buffer before run") {
+    condy::Runtime runtime1, runtime2;
+    REQUIRE_NOTHROW(runtime1.buffer_table().init(4));
+    REQUIRE_NOTHROW(
+        runtime2.buffer_table().clone_from(runtime1.buffer_table()));
+
+    runtime2.done();
+    runtime2.run();
+
+    runtime1.done();
+    runtime1.run();
 }

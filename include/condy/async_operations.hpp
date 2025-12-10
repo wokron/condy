@@ -330,6 +330,8 @@ inline auto async_connect(Fd fd, const struct sockaddr *addr,
 }
 
 inline auto FdTable::async_update_files(int *fds, unsigned nr_fds, int offset) {
+    assert(Context::current().ring() &&
+           Context::current().ring()->ring() == &ring_);
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
 }
 

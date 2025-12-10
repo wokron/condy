@@ -31,12 +31,23 @@ public:
         initialized_ = true;
     }
 
-    void update_files(unsigned index_base, const int *fds, unsigned nr_fds) {
+    void destroy() {
+        if (initialized_) {
+            int r = io_uring_unregister_files(&ring_);
+            if (r < 0) {
+                throw_exception("io_uring_unregister_files failed", -r);
+            }
+            initialized_ = false;
+        }
+    }
+
+    int update_files(unsigned index_base, const int *fds, unsigned nr_fds) {
         check_initialized_();
         int r = io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
         if (r < 0) {
             throw_exception("io_uring_register_files_update failed", -r);
         }
+        return r;
     }
 
     auto async_update_files(int *fds, unsigned nr_fds, int offset);
@@ -93,15 +104,47 @@ public:
         initialized_ = true;
     }
 
-    void update_buffers(unsigned index_base, const iovec *vecs,
-                        unsigned nr_vecs) {
+    void destroy() {
+        if (initialized_) {
+            int r = io_uring_unregister_buffers(&ring_);
+            if (r < 0) {
+                throw_exception("io_uring_unregister_buffers failed", -r);
+            }
+            initialized_ = false;
+        }
+    }
+
+    int update_buffers(unsigned index_base, const iovec *vecs,
+                       unsigned nr_vecs) {
         check_initialized_();
         int r = io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
                                                      nullptr, nr_vecs);
         if (r < 0) {
             throw_exception("io_uring_register_buffers_update failed", -r);
         }
+        return r;
     }
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+    void clone_from(BufferTable &src, unsigned int dst_off = 0,
+                    unsigned int src_off = 0, unsigned int nr = 0) {
+        auto *src_ring = &src.ring_;
+        auto *dst_ring = &ring_;
+        unsigned int flags = 0;
+        if (initialized_) {
+            flags |= IORING_REGISTER_DST_REPLACE;
+        }
+        int r = __io_uring_clone_buffers_offset(dst_ring, src_ring, dst_off,
+                                                src_off, nr, flags);
+        if (r < 0) {
+            throw_exception("io_uring_clone_buffers_offset failed", -r);
+        }
+        bool is_full_clone = dst_off == 0 && src_off == 0 && nr == 0;
+        size_t clone_cap = is_full_clone ? src.capacity_ : dst_off + nr;
+        capacity_ = std::max(capacity_, clone_cap);
+        initialized_ = true;
+    }
+#endif
 
     size_t capacity() const { return capacity_; }
 
