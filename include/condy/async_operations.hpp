@@ -792,4 +792,37 @@ template <typename Fd> inline auto async_ftruncate(Fd fd, loff_t len) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <typename Fd>
+inline auto async_fadvise64(Fd fd, __u64 offset, off_t len, int advice) {
+    auto op = make_op_awaiter(io_uring_prep_fadvise64, fd, offset, len, advice);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_madvise64(void *addr, off_t length, int advice) {
+    auto op = make_op_awaiter(io_uring_prep_madvise64, addr, length, advice);
+    return op;
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <typename Fd>
+inline auto async_bind(Fd fd, struct sockaddr *addr, socklen_t addrlen) {
+    auto op = make_op_awaiter(io_uring_prep_bind, fd, addr, addrlen);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <typename Fd> inline auto async_listen(Fd fd, int backlog) {
+    auto op = make_op_awaiter(io_uring_prep_listen, fd, backlog);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
 } // namespace condy
