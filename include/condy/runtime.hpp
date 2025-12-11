@@ -116,6 +116,7 @@ public:
         int r;
         r = io_uring_enable_rings(ring_.ring());
         if (r < 0) {
+            // TODO: Too many exceptions...
             throw_exception("Failed to enable io_uring rings: ", r);
         }
 
@@ -158,6 +159,8 @@ public:
     auto &fd_table() { return ring_.fd_table(); }
 
     auto &buffer_table() { return ring_.buffer_table(); }
+
+    auto &napi() { return ring_.napi(); }
 
     auto features() { return ring_.features(); }
 
