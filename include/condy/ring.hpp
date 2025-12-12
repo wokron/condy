@@ -6,7 +6,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <stdexcept>
 
 namespace condy {
 
@@ -20,48 +19,31 @@ public:
     FdTable &operator=(FdTable &&) = delete;
 
 public:
-    void init(size_t capacity) {
+    int init(size_t capacity) {
         int r = io_uring_register_files_sparse(&ring_, capacity);
         if (r < 0) {
-            throw_exception("io_uring_register_files_sparse failed", -r);
+            return r;
         }
         capacity_ = capacity;
         alloc_range_offset_ = 0;
         alloc_range_size_ = capacity;
-        initialized_ = true;
+        return r;
     }
 
-    void destroy() {
-        if (initialized_) {
-            int r = io_uring_unregister_files(&ring_);
-            if (r < 0) {
-                throw_exception("io_uring_unregister_files failed", -r);
-            }
-            initialized_ = false;
-        }
-    }
+    int destroy() { return io_uring_unregister_files(&ring_); }
 
     int update_files(unsigned index_base, const int *fds, unsigned nr_fds) {
-        check_initialized_();
-        int r = io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
-        if (r < 0) {
-            throw_exception("io_uring_register_files_update failed", -r);
-        }
-        return r;
+        return io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
     }
 
     auto async_update_files(int *fds, unsigned nr_fds, int offset);
 
     auto async_fixed_fd_install(int fixed_fd, unsigned int flags);
 
-    void set_alloc_range(unsigned offset, unsigned size) {
-        check_initialized_();
+    int set_alloc_range(unsigned offset, unsigned size) {
         alloc_range_offset_ = offset;
         alloc_range_size_ = size;
-        int r = io_uring_register_file_alloc_range(&ring_, offset, size);
-        if (r < 0) {
-            throw_exception("io_uring_register_file_alloc_range failed", -r);
-        }
+        return io_uring_register_file_alloc_range(&ring_, offset, size);
     }
 
     std::pair<unsigned, unsigned> get_alloc_range() const {
@@ -71,14 +53,6 @@ public:
     size_t capacity() const { return capacity_; }
 
 private:
-    void check_initialized_() {
-        if (!initialized_) {
-            throw std::logic_error("FdTable not initialized");
-        }
-    }
-
-private:
-    bool initialized_ = false;
     size_t capacity_ = 0;
     unsigned alloc_range_offset_ = 0;
     unsigned alloc_range_size_ = 0;
@@ -95,39 +69,30 @@ public:
     BufferTable &operator=(BufferTable &&) = delete;
 
 public:
-    void init(size_t capacity) {
+    int init(size_t capacity) {
         int r = io_uring_register_buffers_sparse(&ring_, capacity);
         if (r < 0) {
-            throw_exception("io_uring_register_buffers_sparse failed", -r);
+            return r;
         }
         capacity_ = capacity;
         initialized_ = true;
+        return r;
     }
 
-    void destroy() {
-        if (initialized_) {
-            int r = io_uring_unregister_buffers(&ring_);
-            if (r < 0) {
-                throw_exception("io_uring_unregister_buffers failed", -r);
-            }
-            initialized_ = false;
-        }
+    int destroy() {
+        initialized_ = false;
+        return io_uring_unregister_buffers(&ring_);
     }
 
     int update_buffers(unsigned index_base, const iovec *vecs,
                        unsigned nr_vecs) {
-        check_initialized_();
-        int r = io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
-                                                     nullptr, nr_vecs);
-        if (r < 0) {
-            throw_exception("io_uring_register_buffers_update failed", -r);
-        }
-        return r;
+        return io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
+                                                    nullptr, nr_vecs);
     }
 
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-    void clone_from(BufferTable &src, unsigned int dst_off = 0,
-                    unsigned int src_off = 0, unsigned int nr = 0) {
+    int clone_from(BufferTable &src, unsigned int dst_off = 0,
+                   unsigned int src_off = 0, unsigned int nr = 0) {
         auto *src_ring = &src.ring_;
         auto *dst_ring = &ring_;
         unsigned int flags = 0;
@@ -137,23 +102,17 @@ public:
         int r = __io_uring_clone_buffers_offset(dst_ring, src_ring, dst_off,
                                                 src_off, nr, flags);
         if (r < 0) {
-            throw_exception("io_uring_clone_buffers_offset failed", -r);
+            return r;
         }
         bool is_full_clone = dst_off == 0 && src_off == 0 && nr == 0;
         size_t clone_cap = is_full_clone ? src.capacity_ : dst_off + nr;
         capacity_ = std::max(capacity_, clone_cap);
         initialized_ = true;
+        return r;
     }
 #endif
 
     size_t capacity() const { return capacity_; }
-
-private:
-    void check_initialized_() {
-        if (!initialized_) {
-            throw std::logic_error("BufferTable not initialized");
-        }
-    }
 
 private:
     bool initialized_ = false;

@@ -121,22 +121,23 @@ public:
     void resume_work() { pending_works_--; }
 
     void run() {
-        int r;
-        r = io_uring_enable_rings(ring_.ring());
-        if (r < 0) {
-            // TODO: Too many exceptions...
-            throw_exception("Failed to enable io_uring rings: ", r);
+        State expected = State::Idle;
+        if (!state_.compare_exchange_strong(expected, State::Running)) {
+            throw std::logic_error("Runtime is already running or stopped");
         }
+        auto d1 = defer([this]() { state_.store(State::Stopped); });
+
+        [[maybe_unused]] int r;
+        r = io_uring_enable_rings(ring_.ring());
+        assert(r == 0);
 
         ring_enabled_ = true;
 
         r = io_uring_register_ring_fd(ring_.ring());
-        if (r < 0) {
-            throw_exception("Failed to register ring fd: ", r);
-        }
+        assert(r == 1); // 1 indicates success for this call
 
         Context::current().init(&ring_, this);
-        auto d = defer([]() { Context::current().reset(); });
+        auto d2 = defer([]() { Context::current().reset(); });
 
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -249,6 +250,13 @@ private:
     }
 
 private:
+    enum class State {
+        Idle,
+        Running,
+        Stopped,
+    };
+    static_assert(std::atomic<State>::is_always_lock_free);
+
     // Global state
     std::mutex mutex_;
     WorkListQueue global_queue_;
@@ -256,6 +264,7 @@ private:
     int notify_fd_;
     std::atomic_size_t pending_works_ = 1;
     std::atomic_bool ring_enabled_ = false;
+    std::atomic<State> state_ = State::Idle;
 
     // Local state
     WorkListQueue local_queue_;
