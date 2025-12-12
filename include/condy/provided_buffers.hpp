@@ -105,179 +105,209 @@ private:
     uint16_t bgid_;
 };
 
-// class NewProvidedBufferPool;
+class BundledProvidedBufferPool;
 
-// struct NewProvidedBuffer {
-// public:
-//     NewProvidedBuffer() = default;
-//     NewProvidedBuffer(void *data, size_t size, NewProvidedBufferPool *pool)
-//         : data_(data), size_(size), pool_(pool) {}
-//     NewProvidedBuffer(NewProvidedBuffer &&other)
-//         : data_(std::exchange(other.data_, nullptr)),
-//           size_(std::exchange(other.size_, 0)),
-//           pool_(std::exchange(other.pool_, nullptr)) {}
-//     NewProvidedBuffer &operator=(NewProvidedBuffer &&other) {
-//         if (this != &other) {
-//             data_ = std::exchange(other.data_, nullptr);
-//             size_ = std::exchange(other.size_, 0);
-//             pool_ = std::exchange(other.pool_, nullptr);
-//         }
-//         return *this;
-//     }
+struct ProvidedBuffer {
+public:
+    ProvidedBuffer() = default;
+    ProvidedBuffer(void *data, size_t size, BundledProvidedBufferPool *pool)
+        : data_(data), size_(size), pool_(pool) {}
+    ProvidedBuffer(ProvidedBuffer &&other)
+        : data_(std::exchange(other.data_, nullptr)),
+          size_(std::exchange(other.size_, 0)),
+          pool_(std::exchange(other.pool_, nullptr)) {}
+    ProvidedBuffer &operator=(ProvidedBuffer &&other) {
+        if (this != &other) {
+            data_ = std::exchange(other.data_, nullptr);
+            size_ = std::exchange(other.size_, 0);
+            pool_ = std::exchange(other.pool_, nullptr);
+        }
+        return *this;
+    }
 
-//     ~NewProvidedBuffer();
+    ~ProvidedBuffer() { reset(); }
 
-//     NewProvidedBuffer(const NewProvidedBuffer &) = delete;
-//     NewProvidedBuffer &operator=(const NewProvidedBuffer &) = delete;
+    ProvidedBuffer(const ProvidedBuffer &) = delete;
+    ProvidedBuffer &operator=(const ProvidedBuffer &) = delete;
 
-// public:
-//     void *data() const { return data_; }
+public:
+    void *data() const { return data_; }
 
-//     size_t size() const { return size_; }
+    size_t size() const { return size_; }
 
-// private:
-//     void *data_ = nullptr;
-//     size_t size_ = 0;
-//     NewProvidedBufferPool *pool_ = nullptr;
-// };
+    void reset();
 
-// class NewProvidedBufferPool {
-// public:
-//     using ReturnType = std::vector<NewProvidedBuffer>;
+    bool owns_buffer() const { return pool_ != nullptr; }
 
-//     NewProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
-//                           unsigned int flags = 0)
-//         : num_buffers_(1ll << log_num_buffers), buffer_size_(buffer_size) {
-//         assert(log_num_buffers <= 15);
+private:
+    void *data_ = nullptr;
+    size_t size_ = 0;
+    BundledProvidedBufferPool *pool_ = nullptr;
+};
 
-//         auto &context = Context::current();
-//         auto bgid = context.runtime()->next_bgid();
+class BundledProvidedBufferPool {
+public:
+    using ReturnType = std::vector<ProvidedBuffer>;
 
-//         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) +
-//         buffer_size); void *data = mmap(nullptr, data_size, PROT_READ |
-//         PROT_WRITE,
-//                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
-//         if (data == MAP_FAILED) {
-//             throw std::bad_alloc();
-//         }
-//         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
-//         io_uring_buf_ring_init(br_);
+    BundledProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
+                              unsigned int flags = 0)
+        : num_buffers_(1ll << log_num_buffers), buffer_size_(buffer_size) {
+        assert(log_num_buffers <= 15);
 
-//         io_uring_buf_reg reg = {};
-//         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
-//         reg.ring_entries = static_cast<uint32_t>(num_buffers_);
-//         reg.bgid = static_cast<uint16_t>(bgid);
-//         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg,
-//         flags); if (r != 0) {
-//             munmap(data, data_size);
-//             throw_exception("io_uring_register_buf_ring failed", -r);
-//         }
+        auto &context = Context::current();
+        auto bgid = context.runtime()->next_bgid();
 
-//         bgid_ = static_cast<uint16_t>(bgid);
+        size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
+        void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
+                          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+        if (data == MAP_FAILED) {
+            throw std::bad_alloc();
+        }
+        br_ = reinterpret_cast<io_uring_buf_ring *>(data);
+        io_uring_buf_ring_init(br_);
 
-//         char *buffer_base = reinterpret_cast<char *>(data) +
-//                             sizeof(io_uring_buf) * num_buffers_;
-//         auto mask =
-//         io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_)); for
-//         (size_t bid = 0; bid < num_buffers_; bid++) {
-//             char *ptr = buffer_base + bid * buffer_size;
-//             io_uring_buf_ring_add(br_, ptr, buffer_size, bid, mask, bid);
-//         }
-//         io_uring_buf_ring_advance(br_, num_buffers_);
-//     }
+        io_uring_buf_reg reg = {};
+        reg.ring_addr = reinterpret_cast<uint64_t>(br_);
+        reg.ring_entries = static_cast<uint32_t>(num_buffers_);
+        reg.bgid = static_cast<uint16_t>(bgid);
+        int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
+        if (r != 0) {
+            munmap(data, data_size);
+            throw_exception("io_uring_register_buf_ring failed", -r);
+        }
 
-//     ~NewProvidedBufferPool() {
-//         assert(br_ != nullptr);
-//         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) +
-//         buffer_size_); munmap(br_, data_size);
-//         [[maybe_unused]] int r = io_uring_unregister_buf_ring(
-//             Context::current().ring()->ring(), bgid_);
-//         assert(r == 0);
-//     }
+        bgid_ = static_cast<uint16_t>(bgid);
 
-//     NewProvidedBufferPool(const NewProvidedBufferPool &) = delete;
-//     NewProvidedBufferPool &operator=(const NewProvidedBufferPool &) = delete;
-//     NewProvidedBufferPool(NewProvidedBufferPool &&) = delete;
-//     NewProvidedBufferPool &operator=(NewProvidedBufferPool &&) = delete;
+        char *buffer_base = reinterpret_cast<char *>(data) +
+                            sizeof(io_uring_buf) * num_buffers_;
+        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        for (size_t bid = 0; bid < num_buffers_; bid++) {
+            char *ptr = buffer_base + bid * buffer_size;
+            io_uring_buf_ring_add(br_, ptr, buffer_size, bid, mask, bid);
+        }
+        io_uring_buf_ring_advance(br_, num_buffers_);
+    }
 
-// public:
-//     size_t capacity() const { return num_buffers_; }
+    ~BundledProvidedBufferPool() {
+        assert(br_ != nullptr);
+        size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
+        munmap(br_, data_size);
+        [[maybe_unused]] int r = io_uring_unregister_buf_ring(
+            Context::current().ring()->ring(), bgid_);
+        assert(r == 0);
+    }
 
-//     size_t buffer_size() const { return buffer_size_; }
+    BundledProvidedBufferPool(const BundledProvidedBufferPool &) = delete;
+    BundledProvidedBufferPool &
+    operator=(const BundledProvidedBufferPool &) = delete;
+    BundledProvidedBufferPool(BundledProvidedBufferPool &&) = delete;
+    BundledProvidedBufferPool &operator=(BundledProvidedBufferPool &&) = delete;
 
-// public:
-//     uint16_t bgid() const { return bgid_; }
+public:
+    size_t capacity() const { return num_buffers_; }
 
-//     ReturnType handle_finish(int32_t res, uint32_t flags) {
-//         std::vector<NewProvidedBuffer> buffers;
-//         if (res < 0) {
-//             return buffers;
-//         }
+    size_t buffer_size() const { return buffer_size_; }
 
-//         assert(flags & IORING_CQE_F_BUFFER);
+public:
+    uint16_t bgid() const { return bgid_; }
 
-//         if (flags & IORING_CQE_F_BUF_MORE) {
-//             auto *buf_ptr = curr_uring_buf_();
-//             assert(buf_ptr->bid == flags >> IORING_CQE_BUFFER_SHIFT);
-//             void *data = reinterpret_cast<char *>(buf_ptr->addr) - res;
-//             buffers.emplace_back(data, res, nullptr);
-//         } else {
-//             auto bytes = res;
-//             while (bytes > 0) {
-//                 auto *buf_ptr = curr_uring_buf_();
-//                 advance_uring_buf_();
-//                 size_t buf_size = buf_ptr->len;
-//                 void *data = reinterpret_cast<char *>(buf_ptr->addr);
-//                 buffers.emplace_back(data, buf_size, this);
-//                 bytes -= buf_size;
-//             }
-//             assert(bytes == 0);
-//         }
+    ReturnType handle_finish(int32_t res, uint32_t flags) {
+        std::vector<ProvidedBuffer> buffers;
+        if (res < 0) {
+            return buffers;
+        }
 
-//         return buffers;
-//     }
+        assert(flags & IORING_CQE_F_BUFFER);
 
-//     void add_buffer_back(void *ptr) {
-//         char *base = buffer_base_();
-//         assert(ptr >= base);
-//         size_t offset = static_cast<char *>(ptr) - base;
-//         size_t bid = offset / buffer_size_;
-//         assert(bid < num_buffers_);
-//         char *buffer_ptr = base + bid * buffer_size_;
-//         auto mask =
-//         io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
-//         io_uring_buf_ring_add(br_, buffer_ptr, buffer_size_, bid, mask, 0);
-//         io_uring_buf_ring_advance(br_, 1);
-//     }
+        uint16_t bid = flags >> IORING_CQE_BUFFER_SHIFT;
 
-// private:
-//     char *buffer_base_() const {
-//         return reinterpret_cast<char *>(br_) +
-//                sizeof(io_uring_buf) * num_buffers_;
-//     }
+        if (flags & IORING_CQE_F_BUF_MORE) {
+            char *data = get_buffer_(bid) + partial_size_;
+            buffers.emplace_back(data, static_cast<size_t>(res), nullptr);
+            partial_size_ += static_cast<size_t>(res);
+        } else {
+            auto bytes = res;
+            while (bytes > 0) {
+                auto *buf_ptr = curr_io_uring_buf_();
+                uint16_t bid = buf_ptr->bid;
+                size_t curr_buffer_size = buffer_size_ - partial_size_;
+                char *data = get_buffer_(bid) + partial_size_;
+                buffers.emplace_back(data, curr_buffer_size, this);
+                bytes -= curr_buffer_size;
+                partial_size_ = 0;
+                advance_io_uring_buf_();
+            }
+        }
 
-//     io_uring_buf *curr_uring_buf_() {
-//         auto mask =
-//         io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_)); return
-//         &br_->bufs[br_head_ & mask];
-//     }
+        return buffers;
+    }
 
-//     void advance_uring_buf_() { br_head_++; }
+    void add_buffer_back(void *ptr) {
+        char *base = get_buffers_base_();
+        assert(ptr >= base);
+        size_t offset = static_cast<char *>(ptr) - base;
+        size_t bid = offset / buffer_size_;
+        assert(bid < num_buffers_);
+        char *buffer_ptr = base + bid * buffer_size_;
+        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        io_uring_buf_ring_add(br_, buffer_ptr, buffer_size_, bid, mask, 0);
+        io_uring_buf_ring_advance(br_, 1);
+    }
 
-// private:
-//     io_uring_buf_ring *br_ = nullptr;
-//     size_t num_buffers_;
-//     size_t buffer_size_;
-//     uint16_t bgid_;
-//     uint16_t br_head_ = 0;
+private:
+    char *get_buffer_(uint16_t bid) const {
+        return get_buffers_base_() + bid * buffer_size_;
+    }
 
-//     friend struct NewProvidedBuffer;
-// };
+    char *get_buffers_base_() const {
+        return reinterpret_cast<char *>(br_) +
+               sizeof(io_uring_buf) * num_buffers_;
+    }
 
-// inline NewProvidedBuffer::~NewProvidedBuffer() {
-//     if (pool_ != nullptr) {
-//         pool_->add_buffer_back(data_);
-//     }
-// }
+    io_uring_buf *curr_io_uring_buf_() {
+        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        return &br_->bufs[br_head_ & mask];
+    }
+
+    void advance_io_uring_buf_() { br_head_++; }
+
+private:
+    io_uring_buf_ring *br_ = nullptr;
+    size_t num_buffers_;
+    size_t buffer_size_;
+    size_t partial_size_ = 0;
+    uint16_t bgid_;
+    uint16_t br_head_ = 0;
+
+    friend struct ProvidedBuffer;
+};
+
+inline void ProvidedBuffer::reset() {
+    if (pool_ != nullptr) {
+        pool_->add_buffer_back(data_);
+    }
+    data_ = nullptr;
+    size_ = 0;
+    pool_ = nullptr;
+}
+
+class ProvidedBufferPool : public BundledProvidedBufferPool {
+public:
+    using ReturnType = ProvidedBuffer;
+
+    ProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
+                       unsigned int flags = 0)
+        : BundledProvidedBufferPool(log_num_buffers, buffer_size, flags) {}
+
+public:
+    ReturnType handle_finish(int32_t res, uint32_t flags) {
+        auto buffers = BundledProvidedBufferPool::handle_finish(res, flags);
+        if (buffers.empty()) {
+            return ReturnType();
+        }
+        assert(buffers.size() == 1);
+        return std::move(buffers[0]);
+    }
+};
 
 } // namespace condy

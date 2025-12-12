@@ -7,59 +7,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <doctest/doctest.h>
-#include <liburing.h>
-#include <liburing/io_uring.h>
-
-// TEST_CASE("test buffers - ProvidedBuffersImpl construct") {
-//     condy::Ring ring;
-//     io_uring_params params{};
-//     std::memset(&params, 0, sizeof(params));
-//     ring.init(8, &params);
-//     condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
-// }
-
-// TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
-//     condy::Ring ring;
-//     io_uring_params params{};
-//     std::memset(&params, 0, sizeof(params));
-//     ring.init(8, &params);
-//     condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
-
-//     int pipefd[2];
-//     REQUIRE(pipe(pipefd) == 0);
-
-//     int r;
-
-//     r = ::write(pipefd[1], "test", 4);
-//     REQUIRE(r == 4);
-
-//     auto *sqe = ring.get_sqe();
-//     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
-//     io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
-//     sqe->buf_group = 0;
-//     io_uring_sqe_set_data(sqe, nullptr);
-
-//     r = -1;
-//     int bid = -1;
-
-//     size_t reaped = 0;
-//     while (reaped < 1) {
-//         ring.submit();
-//         reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
-//             auto *data = io_uring_cqe_get_data(cqe);
-//             REQUIRE(data == nullptr);
-//             r = cqe->res;
-//             REQUIRE(r > 0);
-//             REQUIRE((cqe->flags & IORING_CQE_F_BUFFER));
-//             bid = cqe->flags >> IORING_CQE_BUFFER_SHIFT;
-//         });
-//     }
-
-//     REQUIRE(r != -1);
-
-//     char *buf = reinterpret_cast<char *>(impl.get_buffer(bid));
-//     REQUIRE(std::memcmp(buf, "test", 4) == 0);
-// }
 
 TEST_CASE("test buffers - buffer mutable/const") {
     char data[16] = {};
@@ -145,7 +92,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
     auto *sqe = ring.get_sqe();
     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
     io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
-    sqe->buf_group = 0;
+    sqe->buf_group = queue.bgid();
     io_uring_sqe_set_data(sqe, nullptr);
 
     r = -1;
@@ -169,4 +116,60 @@ TEST_CASE("test buffers - provided buffer queue usage") {
     REQUIRE(queue.size() == 1);
 
     REQUIRE(std::memcmp(buf1, "test", 4) == 0);
+}
+
+TEST_CASE("test buffers - provided buffer pool init") {
+    auto func = []() -> condy::Coro<void> {
+        condy::ProvidedBufferPool pool(4, 16);
+        co_return;
+    };
+
+    condy::sync_wait(func());
+}
+
+TEST_CASE("test buffers - provided buffer pool usage") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::Context::current().init(&ring, &runtime);
+
+    condy::ProvidedBufferPool pool(2, 16);
+    REQUIRE(pool.capacity() == (1 << 2));
+
+    int pipefd[2];
+    REQUIRE(pipe(pipefd) == 0);
+
+    int r;
+
+    r = ::write(pipefd[1], "test", 4);
+    REQUIRE(r == 4);
+
+    auto *sqe = ring.get_sqe();
+    io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
+    sqe->buf_group = pool.bgid();
+    io_uring_sqe_set_data(sqe, nullptr);
+
+    r = -1;
+
+    condy::ProvidedBufferPool::ReturnType ret;
+
+    size_t reaped = 0;
+    while (reaped < 1) {
+        ring.submit();
+        reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
+            auto *data = io_uring_cqe_get_data(cqe);
+            REQUIRE(data == nullptr);
+            r = cqe->res;
+            ret = pool.handle_finish(cqe->res, cqe->flags);
+        });
+    }
+
+    REQUIRE(r == 4);
+    REQUIRE(ret.owns_buffer());
+    REQUIRE(ret.size() == 16);
+
+    REQUIRE(std::memcmp(ret.data(), "test", 4) == 0);
 }

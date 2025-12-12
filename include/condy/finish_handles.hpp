@@ -110,13 +110,13 @@ template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
 template <typename ProvidedBufferContainer, typename HandleBase>
-class SelectBufferSendMixin : public HandleBase {
+class SelectBufferMixin : public HandleBase {
 public:
     using ReturnType =
         std::pair<int, typename ProvidedBufferContainer::ReturnType>;
 
     template <typename... Args>
-    SelectBufferSendMixin(ProvidedBufferContainer *buffers, Args &&...args)
+    SelectBufferMixin(ProvidedBufferContainer *buffers, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), buffers_(buffers) {}
 
     ReturnType extract_result() {
@@ -130,8 +130,8 @@ private:
 };
 
 template <typename ProvidedBufferContainer>
-using SelectBufferSendOpFinishHandle =
-    SelectBufferSendMixin<ProvidedBufferContainer, OpFinishHandle>;
+using SelectBufferOpFinishHandle =
+    SelectBufferMixin<ProvidedBufferContainer, OpFinishHandle>;
 
 template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:

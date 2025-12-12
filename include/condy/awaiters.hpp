@@ -148,17 +148,16 @@ public:
 };
 
 template <typename ProvidedBufferContainer, typename Func, typename... Args>
-class [[nodiscard]] SelectBufferSendOpAwaiter
-    : public OpAwaiterBase<
-          SelectBufferSendOpFinishHandle<ProvidedBufferContainer>, Func,
-          Args...> {
+class [[nodiscard]] SelectBufferOpAwaiter
+    : public OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>,
+                           Func, Args...> {
 public:
     using Base =
-        OpAwaiterBase<SelectBufferSendOpFinishHandle<ProvidedBufferContainer>,
-                      Func, Args...>;
-    SelectBufferSendOpAwaiter(ProvidedBufferContainer *buffers, Func func,
-                              Args... args)
-        : Base(SelectBufferSendOpFinishHandle<ProvidedBufferContainer>(buffers),
+        OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>, Func,
+                      Args...>;
+    SelectBufferOpAwaiter(ProvidedBufferContainer *buffers, Func func,
+                          Args... args)
+        : Base(SelectBufferOpFinishHandle<ProvidedBufferContainer>(buffers),
                func, args...) {}
 };
 
