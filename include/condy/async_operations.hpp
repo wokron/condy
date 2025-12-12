@@ -16,31 +16,6 @@
 
 namespace condy {
 
-class ProvidedBufferPool {
-public:
-    ProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
-                       unsigned int flags = 0)
-        : impl_(std::make_shared<detail::ProvidedBufferPoolImpl>(
-              Context::current().ring()->ring(),
-              Context::current().runtime()->next_bgid(), log_num_buffers,
-              buffer_size, flags)) {}
-
-    ProvidedBufferPool(ProvidedBufferPool &&) = default;
-
-    ProvidedBufferPool(const ProvidedBufferPool &) = delete;
-    ProvidedBufferPool &operator=(const ProvidedBufferPool &) = delete;
-    ProvidedBufferPool &operator=(ProvidedBufferPool &&) = delete;
-
-public:
-    detail::ProvidedBufferPoolImplPtr copy_impl() const & { return impl_; }
-    detail::ProvidedBufferPoolImplPtr copy_impl() && {
-        return std::move(impl_);
-    }
-
-private:
-    detail::ProvidedBufferPoolImplPtr impl_;
-};
-
 namespace detail {
 
 struct FixedFd {
@@ -81,8 +56,7 @@ constexpr bool is_bundle_provided_buffers_v =
     is_bundle_provided_buffers<std::decay_t<Buffer>>::value;
 
 template <typename Buffer>
-constexpr bool is_provided_buffer_pool_v =
-    std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
+constexpr bool is_provided_buffer_pool_v = std::false_type::value;
 
 template <typename Buffer>
 constexpr bool is_provided_buffer_queue_v =

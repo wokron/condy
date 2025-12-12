@@ -10,56 +10,56 @@
 #include <liburing.h>
 #include <liburing/io_uring.h>
 
-TEST_CASE("test buffers - ProvidedBuffersImpl construct") {
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
-}
+// TEST_CASE("test buffers - ProvidedBuffersImpl construct") {
+//     condy::Ring ring;
+//     io_uring_params params{};
+//     std::memset(&params, 0, sizeof(params));
+//     ring.init(8, &params);
+//     condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
+// }
 
-TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
+// TEST_CASE("test buffers - ProvidedBuffersImpl buffer select") {
+//     condy::Ring ring;
+//     io_uring_params params{};
+//     std::memset(&params, 0, sizeof(params));
+//     ring.init(8, &params);
+//     condy::detail::ProvidedBufferPoolImpl impl(ring.ring(), 0, 2, 32, 0);
 
-    int pipefd[2];
-    REQUIRE(pipe(pipefd) == 0);
+//     int pipefd[2];
+//     REQUIRE(pipe(pipefd) == 0);
 
-    int r;
+//     int r;
 
-    r = ::write(pipefd[1], "test", 4);
-    REQUIRE(r == 4);
+//     r = ::write(pipefd[1], "test", 4);
+//     REQUIRE(r == 4);
 
-    auto *sqe = ring.get_sqe();
-    io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
-    io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
-    sqe->buf_group = 0;
-    io_uring_sqe_set_data(sqe, nullptr);
+//     auto *sqe = ring.get_sqe();
+//     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
+//     io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
+//     sqe->buf_group = 0;
+//     io_uring_sqe_set_data(sqe, nullptr);
 
-    r = -1;
-    int bid = -1;
+//     r = -1;
+//     int bid = -1;
 
-    size_t reaped = 0;
-    while (reaped < 1) {
-        ring.submit();
-        reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
-            auto *data = io_uring_cqe_get_data(cqe);
-            REQUIRE(data == nullptr);
-            r = cqe->res;
-            REQUIRE(r > 0);
-            REQUIRE((cqe->flags & IORING_CQE_F_BUFFER));
-            bid = cqe->flags >> IORING_CQE_BUFFER_SHIFT;
-        });
-    }
+//     size_t reaped = 0;
+//     while (reaped < 1) {
+//         ring.submit();
+//         reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
+//             auto *data = io_uring_cqe_get_data(cqe);
+//             REQUIRE(data == nullptr);
+//             r = cqe->res;
+//             REQUIRE(r > 0);
+//             REQUIRE((cqe->flags & IORING_CQE_F_BUFFER));
+//             bid = cqe->flags >> IORING_CQE_BUFFER_SHIFT;
+//         });
+//     }
 
-    REQUIRE(r != -1);
+//     REQUIRE(r != -1);
 
-    char *buf = reinterpret_cast<char *>(impl.get_buffer(bid));
-    REQUIRE(std::memcmp(buf, "test", 4) == 0);
-}
+//     char *buf = reinterpret_cast<char *>(impl.get_buffer(bid));
+//     REQUIRE(std::memcmp(buf, "test", 4) == 0);
+// }
 
 TEST_CASE("test buffers - buffer mutable/const") {
     char data[16] = {};
