@@ -49,6 +49,14 @@ public:
             params.flags |= IORING_SETUP_COOP_TASKRUN;
         }
 
+        if (options.enable_sqe128_) {
+            params.flags |= IORING_SETUP_SQE128;
+        }
+
+        if (options.enable_cqe32_) {
+            params.flags |= IORING_SETUP_CQE32;
+        }
+
         ring_.init(ring_entries, &params);
 
         event_interval_ = options.event_interval_;

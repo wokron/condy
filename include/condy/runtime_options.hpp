@@ -52,6 +52,16 @@ public:
         return *this;
     }
 
+    Self &enable_sqe128() {
+        enable_sqe128_ = true;
+        return *this;
+    }
+
+    Self &enable_cqe32() {
+        enable_cqe32_ = true;
+        return *this;
+    }
+
 protected:
     size_t event_interval_ = 61;
     bool enable_sqpoll_ = false;
@@ -60,6 +70,8 @@ protected:
     size_t sq_size_ = 128;
     size_t cq_size_ = 1024;
     bool enable_coop_taskrun_ = false;
+    bool enable_sqe128_ = false;
+    bool enable_cqe32_ = false;
 
     friend class Runtime;
 };

@@ -825,4 +825,41 @@ template <typename Fd> inline auto async_listen(Fd fd, int backlog) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+template <typename Fd>
+inline auto async_cmd_discard(Fd fd, uint64_t offset, uint64_t nbytes) {
+    auto op = make_op_awaiter(io_uring_prep_cmd_discard, fd, offset, nbytes);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+inline auto async_open(const char *path, int flags, mode_t mode) {
+    return make_op_awaiter(io_uring_prep_open, path, flags, mode);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+inline auto async_open_direct(const char *path, int flags, mode_t mode,
+                              unsigned file_index) {
+    return make_op_awaiter(io_uring_prep_open_direct, path, flags, mode,
+                           file_index);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+inline auto async_pipe(int *fds, int pipe_flags) {
+    return make_op_awaiter(io_uring_prep_pipe, fds, pipe_flags);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+inline auto async_pipe_direct(int *fds, int pipe_flags,
+                              unsigned int file_index) {
+    return make_op_awaiter(io_uring_prep_pipe_direct, fds, pipe_flags,
+                           file_index);
+}
+#endif
+
 } // namespace condy
