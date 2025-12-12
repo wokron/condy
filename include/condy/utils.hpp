@@ -127,30 +127,6 @@ template <typename ExceptionType = std::runtime_error>
     throw_exception<ExceptionType>(msg, error_code);
 }
 
-class ErasedDestructor {
-public:
-    ErasedDestructor() = default;
-    template <typename T>
-    ErasedDestructor(T &&obj)
-        : ptr_(new T(std::forward<T>(obj)),
-               [](void *p) { delete static_cast<T *>(p); }) {}
-
-    ErasedDestructor(ErasedDestructor &&other) = default;
-    ErasedDestructor &operator=(ErasedDestructor &&other) = default;
-
-    ErasedDestructor(const ErasedDestructor &) = delete;
-    ErasedDestructor &operator=(const ErasedDestructor &) = delete;
-
-private:
-    static void fallback_deleter_(void *ptr) {
-        assert(ptr == nullptr);
-        (void)ptr;
-    }
-
-    using Deleter = void (*)(void *);
-    std::unique_ptr<void, Deleter> ptr_ = {nullptr, fallback_deleter_};
-};
-
 template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
     constexpr T *dummy = nullptr;
     return reinterpret_cast<ptrdiff_t>(&(dummy->*member));

@@ -278,8 +278,6 @@ private:
     size_t partial_size_ = 0;
     uint16_t bgid_;
     uint16_t br_head_ = 0;
-
-    friend struct ProvidedBuffer;
 };
 
 inline void ProvidedBuffer::reset() {
