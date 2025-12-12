@@ -3,6 +3,7 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
+#include "condy/provided_buffers.hpp"
 #include "condy/ring.hpp"
 #include <liburing.h>
 #include <type_traits>
@@ -84,7 +85,8 @@ constexpr bool is_provided_buffer_pool_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
 
 template <typename Buffer>
-constexpr bool is_provided_buffer_queue_v = std::false_type::value;
+constexpr bool is_provided_buffer_queue_v =
+    std::is_same_v<std::decay_t<Buffer>, ProvidedBufferQueue>;
 
 template <typename BufferBase> class FixedBuffer : public BufferBase {
 public:
@@ -454,14 +456,10 @@ inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(detail::prep_send_fixed, sockfd, buf.data(),
                                    buf.size(), flags, buf.buf_index());
-        } else if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_select_buffer_bundle_send_op_awaiter(
-                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_send,
-                sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
+            // TODO: Resupport bundle after refactoring
             return make_select_buffer_send_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_send,
-                sockfd, nullptr, 0, flags);
+                &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
         } else {
             return make_op_awaiter(io_uring_prep_send, sockfd, buf.data(),
                                    buf.size(), flags);
@@ -479,14 +477,11 @@ inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
             return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
                                    buf.data(), buf.size(), flags, addr, addrlen,
                                    buf.buf_index());
-        } else if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_select_buffer_bundle_send_op_awaiter(
-                std::forward<Buffer>(buf).get().copy_impl(),
-                detail::prep_sendto, sockfd, nullptr, 0, flags, addr, addrlen);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_send_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), detail::prep_sendto,
-                sockfd, nullptr, 0, flags, addr, addrlen);
+            // TODO: Resupport bundle after refactoring
+            return make_select_buffer_send_op_awaiter(&buf, detail::prep_sendto,
+                                                      sockfd, nullptr, 0, flags,
+                                                      addr, addrlen);
         } else {
             return make_op_awaiter(detail::prep_sendto, sockfd, buf.data(),
                                    buf.size(), flags, addr, addrlen);

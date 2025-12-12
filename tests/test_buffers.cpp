@@ -1,5 +1,9 @@
 #include "condy/buffers.hpp"
+#include "condy/coro.hpp"
+#include "condy/provided_buffers.hpp"
 #include "condy/ring.hpp"
+#include "condy/runtime.hpp"
+#include "condy/sync_wait.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <doctest/doctest.h>
@@ -99,4 +103,70 @@ TEST_CASE("test buffers - buffer vector") {
     condy::ConstBuffer cbuf = condy::buffer(vec);
     REQUIRE(cbuf.data() == reinterpret_cast<const void *>(vec.data()));
     REQUIRE(cbuf.size() == sizeof(int) * vec.size());
+}
+
+TEST_CASE("test buffers - provided buffer queue init") {
+    auto func = []() -> condy::Coro<void> {
+        condy::ProvidedBufferQueue queue(4);
+        char data1[16], data2[16];
+        queue.push(condy::buffer(data1));
+        queue.push(condy::buffer(data2));
+        co_return;
+    };
+
+    condy::sync_wait(func());
+}
+
+TEST_CASE("test buffers - provided buffer queue usage") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::Context::current().init(&ring, &runtime);
+
+    condy::ProvidedBufferQueue queue(2);
+    REQUIRE(queue.capacity() == (1 << 2));
+
+    char buf1[32], buf2[32];
+    REQUIRE(queue.push(condy::buffer(buf1)) == 0);
+    REQUIRE(queue.size() == 1);
+    REQUIRE(queue.push(condy::buffer(buf2)) == 1);
+    REQUIRE(queue.size() == 2);
+
+    int pipefd[2];
+    REQUIRE(pipe(pipefd) == 0);
+
+    int r;
+
+    r = ::write(pipefd[1], "test", 4);
+    REQUIRE(r == 4);
+
+    auto *sqe = ring.get_sqe();
+    io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_BUFFER_SELECT);
+    sqe->buf_group = 0;
+    io_uring_sqe_set_data(sqe, nullptr);
+
+    r = -1;
+
+    condy::ProvidedBufferQueue::ReturnType ret;
+
+    size_t reaped = 0;
+    while (reaped < 1) {
+        ring.submit();
+        reaped += ring.reap_completions([&](io_uring_cqe *cqe) {
+            auto *data = io_uring_cqe_get_data(cqe);
+            REQUIRE(data == nullptr);
+            r = cqe->res;
+            ret = queue.handle_finish(cqe->res, cqe->flags);
+        });
+    }
+
+    REQUIRE(r > 0);
+    REQUIRE(ret.num_buffers == 1);
+    REQUIRE(ret.bid == 0);
+    REQUIRE(queue.size() == 1);
+
+    REQUIRE(std::memcmp(buf1, "test", 4) == 0);
 }
