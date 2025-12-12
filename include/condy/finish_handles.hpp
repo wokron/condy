@@ -198,43 +198,6 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
-template <typename HandleBase> class SelectBufferSendMixin : public HandleBase {
-public:
-    using ReturnType = int;
-
-    template <typename... Args>
-    SelectBufferSendMixin(detail::ProvidedBufferQueueImplPtr buffers_impl,
-                          Args &&...args)
-        : HandleBase(std::forward<Args>(args)...),
-          buffers_impl_(std::move(buffers_impl)) {}
-
-    ReturnType extract_result() {
-        int res = this->res_;
-        if (this->flags_ & IORING_CQE_F_BUFFER) {
-            assert(res >= 0);
-            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            size_t sent_size = static_cast<size_t>(res);
-
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-            if (this->flags_ & IORING_CQE_F_BUF_MORE) {
-                // TODO: Any use case for send partial buffer?
-                // Must be partial consumption
-                buffers_impl_->partial_remove_buffer(bid, sent_size);
-                return res;
-            }
-#endif
-            // Entire buffer(s) has been sent, remove it/them from the queue
-            buffers_impl_->remove_buffer(bid, sent_size);
-        }
-        return res;
-    }
-
-private:
-    detail::ProvidedBufferQueueImplPtr buffers_impl_;
-};
-
-using SelectBufferSendOpFinishHandle = SelectBufferSendMixin<OpFinishHandle>;
-
 template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;

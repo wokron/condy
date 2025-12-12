@@ -113,33 +113,6 @@ auto make_multishot_select_buffer_no_bundle_recv_op_awaiter(
     return op;
 }
 
-template <typename Func, typename... Args>
-auto make_select_buffer_send_op_awaiter(
-    detail::ProvidedBufferQueueImplPtr buffers_impl, Func &&func,
-    Args &&...args) {
-    int bgid = buffers_impl->bgid();
-    auto op =
-        SelectBufferSendOpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
-            std::move(buffers_impl), std::forward<Func>(func),
-            std::forward<Args>(args)...);
-    op.add_flags(IOSQE_BUFFER_SELECT);
-    op.set_bgid(bgid);
-    return op;
-}
-
-template <typename Func, typename... Args>
-auto make_select_buffer_bundle_send_op_awaiter(
-    detail::ProvidedBufferQueueImplPtr buffers_impl, Func &&func,
-    Args &&...args) {
-    auto op = make_select_buffer_send_op_awaiter(std::move(buffers_impl),
-                                                 std::forward<Func>(func),
-                                                 std::forward<Args>(args)...);
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-    op.add_ioprio(IORING_RECVSEND_BUNDLE);
-#endif
-    return op;
-}
-
 template <typename FreeFunc, typename Func, typename... Args>
 auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                                Args &&...args) {

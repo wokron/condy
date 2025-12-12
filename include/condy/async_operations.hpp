@@ -40,34 +40,6 @@ private:
     detail::ProvidedBufferPoolImplPtr impl_;
 };
 
-class ProvidedBufferQueue {
-public:
-    ProvidedBufferQueue(size_t log_num_buffers, unsigned int flags = 0)
-        : impl_(std::make_shared<detail::ProvidedBufferQueueImpl>(
-              Context::current().ring()->ring(),
-              Context::current().runtime()->next_bgid(), log_num_buffers,
-              flags)) {}
-
-    ProvidedBufferQueue(ProvidedBufferQueue &&) = default;
-
-    ProvidedBufferQueue(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue &operator=(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue &operator=(ProvidedBufferQueue &&) = delete;
-
-public:
-    template <typename Buffer> void push(Buffer &&buffer) {
-        impl_->submit_buffer(std::forward<Buffer>(buffer));
-    }
-
-    detail::ProvidedBufferQueueImplPtr copy_impl() const & { return impl_; }
-    detail::ProvidedBufferQueueImplPtr copy_impl() && {
-        return std::move(impl_);
-    }
-
-private:
-    detail::ProvidedBufferQueueImplPtr impl_;
-};
-
 namespace detail {
 
 struct FixedFd {
@@ -112,8 +84,7 @@ constexpr bool is_provided_buffer_pool_v =
     std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
 
 template <typename Buffer>
-constexpr bool is_provided_buffer_queue_v =
-    std::is_same_v<std::decay_t<Buffer>, ProvidedBufferQueue>;
+constexpr bool is_provided_buffer_queue_v = std::false_type::value;
 
 template <typename BufferBase> class FixedBuffer : public BufferBase {
 public:
