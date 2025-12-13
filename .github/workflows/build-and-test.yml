@@ -30,6 +30,7 @@ jobs:
           COMPILER=$(${{matrix.compiler.cc}} --version | head -n 1)
           echo "Using compiler: $COMPILER"
           cmake -B ${{github.workspace}}/build \
+              -DBUILD_EXAMPLES=ON \
               -DBUILD_BENCHMARKS=ON \
               -DBUILD_TESTS=ON \
               -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} \
