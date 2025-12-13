@@ -18,12 +18,20 @@ jobs:
           - { cc: clang, cxx: clang++ }
           - { cc: gcc, cxx: g++ }
         build-type: [Release, Debug]
+        liburing-version: [2.3, 2.6]
 
     steps:
       - name: Checkout Repository and Submodules
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Checkout Liburing to Specified Version
+        run: |
+          cd ./third_party/liburing
+          git fetch --tags
+          git checkout liburing-${{ matrix.liburing-version }}
+          cd ../../
 
       - name: Configure CMake
         run: |
