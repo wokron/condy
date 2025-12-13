@@ -67,10 +67,8 @@ constexpr bool is_basic_buffer =
     std::is_same_v<std::decay_t<Buffer>, ConstBuffer>;
 
 template <typename Buffer> struct is_fixed_buffer : public std::false_type {};
-
 template <typename BufferBase>
 struct is_fixed_buffer<FixedBuffer<BufferBase>> : public std::true_type {};
-
 template <typename Buffer>
 constexpr bool is_fixed_buffer_v = is_fixed_buffer<std::decay_t<Buffer>>::value;
 
@@ -80,11 +78,19 @@ struct FixedIoVec {
 };
 
 template <typename IoVec> struct is_fixed_iovec : public std::false_type {};
-
 template <> struct is_fixed_iovec<FixedIoVec> : public std::true_type {};
-
 template <typename IoVec>
 constexpr bool is_fixed_iovec_v = is_fixed_iovec<std::decay_t<IoVec>>::value;
+
+struct FixedMsghdr {
+    int buf_index;
+    msghdr *msg;
+};
+
+template <typename MsgHdr> struct is_fixed_msghdr : public std::false_type {};
+template <> struct is_fixed_msghdr<FixedMsghdr> : public std::true_type {};
+template <typename MsgHdr>
+constexpr bool is_fixed_msghdr_v = is_fixed_msghdr<std::decay_t<MsgHdr>>::value;
 
 } // namespace detail
 
@@ -100,8 +106,13 @@ auto fixed(int buf_index, Buffer &&buf) {
 }
 
 // Helper to specify a fixed iovec
-inline auto fixed(int buf_index, const iovec *iov) {
-    return detail::FixedIoVec{buf_index, const_cast<iovec *>(iov)};
+inline auto fixed(int buf_index, iovec *iov) {
+    return detail::FixedIoVec{buf_index, iov};
+}
+
+// Helper to specify a fixed msghdr
+inline auto fixed(int buf_index, struct msghdr *msg) {
+    return detail::FixedMsghdr{buf_index, msg};
 }
 
 // Helper to bundle provided buffers
@@ -194,6 +205,25 @@ inline auto async_sendmsg(Fd fd, const struct msghdr *msg, unsigned flags) {
     return op;
 }
 
+template <typename Fd, typename MsgHdr, typename FreeFunc>
+inline auto async_sendmsg_zc(Fd fd, MsgHdr &&msg, unsigned flags,
+                             FreeFunc &&func) {
+    auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+        if constexpr (detail::is_fixed_msghdr_v<MsgHdr>) {
+            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
+                                             io_uring_prep_sendmsg_zc_fixed, fd,
+                                             msg.msg, flags, msg.buf_index);
+        } else
+#endif
+            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
+                                             io_uring_prep_sendmsg, fd, msg,
+                                             flags);
+    }();
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+
 template <typename Fd> inline auto async_fsync(Fd fd, unsigned fsync_flags) {
     auto op = make_op_awaiter(io_uring_prep_fsync, fd, fsync_flags);
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -205,6 +235,15 @@ inline auto async_nop() { return make_op_awaiter(io_uring_prep_nop); }
 inline auto async_timeout(struct __kernel_timespec *ts, unsigned count,
                           unsigned flags) {
     return make_op_awaiter(io_uring_prep_timeout, ts, count, flags);
+}
+
+template <typename MultiShotFunc>
+inline auto async_timeout_multishot(struct __kernel_timespec *ts,
+                                    unsigned count, unsigned flags,
+                                    MultiShotFunc &&func) {
+    return make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
+                                     io_uring_prep_timeout, ts, count,
+                                     flags | IORING_TIMEOUT_MULTISHOT);
 }
 
 template <typename Fd>
@@ -501,15 +540,6 @@ inline auto async_sendto_zc(Fd sockfd, Buffer &&buf, int flags,
         }
     }();
     detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
-}
-
-template <typename Fd, typename FreeFunc>
-inline auto async_sendmsg_zc(Fd fd, const struct msghdr *msg, unsigned flags,
-                             FreeFunc &&func) {
-    auto op = make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
-                                        io_uring_prep_sendmsg, fd, msg, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
 

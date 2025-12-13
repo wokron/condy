@@ -236,6 +236,8 @@ private:
                     handle->invoke_extend();
                 } else {
                     (*handle)();
+                    handle->set_result(0, 0);
+                    handle->invoke_extend();
                 }
                 delete handle;
             }
