@@ -33,7 +33,7 @@ public:
         if (br_ == nullptr) {
             throw_exception("io_uring_setup_buf_ring failed", -r);
         }
-        bgid_ = static_cast<uint16_t>(bgid);
+        bgid_ = bgid;
     }
 
     ~BundledProvidedBufferQueue() {
@@ -59,7 +59,7 @@ public:
             throw std::logic_error("Capacity exceeded");
         }
 
-        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(capacity_));
+        auto mask = io_uring_buf_ring_mask(capacity_);
         uint16_t bid = br_->tail & mask;
         io_uring_buf_ring_add(br_, buffer.data(), buffer.size(), bid, mask, 0);
         io_uring_buf_ring_advance(br_, 1);
@@ -106,8 +106,8 @@ public:
 
 private:
     io_uring_buf_ring *br_ = nullptr;
-    size_t size_ = 0;
-    size_t capacity_;
+    uint32_t size_ = 0;
+    uint32_t capacity_;
     uint16_t bgid_;
 };
 
@@ -179,19 +179,19 @@ public:
 
         io_uring_buf_reg reg = {};
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
-        reg.ring_entries = static_cast<uint32_t>(num_buffers_);
-        reg.bgid = static_cast<uint16_t>(bgid);
+        reg.ring_entries = num_buffers_;
+        reg.bgid = bgid;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) {
             munmap(data, data_size);
             throw_exception("io_uring_register_buf_ring failed", -r);
         }
 
-        bgid_ = static_cast<uint16_t>(bgid);
+        bgid_ = bgid;
 
-        char *buffer_base = reinterpret_cast<char *>(data) +
-                            sizeof(io_uring_buf) * num_buffers_;
-        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        char *buffer_base =
+            static_cast<char *>(data) + sizeof(io_uring_buf) * num_buffers_;
+        auto mask = io_uring_buf_ring_mask(num_buffers_);
         for (size_t bid = 0; bid < num_buffers_; bid++) {
             char *ptr = buffer_base + bid * buffer_size;
             io_uring_buf_ring_add(br_, ptr, buffer_size, bid, mask, bid);
@@ -262,7 +262,7 @@ public:
         size_t bid = offset / buffer_size_;
         assert(bid < num_buffers_);
         char *buffer_ptr = base + bid * buffer_size_;
-        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        auto mask = io_uring_buf_ring_mask(num_buffers_);
         io_uring_buf_ring_add(br_, buffer_ptr, buffer_size_, bid, mask, 0);
         io_uring_buf_ring_advance(br_, 1);
     }
@@ -278,7 +278,7 @@ private:
     }
 
     io_uring_buf *curr_io_uring_buf_() {
-        auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(num_buffers_));
+        auto mask = io_uring_buf_ring_mask(num_buffers_);
         return &br_->bufs[br_head_ & mask];
     }
 
@@ -286,9 +286,9 @@ private:
 
 private:
     io_uring_buf_ring *br_ = nullptr;
-    size_t num_buffers_;
-    size_t buffer_size_;
-    size_t partial_size_ = 0;
+    uint32_t num_buffers_;
+    uint32_t buffer_size_;
+    uint32_t partial_size_ = 0;
     uint16_t bgid_;
     uint16_t br_head_ = 0;
 };

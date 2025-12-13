@@ -163,7 +163,7 @@ public:
         }
     }
 
-    size_t next_bgid() { return next_bgid_++; }
+    uint16_t next_bgid() { return next_bgid_++; }
 
     auto &fd_table() { return ring_.fd_table(); }
 
