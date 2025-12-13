@@ -17,11 +17,11 @@ struct BufferInfo {
     uint16_t num_buffers;
 };
 
-class ProvidedBufferQueue {
+class BundledProvidedBufferQueue {
 public:
     using ReturnType = BufferInfo;
 
-    ProvidedBufferQueue(size_t log_capacity, unsigned int flags = 0)
+    BundledProvidedBufferQueue(size_t log_capacity, unsigned int flags = 0)
         : capacity_(1ll << log_capacity) {
         assert(log_capacity <= 15);
         auto &context = Context::current();
@@ -36,16 +36,18 @@ public:
         bgid_ = static_cast<uint16_t>(bgid);
     }
 
-    ~ProvidedBufferQueue() {
+    ~BundledProvidedBufferQueue() {
         assert(br_ != nullptr);
         io_uring_free_buf_ring(Context::current().ring()->ring(), br_,
                                capacity_, bgid_);
     }
 
-    ProvidedBufferQueue(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue &operator=(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue(ProvidedBufferQueue &&) = delete;
-    ProvidedBufferQueue &operator=(ProvidedBufferQueue &&) = delete;
+    BundledProvidedBufferQueue(const BundledProvidedBufferQueue &) = delete;
+    BundledProvidedBufferQueue &
+    operator=(const BundledProvidedBufferQueue &) = delete;
+    BundledProvidedBufferQueue(BundledProvidedBufferQueue &&) = delete;
+    BundledProvidedBufferQueue &
+    operator=(BundledProvidedBufferQueue &&) = delete;
 
 public:
     size_t size() const { return size_; }
@@ -54,7 +56,7 @@ public:
 
     template <typename Buffer> uint16_t push(Buffer &&buffer) {
         if (size_ >= capacity_) {
-            throw std::logic_error("ProvidedBufferQueue capacity exceeded");
+            throw std::logic_error("Capacity exceeded");
         }
 
         auto mask = io_uring_buf_ring_mask(static_cast<uint32_t>(capacity_));
@@ -103,6 +105,11 @@ private:
     size_t size_ = 0;
     size_t capacity_;
     uint16_t bgid_;
+};
+
+class ProvidedBufferQueue : public BundledProvidedBufferQueue {
+public:
+    using BundledProvidedBufferQueue::BundledProvidedBufferQueue;
 };
 
 class BundledProvidedBufferPool;
