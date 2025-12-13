@@ -19,6 +19,9 @@ Condy is designed to provide an intuitive, high-performance coroutine runtime on
 * 📦 **Minimal Dependencies**
   Only depends on the C++20 standard library and liburing.
 
+> [!WARNING]
+> **Alpha Stage** - Condy is currently in early development. API is not stable and may change without notice.
+
 ## Quick Start
 
 ```cpp
