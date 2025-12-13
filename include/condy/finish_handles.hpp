@@ -133,6 +133,11 @@ template <typename ProvidedBufferContainer>
 using SelectBufferOpFinishHandle =
     SelectBufferMixin<ProvidedBufferContainer, OpFinishHandle>;
 
+template <typename MultiShotFunc, typename ProvidedBufferContainer>
+using MultiShotSelectBufferOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, SelectBufferMixin<ProvidedBufferContainer,
+                                                    ExtendOpFinishHandle>>;
+
 template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;

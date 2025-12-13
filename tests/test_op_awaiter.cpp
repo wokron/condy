@@ -1,4 +1,5 @@
 #include "condy/buffers.hpp"
+#include "condy/provided_buffers.hpp"
 #include <condy/awaiter_operations.hpp>
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
@@ -214,43 +215,42 @@ TEST_CASE("test op_awaiter - multishot op") {
     context.reset();
 }
 
-// TEST_CASE("test op_awaiter - select buffer op") {
-//     condy::Ring ring;
-//     io_uring_params params{};
-//     std::memset(&params, 0, sizeof(params));
-//     ring.init(8, &params);
-//     auto &context = condy::Context::current();
-//     context.init(&ring, &runtime);
+TEST_CASE("test op_awaiter - select buffer op") {
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::Context::current();
+    context.init(&ring, &runtime);
 
-//     condy::detail::ProvidedBufferPoolImplPtr buffers_impl =
-//         std::make_shared<condy::detail::ProvidedBufferPoolImpl>(ring.ring(), 0,
-//                                                                 4, 32, 0);
+    {
+        condy::ProvidedBufferPool pool(4, 32);
 
-//     int pipefd[2];
-//     REQUIRE(pipe(pipefd) == 0);
+        int pipefd[2];
+        REQUIRE(pipe(pipefd) == 0);
 
-//     int r = ::write(pipefd[1], "test", 4);
-//     REQUIRE(r == 4);
+        int r = ::write(pipefd[1], "test", 4);
+        REQUIRE(r == 4);
 
-//     size_t unfinished = 1;
-//     auto func = [&]() -> condy::Coro<void> {
-//         auto [res, buf] =
-//             co_await condy::make_select_buffer_no_bundle_recv_op_awaiter(
-//                 buffers_impl, io_uring_prep_read, pipefd[0], nullptr, 0, 0);
-//         REQUIRE(res >= 0);
-//         REQUIRE(buf.size() == 32);
-//         REQUIRE(std::memcmp(buf.data(), "test", 4) == 0);
-//         --unfinished;
-//     };
+        size_t unfinished = 1;
+        auto func = [&]() -> condy::Coro<void> {
+            auto [res, buf] = co_await condy::make_select_buffer_op_awaiter(
+                &pool, io_uring_prep_read, pipefd[0], nullptr, 0, 0);
+            REQUIRE(res >= 0);
+            REQUIRE(buf.size() == 32);
+            REQUIRE(std::memcmp(buf.data(), "test", 4) == 0);
+            --unfinished;
+        };
 
-//     auto coro = func();
-//     REQUIRE(unfinished == 1);
+        auto coro = func();
+        REQUIRE(unfinished == 1);
 
-//     coro.release().resume();
-//     REQUIRE(unfinished == 1);
+        coro.release().resume();
+        REQUIRE(unfinished == 1);
 
-//     event_loop(unfinished);
-//     REQUIRE(unfinished == 0);
+        event_loop(unfinished);
+        REQUIRE(unfinished == 0);
+    }
 
-//     context.reset();
-// }
+    context.reset();
+}

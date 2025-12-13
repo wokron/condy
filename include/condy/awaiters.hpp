@@ -161,6 +161,25 @@ public:
                func, args...) {}
 };
 
+template <typename MultiShotFunc, typename ProvidedBufferContainer,
+          typename Func, typename... Args>
+class [[nodiscard]] MultiShotSelectBufferOpAwaiter
+    : public OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
+                               MultiShotFunc, ProvidedBufferContainer>,
+                           Func, Args...> {
+public:
+    using Base = OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
+                                   MultiShotFunc, ProvidedBufferContainer>,
+                               Func, Args...>;
+    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
+                                   ProvidedBufferContainer *buffers, Func func,
+                                   Args... args)
+        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc,
+                                                   ProvidedBufferContainer>(
+                   std::move(multishot_func), buffers),
+               func, args...) {}
+};
+
 template <typename Func, typename... Args>
 class [[nodiscard]] TimerOpAwaiter
     : public OpAwaiterBase<TimerFinishHandle, Func, Args...> {

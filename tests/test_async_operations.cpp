@@ -91,57 +91,57 @@ TEST_CASE("test async_operations - splice fixed fd") {
     REQUIRE(std::strcmp(buffer, msg) == 0);
 }
 
-// TEST_CASE("test async_operations - recvmsg multishot") {
-//     int sv[2];
-//     create_tcp_socketpair(sv);
+TEST_CASE("test async_operations - recvmsg multishot") {
+    int sv[2];
+    create_tcp_socketpair(sv);
 
-//     const size_t times = 5;
+    const size_t times = 5;
 
-//     const char *msg = "Hello, condy multishot!";
-//     ssize_t msg_len = std::strlen(msg);
+    const char *msg = "Hello, condy multishot!";
+    ssize_t msg_len = std::strlen(msg);
 
-//     auto sender = [&]() -> condy::Coro<void> {
-//         for (size_t i = 0; i < times; ++i) {
-//             ssize_t n = co_await condy::async_send(
-//                 sv[0], condy::buffer(msg, msg_len), 0);
-//             REQUIRE(n == msg_len);
-//         }
-//     };
+    auto sender = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < times; ++i) {
+            ssize_t n = co_await condy::async_send(
+                sv[0], condy::buffer(msg, msg_len), 0);
+            REQUIRE(n == msg_len);
+        }
+    };
 
-//     auto func = [&]() -> condy::Coro<void> {
-//         struct msghdr msg_hdr {};
-//         msg_hdr.msg_iov = nullptr;
-//         msg_hdr.msg_iovlen = 0;
+    auto func = [&]() -> condy::Coro<void> {
+        struct msghdr msg_hdr {};
+        msg_hdr.msg_iov = nullptr;
+        msg_hdr.msg_iovlen = 0;
 
-//         condy::Channel<std::pair<int, condy::ProvidedBuffer>> channel(8);
+        condy::Channel<std::pair<int, condy::ProvidedBuffer>> channel(8);
 
-//         condy::ProvidedBufferPool buf_pool(2, 256);
+        condy::ProvidedBufferPool buf_pool(2, 256);
 
-//         auto t = condy::co_spawn(sender());
+        auto t = condy::co_spawn(sender());
 
-//         auto [n, buf] = co_await condy::async_recvmsg_multishot(
-//             sv[1], &msg_hdr, 0, buf_pool, condy::will_push(channel));
-//         REQUIRE(n == -ENOBUFS);
+        auto [n, buf] = co_await condy::async_recvmsg_multishot(
+            sv[1], &msg_hdr, 0, buf_pool, condy::will_push(channel));
+        REQUIRE(n == -ENOBUFS);
 
-//         co_await std::move(t);
+        co_await std::move(t);
 
-//         REQUIRE(channel.size() == 4);
+        REQUIRE(channel.size() == 4);
 
-//         for (size_t i = 0; i < 4; ++i) {
-//             auto [n, buf] = co_await channel.pop();
-//             auto *out = io_uring_recvmsg_validate(buf.data(), n, &msg_hdr);
-//             REQUIRE(n > msg_len);
-//             void *payload = io_uring_recvmsg_payload(out, &msg_hdr);
-//             size_t length = io_uring_recvmsg_payload_length(out, n,
-//             &msg_hdr); REQUIRE(length == msg_len);
-//             REQUIRE(std::memcmp(payload, msg, msg_len) == 0);
-//         }
-//     };
-//     condy::sync_wait(func());
+        for (size_t i = 0; i < 4; ++i) {
+            auto [n, buf] = co_await channel.pop();
+            auto *out = io_uring_recvmsg_validate(buf.data(), n, &msg_hdr);
+            REQUIRE(n > msg_len);
+            void *payload = io_uring_recvmsg_payload(out, &msg_hdr);
+            size_t length = io_uring_recvmsg_payload_length(out, n, &msg_hdr);
+            REQUIRE(length == msg_len);
+            REQUIRE(std::memcmp(payload, msg, msg_len) == 0);
+        }
+    };
+    condy::sync_wait(func());
 
-//     close(sv[0]);
-//     close(sv[1]);
-// }
+    close(sv[0]);
+    close(sv[1]);
+}
 
 TEST_CASE("test async_operations - accept direct") {
     int listen_fd = create_accept_socket();
@@ -169,7 +169,7 @@ TEST_CASE("test async_operations - accept direct") {
 
         auto client_task = condy::co_spawn(client());
 
-        struct sockaddr_in addr{};
+        struct sockaddr_in addr {};
         socklen_t addrlen = sizeof(addr);
         int fd1 = co_await condy::async_accept_direct(
             listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
