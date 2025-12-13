@@ -186,6 +186,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     REQUIRE(finished);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 TEST_CASE("test runtime - setup napi") {
     condy::Runtime runtime;
 
@@ -204,3 +205,4 @@ TEST_CASE("test runtime - setup napi") {
 
     REQUIRE(runtime.napi().destroy() == 0);
 }
+#endif

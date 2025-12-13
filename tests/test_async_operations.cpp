@@ -1137,6 +1137,7 @@ TEST_CASE("test async_operations - test timeout - basic") {
     condy::sync_wait(func());
 }
 
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
 TEST_CASE("test async_operations - test timeout - multishot") {
     auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts = {
@@ -1154,6 +1155,7 @@ TEST_CASE("test async_operations - test timeout - multishot") {
     };
     condy::sync_wait(func());
 }
+#endif
 
 TEST_CASE("test async_operations - test accept - basic") {
     int listen_fd = create_accept_socket();

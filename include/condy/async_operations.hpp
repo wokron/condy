@@ -237,6 +237,7 @@ inline auto async_timeout(struct __kernel_timespec *ts, unsigned count,
     return make_op_awaiter(io_uring_prep_timeout, ts, count, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
 template <typename MultiShotFunc>
 inline auto async_timeout_multishot(struct __kernel_timespec *ts,
                                     unsigned count, unsigned flags,
@@ -245,6 +246,7 @@ inline auto async_timeout_multishot(struct __kernel_timespec *ts,
                                      io_uring_prep_timeout, ts, count,
                                      flags | IORING_TIMEOUT_MULTISHOT);
 }
+#endif
 
 template <typename Fd>
 inline auto async_accept(Fd fd, struct sockaddr *addr, socklen_t *addrlen,
@@ -363,17 +365,16 @@ inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
 template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
                                  MultiShotFunc &&func) {
-    auto prep = [](io_uring_sqe *sqe, int fd, __u64 offset) {
-        io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
-    };
     auto op = [&] {
         if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
                       detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_multishot_bundle_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf, prep, fd, offset);
+                std::forward<MultiShotFunc>(func), &buf,
+                io_uring_prep_read_multishot, fd, 0, offset, buf.bgid());
         } else {
             return make_multishot_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf, prep, fd, offset);
+                std::forward<MultiShotFunc>(func), &buf,
+                io_uring_prep_read_multishot, fd, 0, offset, buf.bgid());
         }
     }();
     detail::maybe_add_fixed_fd_flag(op, fd);

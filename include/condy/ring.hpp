@@ -120,6 +120,7 @@ private:
     io_uring &ring_;
 };
 
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 class NAPI {
 public:
     NAPI(io_uring &ring) : ring_(ring) {}
@@ -141,6 +142,17 @@ public:
 private:
     io_uring &ring_;
 };
+#else
+class NAPI {
+public:
+    NAPI(io_uring &) {}
+
+    NAPI(const NAPI &) = delete;
+    NAPI &operator=(const NAPI &) = delete;
+    NAPI(NAPI &&) = delete;
+    NAPI &operator=(NAPI &&) = delete;
+};
+#endif
 
 class Ring {
 public:

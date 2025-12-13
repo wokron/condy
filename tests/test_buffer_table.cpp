@@ -77,6 +77,7 @@ TEST_CASE("test buffer_table - use registered buffer") {
         auto write_op =
             condy::make_op_awaiter(io_uring_prep_write_fixed, pipes[1],
                                    write_buf, sizeof(write_buf), 0, 1);
+        write_op.set_bgid(1); // This is the actual place where we set bgid
         int write_res = co_await write_op;
         REQUIRE(write_res == sizeof(write_buf));
 

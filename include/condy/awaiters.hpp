@@ -94,12 +94,12 @@ public:
 
 private:
     void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
-        sqe->buf_group = bgid_;
         std::apply(
             [&](auto &&...args) {
                 prep_func_(sqe, std::forward<decltype(args)>(args)...);
             },
             args_);
+        sqe->buf_group = bgid_;
         sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
         sqe->ioprio |= ioprio_;
         io_uring_sqe_set_data(
@@ -107,6 +107,8 @@ private:
     }
 
 protected:
+    // TODO: We don't need both prep_func_ and args_, just a lambda that
+    // captures everything is enough.
     Func prep_func_;
     std::tuple<Args...> args_;
     HandleBox<Handle> finish_handle_;

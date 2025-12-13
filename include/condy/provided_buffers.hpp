@@ -27,19 +27,35 @@ public:
         auto &context = Context::current();
         auto bgid = context.runtime()->next_bgid();
 
-        int r;
-        br_ = io_uring_setup_buf_ring(context.ring()->ring(), capacity_, bgid,
-                                      flags, &r);
-        if (br_ == nullptr) {
-            throw_exception("io_uring_setup_buf_ring failed", -r);
+        size_t data_size = capacity_ * sizeof(io_uring_buf);
+        void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
+                          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+        if (data == MAP_FAILED) {
+            throw std::bad_alloc();
         }
+        br_ = reinterpret_cast<io_uring_buf_ring *>(data);
+        io_uring_buf_ring_init(br_);
+
+        io_uring_buf_reg reg = {};
+        reg.ring_addr = reinterpret_cast<uint64_t>(br_);
+        reg.ring_entries = capacity_;
+        reg.bgid = bgid;
+        int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
+        if (r != 0) {
+            munmap(data, data_size);
+            throw_exception("io_uring_register_buf_ring failed", -r);
+        }
+
         bgid_ = bgid;
     }
 
     ~BundledProvidedBufferQueue() {
         assert(br_ != nullptr);
-        io_uring_free_buf_ring(Context::current().ring()->ring(), br_,
-                               capacity_, bgid_);
+        size_t data_size = capacity_ * sizeof(io_uring_buf);
+        munmap(br_, data_size);
+        [[maybe_unused]] int r = io_uring_unregister_buf_ring(
+            Context::current().ring()->ring(), bgid_);
+        assert(r == 0);
     }
 
     BundledProvidedBufferQueue(const BundledProvidedBufferQueue &) = delete;
