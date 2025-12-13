@@ -364,8 +364,7 @@ TEST_CASE("test async_operations - read incr provided buffer") {
         REQUIRE(r == msg_len);
         auto [n2, buf2] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
         REQUIRE(n2 == msg_len);
-        REQUIRE(std::memcmp(static_cast<char *>(buf2.data()) + n, msg,
-                            msg_len) == 0);
+        REQUIRE(std::memcmp(buf2.data(), msg, msg_len) == 0);
         REQUIRE(buf2.owns_buffer() == false);
     };
     condy::sync_wait(func());
@@ -389,13 +388,13 @@ TEST_CASE("test async_operations - recv bundle provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferPool buf_pool(2, 8);
 
-        auto [n, buf] =
+        auto [n, bufs] =
             co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
         REQUIRE(n == msg_len);
-        REQUIRE(buf.size() == 2);
+        REQUIRE(bufs.size() == 2);
         char temp[64];
-        std::memcpy(temp, buf[0].data(), buf[0].size());
-        std::memcpy(temp + buf[0].size(), buf[1].data(), n - buf[0].size());
+        std::memcpy(temp, bufs[0].data(), bufs[0].size());
+        std::memcpy(temp + bufs[0].size(), bufs[1].data(), n - bufs[0].size());
         REQUIRE(std::memcmp(temp, msg, msg_len) == 0);
     };
     condy::sync_wait(func());
@@ -419,24 +418,38 @@ TEST_CASE("test async_operations - recv incr and bundle provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferPool buf_pool(2, 16, IOU_PBUF_RING_INC);
 
-        auto [n, buf] =
+        auto [n, bufs] =
             co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
         REQUIRE(n == msg_len);
-        REQUIRE(buf.size() == 1);
-        REQUIRE(buf[0].owns_buffer() == false);
-        REQUIRE(std::memcmp(buf[0].data(), msg, msg_len) == 0);
+        REQUIRE(bufs.size() == 1);
+        REQUIRE(bufs[0].owns_buffer() == false);
+        REQUIRE(std::memcmp(bufs[0].data(), msg, msg_len) == 0);
 
         int r = ::write(sv[1], msg, msg_len);
         REQUIRE(r == msg_len);
         r = write(sv[1], msg, msg_len);
         REQUIRE(r == msg_len);
 
-        auto [n2, buf2] =
+        auto [n2, bufs2] =
             co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
         REQUIRE(n2 == msg_len * 2);
-        REQUIRE(buf2.size() == 2);
-        REQUIRE(buf2[0].owns_buffer() == true);
-        REQUIRE(buf2[1].owns_buffer() == true);
+        REQUIRE(bufs2.size() == 3); // 3 + 16 + 16
+        REQUIRE(bufs2[0].size() == 3);
+        REQUIRE(bufs2[1].size() == 16);
+        REQUIRE(bufs2[2].size() == 16);
+
+        std::string actual;
+        int rest = n2;
+        for (const auto &buf : bufs2) {
+            REQUIRE(buf.owns_buffer());
+            actual.append(static_cast<char *>(buf.data()),
+                          std::min<size_t>(buf.size(), rest));
+            rest -= buf.size();
+        }
+        std::string expected;
+        expected.append(msg, msg_len);
+        expected.append(msg, msg_len);
+        REQUIRE(actual == expected);
     };
     condy::sync_wait(func());
 
@@ -531,9 +544,11 @@ TEST_CASE("test async_operations - send provided buffer") {
 
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(2);
-        queue.push(condy::buffer(msg, msg_len));
-        int r = co_await condy::async_send(sv[1], std::move(queue), 0);
+        auto bid = queue.push(condy::buffer(msg, msg_len));
+        auto [r, binfo] = co_await condy::async_send(sv[1], queue, 0);
         REQUIRE(r == msg_len);
+        REQUIRE(binfo.num_buffers == 1);
+        REQUIRE(binfo.bid == bid);
     };
     condy::sync_wait(func());
 
@@ -541,34 +556,6 @@ TEST_CASE("test async_operations - send provided buffer") {
     ssize_t n = ::read(sv[0], read_buf, sizeof(read_buf));
     REQUIRE(n == msg_len);
     REQUIRE(std::memcmp(read_buf, msg, msg_len) == 0);
-
-    close(sv[0]);
-    close(sv[1]);
-}
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-TEST_CASE("test async_operations - send bundle provided buffer") {
-    int sv[2];
-    create_tcp_socketpair(sv);
-
-    char msg[] = "Hello, condy!";
-    size_t msg_len = std::strlen(msg);
-
-    auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferQueue queue(2);
-        queue.push(condy::buffer(msg, msg_len));
-        queue.push(condy::buffer(msg, msg_len));
-        int r = co_await condy::async_send(sv[1], condy::bundled((queue)), 0);
-        REQUIRE(r == msg_len * 2);
-    };
-    condy::sync_wait(func());
-
-    char read_buf[64];
-    ssize_t n = ::read(sv[0], read_buf, sizeof(read_buf));
-    REQUIRE(n == 2 * msg_len);
-    REQUIRE(std::memcmp(read_buf, msg, msg_len) == 0);
-    REQUIRE(std::memcmp(read_buf + msg_len, msg, msg_len) == 0);
 
     close(sv[0]);
     close(sv[1]);

@@ -3,6 +3,7 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
+#include "condy/provided_buffers.hpp"
 #include "condy/ring.hpp"
 #include <liburing.h>
 #include <type_traits>
@@ -14,59 +15,6 @@
 #endif
 
 namespace condy {
-
-class ProvidedBufferPool {
-public:
-    ProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
-                       unsigned int flags = 0)
-        : impl_(std::make_shared<detail::ProvidedBufferPoolImpl>(
-              Context::current().ring()->ring(),
-              Context::current().runtime()->next_bgid(), log_num_buffers,
-              buffer_size, flags)) {}
-
-    ProvidedBufferPool(ProvidedBufferPool &&) = default;
-
-    ProvidedBufferPool(const ProvidedBufferPool &) = delete;
-    ProvidedBufferPool &operator=(const ProvidedBufferPool &) = delete;
-    ProvidedBufferPool &operator=(ProvidedBufferPool &&) = delete;
-
-public:
-    detail::ProvidedBufferPoolImplPtr copy_impl() const & { return impl_; }
-    detail::ProvidedBufferPoolImplPtr copy_impl() && {
-        return std::move(impl_);
-    }
-
-private:
-    detail::ProvidedBufferPoolImplPtr impl_;
-};
-
-class ProvidedBufferQueue {
-public:
-    ProvidedBufferQueue(size_t log_num_buffers, unsigned int flags = 0)
-        : impl_(std::make_shared<detail::ProvidedBufferQueueImpl>(
-              Context::current().ring()->ring(),
-              Context::current().runtime()->next_bgid(), log_num_buffers,
-              flags)) {}
-
-    ProvidedBufferQueue(ProvidedBufferQueue &&) = default;
-
-    ProvidedBufferQueue(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue &operator=(const ProvidedBufferQueue &) = delete;
-    ProvidedBufferQueue &operator=(ProvidedBufferQueue &&) = delete;
-
-public:
-    template <typename Buffer> void push(Buffer &&buffer) {
-        impl_->submit_buffer(std::forward<Buffer>(buffer));
-    }
-
-    detail::ProvidedBufferQueueImplPtr copy_impl() const & { return impl_; }
-    detail::ProvidedBufferQueueImplPtr copy_impl() && {
-        return std::move(impl_);
-    }
-
-private:
-    detail::ProvidedBufferQueueImplPtr impl_;
-};
 
 namespace detail {
 
@@ -86,34 +34,21 @@ void maybe_add_fixed_fd_flag(OpAwaiter &, int) { /* No-op */ }
 template <typename Fd>
 constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
 
-template <typename ProvidedBuffers> class BundleProvidedBuffers {
-public:
-    BundleProvidedBuffers(ProvidedBuffers &buffer) : buffer_(buffer) {}
-
-    ProvidedBuffers &get() { return buffer_; }
-
-private:
-    ProvidedBuffers &buffer_;
-};
-
-template <typename Buffer>
-struct is_bundle_provided_buffers : public std::false_type {};
-
-template <typename Buffer>
-struct is_bundle_provided_buffers<BundleProvidedBuffers<Buffer>>
-    : public std::true_type {};
-
-template <typename Buffer>
-constexpr bool is_bundle_provided_buffers_v =
-    is_bundle_provided_buffers<std::decay_t<Buffer>>::value;
-
 template <typename Buffer>
 constexpr bool is_provided_buffer_pool_v =
-    std::is_same_v<std::decay_t<Buffer>, ProvidedBufferPool>;
+    std::is_same_v<Buffer, ProvidedBufferPool &>;
+
+template <typename Buffer>
+constexpr bool is_bundled_provided_buffer_pool_v =
+    std::is_same_v<Buffer, BundledProvidedBufferPool &>;
 
 template <typename Buffer>
 constexpr bool is_provided_buffer_queue_v =
-    std::is_same_v<std::decay_t<Buffer>, ProvidedBufferQueue>;
+    std::is_same_v<Buffer, ProvidedBufferQueue &>;
+
+template <typename Buffer>
+constexpr bool is_bundled_provided_buffer_queue_v =
+    std::is_same_v<Buffer, BundledProvidedBufferQueue &>;
 
 template <typename BufferBase> class FixedBuffer : public BufferBase {
 public:
@@ -170,8 +105,11 @@ inline auto fixed(int buf_index, const iovec *iov) {
 }
 
 // Helper to bundle provided buffers
-template <typename ProvidedBuffers> auto bundled(ProvidedBuffers &buffer) {
-    return detail::BundleProvidedBuffers<std::decay_t<ProvidedBuffers>>(buffer);
+inline auto &bundled(ProvidedBufferPool &buffer) {
+    return static_cast<BundledProvidedBufferPool &>(buffer);
+}
+inline auto &bundled(ProvidedBufferQueue &buffer) {
+    return static_cast<BundledProvidedBufferQueue &>(buffer);
 }
 
 template <typename Fd1, typename Fd2>
@@ -241,10 +179,9 @@ inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
 
 template <typename Fd, typename MultiShotFunc, typename Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
-                                    Buffer &&buf_pool, MultiShotFunc &&func) {
-    auto op = make_multishot_select_buffer_no_bundle_recv_op_awaiter(
-        std::forward<MultiShotFunc>(func),
-        std::forward<Buffer>(buf_pool).copy_impl(),
+                                    Buffer &&buf, MultiShotFunc &&func) {
+    auto op = make_multishot_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func), &buf,
         io_uring_prep_recvmsg_multishot, fd, msg, flags);
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
@@ -363,10 +300,14 @@ inline auto async_close(detail::FixedFd fd) {
 template <typename Fd, typename Buffer>
 inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
     auto op = [&] {
-        if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
-            return make_select_buffer_no_bundle_recv_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_read, fd,
-                nullptr, 0, offset);
+        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
+                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
+            return make_bundle_select_buffer_op_awaiter(
+                &buf, io_uring_prep_read, fd, nullptr, 0, offset);
+        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
+                             detail::is_provided_buffer_queue_v<Buffer>) {
+            return make_select_buffer_op_awaiter(&buf, io_uring_prep_read, fd,
+                                                 nullptr, 0, offset);
         } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(io_uring_prep_read_fixed, fd, buf.data(),
                                    buf.size(), offset, buf.buf_index());
@@ -387,14 +328,13 @@ inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
         io_uring_prep_rw(IORING_OP_READ_MULTISHOT, sqe, fd, nullptr, 0, offset);
     };
     auto op = [&] {
-        if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_multishot_select_buffer_recv_op_awaiter(
-                std::forward<MultiShotFunc>(func),
-                std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
+                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
+            return make_multishot_bundle_select_buffer_op_awaiter(
+                std::forward<MultiShotFunc>(func), &buf, prep, fd, offset);
         } else {
-            return make_multishot_select_buffer_no_bundle_recv_op_awaiter(
-                std::forward<MultiShotFunc>(func),
-                std::forward<Buffer>(buf).copy_impl(), prep, fd, offset);
+            return make_multishot_select_buffer_op_awaiter(
+                std::forward<MultiShotFunc>(func), &buf, prep, fd, offset);
         }
     }();
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -483,14 +423,13 @@ inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
         if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(detail::prep_send_fixed, sockfd, buf.data(),
                                    buf.size(), flags, buf.buf_index());
-        } else if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_select_buffer_bundle_send_op_awaiter(
-                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_send,
-                sockfd, nullptr, 0, flags);
+        } else if constexpr (detail::is_bundled_provided_buffer_queue_v<
+                                 Buffer>) {
+            return make_bundle_select_buffer_op_awaiter(
+                &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_send_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_send,
-                sockfd, nullptr, 0, flags);
+            return make_select_buffer_op_awaiter(&buf, io_uring_prep_send,
+                                                 sockfd, nullptr, 0, flags);
         } else {
             return make_op_awaiter(io_uring_prep_send, sockfd, buf.data(),
                                    buf.size(), flags);
@@ -508,14 +447,15 @@ inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
             return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
                                    buf.data(), buf.size(), flags, addr, addrlen,
                                    buf.buf_index());
-        } else if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_select_buffer_bundle_send_op_awaiter(
-                std::forward<Buffer>(buf).get().copy_impl(),
-                detail::prep_sendto, sockfd, nullptr, 0, flags, addr, addrlen);
+        } else if constexpr (detail::is_bundled_provided_buffer_queue_v<
+                                 Buffer>) {
+            return make_bundle_select_buffer_op_awaiter(
+                &buf, detail::prep_sendto, sockfd, nullptr, 0, flags, addr,
+                addrlen);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_send_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), detail::prep_sendto,
-                sockfd, nullptr, 0, flags, addr, addrlen);
+            return make_select_buffer_op_awaiter(&buf, detail::prep_sendto,
+                                                 sockfd, nullptr, 0, flags,
+                                                 addr, addrlen);
         } else {
             return make_op_awaiter(detail::prep_sendto, sockfd, buf.data(),
                                    buf.size(), flags, addr, addrlen);
@@ -587,14 +527,14 @@ inline void prep_recv_fixed(io_uring_sqe *sqe, int sockfd, void *buf,
 template <typename Fd, typename Buffer>
 inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
-        if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_select_buffer_recv_op_awaiter(
-                std::forward<Buffer>(buf).get().copy_impl(), io_uring_prep_recv,
-                sockfd, nullptr, 0, flags);
-        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer>) {
-            return make_select_buffer_no_bundle_recv_op_awaiter(
-                std::forward<Buffer>(buf).copy_impl(), io_uring_prep_recv,
-                sockfd, nullptr, 0, flags);
+        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
+                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
+            return make_bundle_select_buffer_op_awaiter(
+                &buf, io_uring_prep_recv, sockfd, nullptr, 0, flags);
+        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
+                             detail::is_provided_buffer_queue_v<Buffer>) {
+            return make_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
+                                                 sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
             return make_op_awaiter(detail::prep_recv_fixed, sockfd, buf.data(),
                                    buf.size(), flags, buf.buf_index());
@@ -611,15 +551,14 @@ template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
                                  MultiShotFunc &&func) {
     auto op = [&] {
-        if constexpr (detail::is_bundle_provided_buffers_v<Buffer>) {
-            return make_multishot_select_buffer_recv_op_awaiter(
-                std::forward<MultiShotFunc>(func),
-                std::forward<Buffer>(buf).get().copy_impl(),
+        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
+                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
+            return make_multishot_bundle_select_buffer_op_awaiter(
+                std::forward<MultiShotFunc>(func), &buf,
                 io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
         } else {
-            return make_multishot_select_buffer_no_bundle_recv_op_awaiter(
-                std::forward<MultiShotFunc>(func),
-                std::forward<Buffer>(buf).copy_impl(),
+            return make_multishot_select_buffer_op_awaiter(
+                std::forward<MultiShotFunc>(func), &buf,
                 io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
         }
     }();

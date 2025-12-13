@@ -85,95 +85,6 @@ template <typename MultiShotFunc>
 using MultiShotOpFinishHandle =
     MultiShotMixin<MultiShotFunc, ExtendOpFinishHandle>;
 
-template <typename HandleBase> class SelectBufferRecvMixin : public HandleBase {
-public:
-    using ReturnType = std::pair<int, std::vector<ProvidedBuffer>>;
-
-    template <typename... Args>
-    SelectBufferRecvMixin(detail::ProvidedBufferPoolImplPtr buffers_impl,
-                          Args &&...args)
-        : HandleBase(std::forward<Args>(args)...),
-          buffers_impl_(std::move(buffers_impl)) {}
-
-    ReturnType extract_result() {
-        std::vector<ProvidedBuffer> entries;
-        if (this->flags_ & IORING_CQE_F_BUFFER) {
-            extract_buffers_(entries);
-        }
-        return std::make_pair(this->res_, std::move(entries));
-    }
-
-private:
-    void extract_buffers_(std::vector<ProvidedBuffer> &entries) {
-        int res = this->res_;
-        assert(res >= 0);
-        const size_t buf_size = buffers_impl_->buffer_size();
-
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-        if (this->flags_ & IORING_CQE_F_BUF_MORE) {
-            // Must be partial consumption
-            assert(static_cast<size_t>(res) < buf_size);
-            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
-            entries.emplace_back(buffers_impl_, data, buf_size, false);
-            return;
-        }
-#endif
-        // One or more full buffers consumed
-        const size_t buf_mask = buf_size - 1;
-        size_t num_buffers = (res + buf_size - 1) / buf_size;
-        int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-        for (size_t i = 0; i < num_buffers; i++) {
-            void *data = buffers_impl_->get_buffer(static_cast<size_t>(bid));
-            // NOTE: No std::move here, since buffers_impl_ may be used
-            // multiple times (multishot)
-            entries.emplace_back(buffers_impl_, data, buf_size);
-            bid = (bid + 1) & buf_mask;
-        }
-    }
-
-    detail::ProvidedBufferPoolImplPtr buffers_impl_;
-};
-
-template <typename HandleBase>
-class SelectBufferNoBundleRecvMixin : public SelectBufferRecvMixin<HandleBase> {
-public:
-    using ReturnType = std::pair<int, ProvidedBuffer>;
-
-    using Base = SelectBufferRecvMixin<HandleBase>;
-
-    template <typename... Args>
-    SelectBufferNoBundleRecvMixin(
-        detail::ProvidedBufferPoolImplPtr buffers_impl, Args &&...args)
-        : SelectBufferRecvMixin<HandleBase>(std::move(buffers_impl),
-                                            std::forward<Args>(args)...) {}
-
-    ReturnType extract_result() {
-        auto result = Base::extract_result();
-        auto &[res, entries] = result;
-        if (entries.empty()) {
-            assert(res < 0);
-            return std::make_pair(res, ProvidedBuffer{});
-        }
-        assert(entries.size() == 1);
-        return std::make_pair(res, std::move(entries[0]));
-    }
-};
-
-using SelectBufferRecvOpFinishHandle = SelectBufferRecvMixin<OpFinishHandle>;
-
-using SelectBufferNoBundleRecvOpFinishHandle =
-    SelectBufferNoBundleRecvMixin<OpFinishHandle>;
-
-template <typename MultiShotFunc>
-using MultiShotSelectBufferRecvOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferRecvMixin<ExtendOpFinishHandle>>;
-
-template <typename MultiShotFunc>
-using MultiShotSelectBufferNoBundleRecvOpFinishHandle =
-    MultiShotMixin<MultiShotFunc,
-                   SelectBufferNoBundleRecvMixin<ExtendOpFinishHandle>>;
-
 template <typename Func, typename HandleBase>
 class ZeroCopyMixin : public HandleBase {
 public:
@@ -198,42 +109,34 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
-template <typename HandleBase> class SelectBufferSendMixin : public HandleBase {
+template <typename ProvidedBufferContainer, typename HandleBase>
+class SelectBufferMixin : public HandleBase {
 public:
-    using ReturnType = int;
+    using ReturnType =
+        std::pair<int, typename ProvidedBufferContainer::ReturnType>;
 
     template <typename... Args>
-    SelectBufferSendMixin(detail::ProvidedBufferQueueImplPtr buffers_impl,
-                          Args &&...args)
-        : HandleBase(std::forward<Args>(args)...),
-          buffers_impl_(std::move(buffers_impl)) {}
+    SelectBufferMixin(ProvidedBufferContainer *buffers, Args &&...args)
+        : HandleBase(std::forward<Args>(args)...), buffers_(buffers) {}
 
     ReturnType extract_result() {
         int res = this->res_;
-        if (this->flags_ & IORING_CQE_F_BUFFER) {
-            assert(res >= 0);
-            int bid = this->flags_ >> IORING_CQE_BUFFER_SHIFT;
-            size_t sent_size = static_cast<size_t>(res);
-
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-            if (this->flags_ & IORING_CQE_F_BUF_MORE) {
-                // TODO: Any use case for send partial buffer?
-                // Must be partial consumption
-                buffers_impl_->partial_remove_buffer(bid, sent_size);
-                return res;
-            }
-#endif
-            // Entire buffer(s) has been sent, remove it/them from the queue
-            buffers_impl_->remove_buffer(bid, sent_size);
-        }
-        return res;
+        return std::make_pair(
+            res, buffers_->handle_finish(this->res_, this->flags_));
     }
 
 private:
-    detail::ProvidedBufferQueueImplPtr buffers_impl_;
+    ProvidedBufferContainer *buffers_;
 };
 
-using SelectBufferSendOpFinishHandle = SelectBufferSendMixin<OpFinishHandle>;
+template <typename ProvidedBufferContainer>
+using SelectBufferOpFinishHandle =
+    SelectBufferMixin<ProvidedBufferContainer, OpFinishHandle>;
+
+template <typename MultiShotFunc, typename ProvidedBufferContainer>
+using MultiShotSelectBufferOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, SelectBufferMixin<ProvidedBufferContainer,
+                                                    ExtendOpFinishHandle>>;
 
 template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
 public:
