@@ -4,10 +4,12 @@
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime.hpp"
+#include "condy/utils.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <liburing.h>
 #include <stdexcept>
+#include <sys/mman.h>
 #include <sys/types.h>
 
 namespace condy {
@@ -21,9 +23,11 @@ class BundledProvidedBufferQueue {
 public:
     using ReturnType = BufferInfo;
 
-    BundledProvidedBufferQueue(size_t log_capacity, unsigned int flags = 0)
-        : capacity_(1ll << log_capacity) {
-        assert(log_capacity <= 15);
+    BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
+        : capacity_(capacity) {
+        if (!is_power_of_two(capacity)) {
+            throw std::invalid_argument("capacity must be a power of two");
+        }
         auto &context = Context::current();
         auto bgid = context.runtime()->next_bgid();
 
@@ -176,10 +180,12 @@ class BundledProvidedBufferPool {
 public:
     using ReturnType = std::vector<ProvidedBuffer>;
 
-    BundledProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
+    BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                               unsigned int flags = 0)
-        : num_buffers_(1ll << log_num_buffers), buffer_size_(buffer_size) {
-        assert(log_num_buffers <= 15);
+        : num_buffers_(num_buffers), buffer_size_(buffer_size) {
+        if (!is_power_of_two(num_buffers)) {
+            throw std::invalid_argument("num_buffers must be a power of two");
+        }
 
         auto &context = Context::current();
         auto bgid = context.runtime()->next_bgid();
@@ -322,9 +328,9 @@ class ProvidedBufferPool : public BundledProvidedBufferPool {
 public:
     using ReturnType = ProvidedBuffer;
 
-    ProvidedBufferPool(size_t log_num_buffers, size_t buffer_size,
+    ProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                        unsigned int flags = 0)
-        : BundledProvidedBufferPool(log_num_buffers, buffer_size, flags) {}
+        : BundledProvidedBufferPool(num_buffers, buffer_size, flags) {}
 
 public:
     ReturnType handle_finish(int32_t res, uint32_t flags) {

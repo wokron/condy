@@ -1,5 +1,6 @@
 #include <condy/utils.hpp>
 #include <doctest/doctest.h>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -39,4 +40,17 @@ TEST_CASE("test uninitialized - std::unique_ptr") {
     }
 
     REQUIRE(int_deleter::called);
+}
+
+TEST_CASE("test is_power_of_two") {
+    uint16_t next_power_of_two = 1;
+    uint16_t max = std::numeric_limits<uint16_t>::max();
+    for (uint16_t i = 1; i < max; ++i) {
+        if (i == next_power_of_two) {
+            REQUIRE_MESSAGE(condy::is_power_of_two(i), "i=", i);
+            next_power_of_two <<= 1;
+        } else {
+            REQUIRE_MESSAGE(!condy::is_power_of_two(i), "i=", i);
+        }
+    }
 }

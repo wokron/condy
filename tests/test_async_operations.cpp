@@ -128,7 +128,7 @@ TEST_CASE("test async_operations - recvmsg multishot") {
 
         condy::Channel<std::pair<int, condy::ProvidedBuffer>> channel(8);
 
-        condy::ProvidedBufferPool buf_pool(2, 256);
+        condy::ProvidedBufferPool buf_pool(4, 256);
 
         auto t = condy::co_spawn(sender());
 
@@ -266,7 +266,7 @@ TEST_CASE("test async_operations - read provided buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferPool buf_pool(2, 64);
+        condy::ProvidedBufferPool buf_pool(4, 64);
 
         auto [n, buf] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
         REQUIRE(n == msg_len);
@@ -290,7 +290,7 @@ TEST_CASE("test async_operations - read incr provided buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferPool buf_pool(2, 64, IOU_PBUF_RING_INC);
+        condy::ProvidedBufferPool buf_pool(4, 64, IOU_PBUF_RING_INC);
 
         auto [n, buf] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
         REQUIRE(n == msg_len);
@@ -323,7 +323,7 @@ TEST_CASE("test async_operations - recv bundle provided buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferPool buf_pool(2, 8);
+        condy::ProvidedBufferPool buf_pool(4, 8);
 
         auto [n, bufs] =
             co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
@@ -353,7 +353,7 @@ TEST_CASE("test async_operations - recv incr and bundle provided buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferPool buf_pool(2, 16, IOU_PBUF_RING_INC);
+        condy::ProvidedBufferPool buf_pool(4, 16, IOU_PBUF_RING_INC);
 
         auto [n, bufs] =
             co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
@@ -480,7 +480,7 @@ TEST_CASE("test async_operations - send provided buffer") {
     size_t msg_len = std::strlen(msg);
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::ProvidedBufferQueue queue(2);
+        condy::ProvidedBufferQueue queue(4);
         auto bid = queue.push(condy::buffer(msg, msg_len));
         auto [r, binfo] = co_await condy::async_send(sv[1], queue, 0);
         REQUIRE(r == msg_len);
@@ -932,7 +932,7 @@ TEST_CASE("test async_operations - test recvmsg - multishot") {
         size_t count = 0;
         std::string actual;
 
-        condy::ProvidedBufferQueue queue(2);
+        condy::ProvidedBufferQueue queue(4);
         char bufs[2][256];
         uint16_t bid;
         bid = queue.push(condy::buffer(bufs[0]));
@@ -958,7 +958,7 @@ TEST_CASE("test async_operations - test recvmsg - multishot") {
         REQUIRE(res == -ENOBUFS);
         REQUIRE(count == 2);
 
-        condy::ProvidedBufferPool buf_pool(4, 256);
+        condy::ProvidedBufferPool buf_pool(16, 256);
 
         auto [res2, buf] = co_await condy::async_recvmsg_multishot(
             sv[0], &msg_hdr, 0, buf_pool, [&](auto r) {
@@ -1662,7 +1662,7 @@ TEST_CASE("test async_operations - test read - provided buffer") {
         std::string actual;
 
         char buf[2][256];
-        condy::ProvidedBufferQueue queue(1);
+        condy::ProvidedBufferQueue queue(2);
         uint16_t bid = queue.push(condy::buffer(buf[0]));
         REQUIRE(bid == 0);
         bid = queue.push(condy::buffer(buf[1]));
@@ -1680,7 +1680,7 @@ TEST_CASE("test async_operations - test read - provided buffer") {
         REQUIRE(binfo2.bid == 1);
         actual.append(static_cast<char *>(buf[binfo2.bid]), r2);
 
-        condy::ProvidedBufferPool buf_pool(1, 256);
+        condy::ProvidedBufferPool buf_pool(2, 256);
         auto [r3, buf3] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
         REQUIRE(r3 == 256);
         actual.append(static_cast<char *>(buf3.data()), r3);
@@ -1712,7 +1712,7 @@ TEST_CASE("test async_operations - test read - multishot") {
         size_t count = 0;
         std::string actual;
 
-        condy::ProvidedBufferPool pool(1, 256);
+        condy::ProvidedBufferPool pool(2, 256);
 
         condy::Channel<condy::ProvidedBuffer> channel(2);
 

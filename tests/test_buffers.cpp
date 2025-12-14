@@ -54,7 +54,7 @@ TEST_CASE("test buffers - buffer vector") {
 
 TEST_CASE("test buffers - provided buffer queue init") {
     auto func = []() -> condy::Coro<void> {
-        condy::ProvidedBufferQueue queue(4);
+        condy::ProvidedBufferQueue queue(16);
         char data1[16], data2[16];
         queue.push(condy::buffer(data1));
         queue.push(condy::buffer(data2));
@@ -72,7 +72,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
 
     condy::Context::current().init(&ring, &runtime);
 
-    condy::ProvidedBufferQueue queue(2);
+    condy::ProvidedBufferQueue queue(4);
     REQUIRE(queue.capacity() == (1 << 2));
 
     char buf1[32], buf2[32];
@@ -120,7 +120,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
 
 TEST_CASE("test buffers - provided buffer pool init") {
     auto func = []() -> condy::Coro<void> {
-        condy::ProvidedBufferPool pool(4, 16);
+        condy::ProvidedBufferPool pool(16, 16);
         co_return;
     };
 
@@ -135,7 +135,7 @@ TEST_CASE("test buffers - provided buffer pool usage") {
 
     condy::Context::current().init(&ring, &runtime);
 
-    condy::ProvidedBufferPool pool(2, 16);
+    condy::ProvidedBufferPool pool(4, 16);
     REQUIRE(pool.capacity() == (1 << 2));
 
     int pipefd[2];

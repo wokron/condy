@@ -224,7 +224,7 @@ TEST_CASE("test op_awaiter - select buffer op") {
     context.init(&ring, &runtime);
 
     {
-        condy::ProvidedBufferPool pool(4, 32);
+        condy::ProvidedBufferPool pool(16, 32);
 
         int pipefd[2];
         REQUIRE(pipe(pipefd) == 0);
