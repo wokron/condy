@@ -1,6 +1,5 @@
 #pragma once
 
-#include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
@@ -13,6 +12,16 @@
 #include <variant>
 #include <vector>
 
+// Cancel method for finish handles
+#define DEFINE_CANCEL_METHOD_()                                                \
+    void cancel() {                                                            \
+        auto *ring = Context::current().ring();                                \
+        io_uring_sqe *sqe = ring->get_sqe();                                   \
+        io_uring_prep_cancel(sqe, encode_work(this, work_type), 0);            \
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));    \
+        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);                   \
+    }
+
 namespace condy {
 
 class Ring;
@@ -22,13 +31,7 @@ public:
     static constexpr WorkType work_type = WorkType::Common;
     using ReturnType = int;
 
-    void cancel() {
-        auto *ring = Context::current().ring();
-        io_uring_sqe *sqe = ring->get_sqe();
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
-        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-    }
+    DEFINE_CANCEL_METHOD_();
 
     void set_result(int res, int flags) {
         res_ = res;
@@ -74,6 +77,8 @@ public:
         };
     }
 
+    DEFINE_CANCEL_METHOD_();
+
 private:
     void invoke_multishot_() { func_(HandleBase::extract_result()); }
 
@@ -98,6 +103,8 @@ public:
             self->invoke_notify_();
         };
     }
+
+    DEFINE_CANCEL_METHOD_();
 
 private:
     void invoke_notify_() { free_func_(this->res_); }
@@ -388,5 +395,7 @@ private:
         }
     }
 };
+
+#undef DEFINE_CANCEL_METHOD_
 
 } // namespace condy

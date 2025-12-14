@@ -191,6 +191,9 @@ inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
 template <typename Fd, typename MultiShotFunc, typename Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
                                     Buffer &&buf, MultiShotFunc &&func) {
+    static_assert(detail::is_provided_buffer_pool_v<Buffer> ||
+                      detail::is_provided_buffer_queue_v<Buffer>,
+                  "Buffer must be a ProvidedBufferPool or ProvidedBufferQueue");
     auto op = make_multishot_select_buffer_op_awaiter(
         std::forward<MultiShotFunc>(func), &buf,
         io_uring_prep_recvmsg_multishot, fd, msg, flags);
@@ -341,12 +344,8 @@ inline auto async_close(detail::FixedFd fd) {
 template <typename Fd, typename Buffer>
 inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
     auto op = [&] {
-        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
-                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_bundle_select_buffer_op_awaiter(
-                &buf, io_uring_prep_read, fd, nullptr, 0, offset);
-        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
-                             detail::is_provided_buffer_queue_v<Buffer>) {
+        if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
+                      detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_op_awaiter(&buf, io_uring_prep_read, fd,
                                                  nullptr, 0, offset);
         } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
@@ -365,18 +364,12 @@ inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
 template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
                                  MultiShotFunc &&func) {
-    auto op = [&] {
-        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
-                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_multishot_bundle_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf,
-                io_uring_prep_read_multishot, fd, 0, offset, buf.bgid());
-        } else {
-            return make_multishot_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf,
-                io_uring_prep_read_multishot, fd, 0, offset, buf.bgid());
-        }
-    }();
+    static_assert(detail::is_provided_buffer_queue_v<Buffer> ||
+                      detail::is_provided_buffer_pool_v<Buffer>,
+                  "Buffer must be a ProvidedBufferPool or ProvidedBufferQueue");
+    auto op = make_multishot_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func), &buf, io_uring_prep_read_multishot,
+        fd, 0, offset, buf.bgid());
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
 }
