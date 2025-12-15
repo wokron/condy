@@ -453,11 +453,7 @@ inline void prep_sendto_zc_fixed(io_uring_sqe *sqe, int sockfd, const void *buf,
 template <typename Fd, typename Buffer>
 inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
-        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(detail::prep_send_fixed, sockfd, buf.data(),
-                                   buf.size(), flags, buf.buf_index());
-        } else if constexpr (detail::is_bundled_provided_buffer_queue_v<
-                                 Buffer>) {
+        if constexpr (detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_bundle_select_buffer_op_awaiter(
                 &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
@@ -537,17 +533,6 @@ inline auto async_sendto_zc(Fd sockfd, Buffer &&buf, int flags,
     return op;
 }
 
-namespace detail {
-
-inline void prep_recv_fixed(io_uring_sqe *sqe, int sockfd, void *buf,
-                            size_t len, int flags, int buf_index) {
-    io_uring_prep_recv(sqe, sockfd, buf, len, flags);
-    sqe->ioprio |= IORING_RECVSEND_FIXED_BUF;
-    sqe->buf_index = buf_index;
-}
-
-} // namespace detail
-
 template <typename Fd, typename Buffer>
 inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
@@ -559,9 +544,6 @@ inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
                              detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
                                                  sockfd, nullptr, 0, flags);
-        } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(detail::prep_recv_fixed, sockfd, buf.data(),
-                                   buf.size(), flags, buf.buf_index());
         } else {
             return make_op_awaiter(io_uring_prep_recv, sockfd, buf.data(),
                                    buf.size(), flags);
@@ -611,7 +593,7 @@ inline auto async_unlinkat(int dfd, const char *path, int flags) {
 }
 
 inline auto async_unlink(const char *path, int flags) {
-    return make_op_awaiter(io_uring_prep_unlink, path, flags);
+    return async_unlinkat(AT_FDCWD, path, flags);
 }
 
 inline auto async_renameat(int olddfd, const char *oldpath, int newdfd,
@@ -621,7 +603,7 @@ inline auto async_renameat(int olddfd, const char *oldpath, int newdfd,
 }
 
 inline auto async_rename(const char *oldpath, const char *newpath) {
-    return make_op_awaiter(io_uring_prep_rename, oldpath, newpath);
+    return async_renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
 }
 
 template <typename Fd>

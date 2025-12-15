@@ -10,7 +10,12 @@ template <typename T, typename Allocator>
 T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     auto t = co_spawn(runtime, std::move(coro));
     runtime.done();
-    runtime.run();
+    try {
+        runtime.run();
+    } catch (...) {
+        t.detach();
+        throw;
+    }
     return t.wait();
 }
 
