@@ -3,7 +3,6 @@
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
-#include "condy/runtime.hpp"
 #include "condy/utils.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -29,7 +28,7 @@ public:
             throw std::invalid_argument("capacity must be a power of two");
         }
         auto &context = Context::current();
-        auto bgid = context.runtime()->next_bgid();
+        auto bgid = context.next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -188,7 +187,7 @@ public:
         }
 
         auto &context = Context::current();
-        auto bgid = context.runtime()->next_bgid();
+        auto bgid = context.next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,

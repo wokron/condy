@@ -2,6 +2,7 @@
 
 #include "condy/singleton.hpp"
 #include <cassert>
+#include <cstdint>
 
 namespace condy {
 
@@ -14,19 +15,24 @@ public:
     void init(Ring *ring, Runtime *runtime) {
         ring_ = ring;
         runtime_ = runtime;
+        next_bgid_ = 0;
     }
     void reset() {
         ring_ = nullptr;
         runtime_ = nullptr;
+        next_bgid_ = 0;
     }
 
     Ring *ring() { return ring_; }
 
     Runtime *runtime() { return runtime_; }
 
+    uint16_t next_bgid() { return next_bgid_++; }
+
 private:
     Ring *ring_ = nullptr;
     Runtime *runtime_ = nullptr;
+    uint16_t next_bgid_ = 0;
 };
 
 } // namespace condy

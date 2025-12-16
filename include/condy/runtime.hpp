@@ -163,8 +163,6 @@ public:
         }
     }
 
-    uint16_t next_bgid() { return next_bgid_++; }
-
     auto &fd_table() { return ring_.fd_table(); }
 
     auto &buffer_table() { return ring_.buffer_table(); }
@@ -272,7 +270,6 @@ private:
     WorkListQueue local_queue_;
     Ring ring_;
     size_t tick_count_ = 0;
-    uint16_t next_bgid_ = 0;
 
     // Configurable parameters
     size_t event_interval_ = 61;
