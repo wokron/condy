@@ -333,6 +333,15 @@ inline auto async_openat_direct(int dfd, const char *path, int flags,
                            file_index);
 }
 
+inline auto async_open(const char *path, int flags, mode_t mode) {
+    return async_openat(AT_FDCWD, path, flags, mode);
+}
+
+inline auto async_open_direct(const char *path, int flags, mode_t mode,
+                              unsigned file_index) {
+    return async_openat_direct(AT_FDCWD, path, flags, mode, file_index);
+}
+
 inline auto async_close(int fd) {
     return make_op_awaiter(io_uring_prep_close, fd);
 }
@@ -403,9 +412,25 @@ inline auto async_fadvise(Fd fd, __u64 offset, off_t len, int advice) {
     return op;
 }
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <typename Fd>
+inline auto async_fadvise64(Fd fd, __u64 offset, off_t len, int advice) {
+    auto op = make_op_awaiter(io_uring_prep_fadvise64, fd, offset, len, advice);
+    detail::maybe_add_fixed_fd_flag(op, fd);
+    return op;
+}
+#endif
+
 inline auto async_madvise(void *addr, __u32 length, int advice) {
     return make_op_awaiter(io_uring_prep_madvise, addr, length, advice);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+inline auto async_madvise64(void *addr, off_t length, int advice) {
+    auto op = make_op_awaiter(io_uring_prep_madvise64, addr, length, advice);
+    return op;
+}
+#endif
 
 namespace detail {
 
@@ -620,7 +645,7 @@ inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
 }
 
 inline auto async_mkdir(const char *path, mode_t mode) {
-    return make_op_awaiter(io_uring_prep_mkdir, path, mode);
+    return async_mkdirat(AT_FDCWD, path, mode);
 }
 
 inline auto async_symlinkat(const char *target, int newdirfd,
@@ -629,7 +654,7 @@ inline auto async_symlinkat(const char *target, int newdirfd,
 }
 
 inline auto async_symlink(const char *target, const char *linkpath) {
-    return make_op_awaiter(io_uring_prep_symlink, target, linkpath);
+    return async_symlinkat(target, AT_FDCWD, linkpath);
 }
 
 inline auto async_linkat(int olddfd, const char *oldpath, int newdfd,
@@ -639,7 +664,7 @@ inline auto async_linkat(int olddfd, const char *oldpath, int newdfd,
 }
 
 inline auto async_link(const char *oldpath, const char *newpath, int flags) {
-    return make_op_awaiter(io_uring_prep_link, oldpath, newpath, flags);
+    return async_linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, flags);
 }
 
 inline auto async_getxattr(const char *name, char *value, const char *path,
@@ -653,21 +678,17 @@ inline auto async_setxattr(const char *name, const char *value,
                            len);
 }
 
-template <typename Fd>
-inline auto async_fgetxattr(Fd fd, const char *name, char *value,
+inline auto async_fgetxattr(int fd, const char *name, char *value,
                             unsigned int len) {
-    auto op = make_op_awaiter(io_uring_prep_fgetxattr, fd, name, value, len);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    // TODO: Seems fixed fd not supported?
+    return make_op_awaiter(io_uring_prep_fgetxattr, fd, name, value, len);
 }
 
-template <typename Fd>
-inline auto async_fsetxattr(Fd fd, const char *name, const char *value,
+inline auto async_fsetxattr(int fd, const char *name, const char *value,
                             int flags, unsigned int len) {
-    auto op =
-        make_op_awaiter(io_uring_prep_fsetxattr, fd, name, value, flags, len);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    // TODO: Seems fixed fd not supported?
+    return make_op_awaiter(io_uring_prep_fsetxattr, fd, name, value, flags,
+                           len);
 }
 
 inline auto async_socket(int domain, int type, int protocol,
@@ -739,22 +760,6 @@ template <typename Fd> inline auto async_ftruncate(Fd fd, loff_t len) {
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 template <typename Fd>
-inline auto async_fadvise64(Fd fd, __u64 offset, off_t len, int advice) {
-    auto op = make_op_awaiter(io_uring_prep_fadvise64, fd, offset, len, advice);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
-}
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-inline auto async_madvise64(void *addr, off_t length, int advice) {
-    auto op = make_op_awaiter(io_uring_prep_madvise64, addr, length, advice);
-    return op;
-}
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename Fd>
 inline auto async_bind(Fd fd, struct sockaddr *addr, socklen_t addrlen) {
     auto op = make_op_awaiter(io_uring_prep_bind, fd, addr, addrlen);
     detail::maybe_add_fixed_fd_flag(op, fd);
@@ -776,20 +781,6 @@ inline auto async_cmd_discard(Fd fd, uint64_t offset, uint64_t nbytes) {
     auto op = make_op_awaiter(io_uring_prep_cmd_discard, fd, offset, nbytes);
     detail::maybe_add_fixed_fd_flag(op, fd);
     return op;
-}
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-inline auto async_open(const char *path, int flags, mode_t mode) {
-    return make_op_awaiter(io_uring_prep_open, path, flags, mode);
-}
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-inline auto async_open_direct(const char *path, int flags, mode_t mode,
-                              unsigned file_index) {
-    return make_op_awaiter(io_uring_prep_open_direct, path, flags, mode,
-                           file_index);
 }
 #endif
 
