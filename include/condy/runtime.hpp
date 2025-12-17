@@ -92,7 +92,7 @@ public:
             return;
         }
 
-        if (runtime != nullptr && this->ring_enabled_) {
+        if (runtime != nullptr && state_.load() == State::Enabled) {
             __tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
@@ -101,7 +101,7 @@ public:
         }
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
-        if (runtime == nullptr && this->ring_enabled_) {
+        if (runtime == nullptr && state_.load() == State::Enabled) {
             __tsan_release(work);
             io_uring_sqe sqe = {};
             prep_msg_ring_(&sqe, work);
@@ -131,7 +131,7 @@ public:
         r = io_uring_enable_rings(ring_.ring());
         assert(r == 0);
 
-        ring_enabled_ = true;
+        state_.store(State::Enabled);
 
         r = io_uring_register_ring_fd(ring_.ring());
         assert(r == 1); // 1 indicates success for this call
@@ -251,9 +251,10 @@ private:
 
 private:
     enum class State {
-        Idle,
-        Running,
-        Stopped,
+        Idle,    // Not running
+        Running, // Started running
+        Enabled, // Running and ring enabled
+        Stopped, // Stopped
     };
     static_assert(std::atomic<State>::is_always_lock_free);
 
@@ -263,7 +264,6 @@ private:
     eventfd_t dummy_;
     int notify_fd_;
     std::atomic_size_t pending_works_ = 1;
-    std::atomic_bool ring_enabled_ = false;
     std::atomic<State> state_ = State::Idle;
 
     // Local state
