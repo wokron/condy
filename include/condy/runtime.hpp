@@ -20,6 +20,32 @@ namespace condy {
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
+// TODO: Use futex to implement this
+class AsyncWaiter {
+public:
+    AsyncWaiter() {
+        notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        if (notify_fd_ < 0) {
+            throw_exception("Failed to create eventfd for AsyncWaiter");
+        }
+    }
+
+    ~AsyncWaiter() { close(notify_fd_); }
+
+    void async_wait(Ring &ring, void *data) {
+        eventfd_read(notify_fd_, &dummy_);
+        io_uring_sqe *sqe = ring.get_sqe();
+        io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
+        io_uring_sqe_set_data(sqe, data);
+    }
+
+    void notify(Ring &) { eventfd_write(notify_fd_, 1); }
+
+private:
+    int notify_fd_;
+    eventfd_t dummy_;
+};
+
 class Runtime {
 public:
     Runtime(const RuntimeOptions &options = {}) {
@@ -60,17 +86,9 @@ public:
         ring_.init(ring_entries, &params);
 
         event_interval_ = options.event_interval_;
-
-        notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-        if (notify_fd_ < 0) {
-            throw_exception("Failed to create eventfd for runtime");
-        }
     }
 
-    ~Runtime() {
-        close(notify_fd_);
-        ring_.destroy();
-    }
+    ~Runtime() { ring_.destroy(); }
 
     Runtime(const Runtime &) = delete;
     Runtime &operator=(const Runtime &) = delete;
@@ -83,7 +101,7 @@ public:
         notify();
     }
 
-    void notify() { eventfd_write(notify_fd_, 1); }
+    void notify() { async_waiter_.notify(ring_); }
 
     void schedule(WorkInvoker *work) {
         auto *runtime = Context::current().runtime();
@@ -113,7 +131,7 @@ public:
 
         std::lock_guard<std::mutex> lock(mutex_);
         global_queue_.push_back(work);
-        eventfd_write(notify_fd_, 1);
+        notify();
     }
 
     void pend_work() { pending_works_++; }
@@ -174,14 +192,7 @@ public:
 private:
     void flush_global_queue_() {
         local_queue_.push_back(std::move(global_queue_));
-        eventfd_read(notify_fd_, &dummy_);
-        io_uring_sqe *sqe = ring_.get_sqe();
-        prep_read_notify_fd_(sqe);
-    }
-
-    void prep_read_notify_fd_(io_uring_sqe *sqe) {
-        io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Notify));
+        async_waiter_.async_wait(ring_, encode_work(nullptr, WorkType::Notify));
     }
 
     void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work) {
@@ -260,9 +271,8 @@ private:
 
     // Global state
     std::mutex mutex_;
+    AsyncWaiter async_waiter_;
     WorkListQueue global_queue_;
-    eventfd_t dummy_;
-    int notify_fd_;
     std::atomic_size_t pending_works_ = 1;
     std::atomic<State> state_ = State::Idle;
 
@@ -277,6 +287,7 @@ private:
 
 inline auto &current_runtime() { return *Context::current().runtime(); }
 
+// TODO: Remove these functions
 inline auto &current_fd_table() { return current_runtime().fd_table(); }
 
 inline auto &current_buffer_table() { return current_runtime().buffer_table(); }
