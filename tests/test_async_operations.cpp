@@ -11,9 +11,11 @@
 #include <doctest/doctest.h>
 #include <fcntl.h>
 #include <liburing.h>
+#include <linux/futex.h>
 #include <netinet/in.h>
 #include <string_view>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/xattr.h>
 #include <thread>
 #include <unistd.h>
@@ -3163,7 +3165,29 @@ TEST_CASE("test async_operations - test waitid") {
 }
 #endif
 
-// TODO: Unit tests for futex
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+TEST_CASE("test async_operations - test futex - wait/wake") {
+    uint32_t futex_var = 0;
+
+    auto waker = [&]() -> condy::Coro<void> {
+        futex_var = 1;
+        int r = co_await condy::async_futex_wake(
+            &futex_var, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        REQUIRE(r >= 0);
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(waker());
+        int r = co_await condy::async_futex_wait(
+            &futex_var, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        REQUIRE(r == 0);
+
+        co_await std::move(t);
+    };
+    condy::sync_wait(func());
+}
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 TEST_CASE("test async_operations - test fixed_fd_install") {
