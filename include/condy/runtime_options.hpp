@@ -1,10 +1,15 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <stdexcept>
 
 namespace condy {
 
+class Runtime;
+
+// TODO: Test these options
 struct RuntimeOptions {
 public:
     using Self = RuntimeOptions;
@@ -14,13 +19,21 @@ public:
         return *this;
     }
 
-    Self &enable_sqpoll(size_t idle_time_ms = 1000) {
+    Self &enable_iopoll(bool hybrid = false) {
+        enable_iopoll_ = true;
+        enable_hybrid_iopoll_ = hybrid;
+        return *this;
+    }
+
+    Self &enable_sqpoll(size_t idle_time_ms = 1000,
+                        std::optional<uint32_t> cpu = std::nullopt) {
         if (enable_defer_taskrun_ || enable_coop_taskrun_) {
             throw std::logic_error(
                 "sqpoll cannot be enabled with defer_taskrun or coop_taskrun");
         }
         enable_sqpoll_ = true;
         sqpoll_idle_time_ms_ = idle_time_ms;
+        sqpoll_thread_cpu_ = cpu;
         return *this;
     }
 
@@ -43,12 +56,18 @@ public:
         return *this;
     }
 
-    Self &enable_coop_taskrun() {
+    Self &enable_attach_wq(Runtime &other) {
+        attach_wq_target_ = &other;
+        return *this;
+    }
+
+    Self &enable_coop_taskrun(bool taskrun_flag = false) {
         if (enable_sqpoll_ || enable_defer_taskrun_) {
             throw std::logic_error(
                 "coop_taskrun cannot be enabled with sqpoll or defer_taskrun");
         }
         enable_coop_taskrun_ = true;
+        enable_coop_taskrun_flag_ = taskrun_flag;
         return *this;
     }
 
@@ -64,12 +83,17 @@ public:
 
 protected:
     size_t event_interval_ = 61;
+    bool enable_iopoll_ = false;
+    bool enable_hybrid_iopoll_ = false;
     bool enable_sqpoll_ = false;
     size_t sqpoll_idle_time_ms_ = 1000;
+    std::optional<uint32_t> sqpoll_thread_cpu_ = std::nullopt;
     bool enable_defer_taskrun_ = false;
     size_t sq_size_ = 128;
     size_t cq_size_ = 1024;
+    Runtime *attach_wq_target_ = nullptr;
     bool enable_coop_taskrun_ = false;
+    bool enable_coop_taskrun_flag_ = false;
     bool enable_sqe128_ = false;
     bool enable_cqe32_ = false;
 

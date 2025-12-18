@@ -62,9 +62,27 @@ public:
             params.cq_entries = options.cq_size_;
         }
 
+        if (options.enable_iopoll_) {
+            params.flags |= IORING_SETUP_IOPOLL;
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+            if (options.enable_hybrid_iopoll_) {
+                params.flags |= IORING_SETUP_HYBRID_IOPOLL;
+            }
+#endif
+        }
+
         if (options.enable_sqpoll_) {
             params.flags |= IORING_SETUP_SQPOLL;
             params.sq_thread_idle = options.sqpoll_idle_time_ms_;
+            if (options.sqpoll_thread_cpu_.has_value()) {
+                params.flags |= IORING_SETUP_SQ_AFF;
+                params.sq_thread_cpu = *options.sqpoll_thread_cpu_;
+            }
+        }
+
+        if (options.attach_wq_target_ != nullptr) {
+            params.flags |= IORING_SETUP_ATTACH_WQ;
+            params.wq_fd = options.attach_wq_target_->ring_.ring()->ring_fd;
         }
 
         if (options.enable_defer_taskrun_) {
@@ -73,6 +91,9 @@ public:
 
         if (options.enable_coop_taskrun_) {
             params.flags |= IORING_SETUP_COOP_TASKRUN;
+            if (options.enable_coop_taskrun_flag_) {
+                params.flags |= IORING_SETUP_TASKRUN_FLAG;
+            }
         }
 
         if (options.enable_sqe128_) {
