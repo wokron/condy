@@ -54,6 +54,7 @@ public:
 
         params.flags |= IORING_SETUP_CLAMP;
         params.flags |= IORING_SETUP_SINGLE_ISSUER;
+        params.flags |= IORING_SETUP_SUBMIT_ALL;
         params.flags |= IORING_SETUP_R_DISABLED;
 
         size_t ring_entries = options.sq_size_;
@@ -104,7 +105,20 @@ public:
             params.flags |= IORING_SETUP_CQE32;
         }
 
-        ring_.init(ring_entries, &params);
+        void *buf = nullptr;
+        size_t buf_size = 0;
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
+        if (options.no_mmap_buf_ != nullptr) {
+            params.flags |= IORING_SETUP_NO_MMAP;
+            buf = options.no_mmap_buf_;
+            buf_size = options.no_mmap_buf_size_;
+        }
+#endif
+
+        int r = ring_.init(ring_entries, &params, buf, buf_size);
+        if (r < 0) {
+            throw make_system_error("io_uring_queue_init_params", -r);
+        }
 
         event_interval_ = options.event_interval_;
     }

@@ -81,6 +81,16 @@ public:
         return *this;
     }
 
+    Self &enable_no_mmap(void *buf, size_t buf_size) {
+        if (buf == nullptr || buf_size == 0) {
+            throw std::invalid_argument(
+                "Buffer and buffer size must be non-zero for no_mmap");
+        }
+        no_mmap_buf_ = buf;
+        no_mmap_buf_size_ = buf_size;
+        return *this;
+    }
+
 protected:
     size_t event_interval_ = 61;
     bool enable_iopoll_ = false;
@@ -96,6 +106,8 @@ protected:
     bool enable_coop_taskrun_flag_ = false;
     bool enable_sqe128_ = false;
     bool enable_cqe32_ = false;
+    void *no_mmap_buf_ = nullptr;
+    size_t no_mmap_buf_size_ = 0;
 
     friend class Runtime;
 };

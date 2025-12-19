@@ -165,16 +165,24 @@ public:
     Ring &operator=(Ring &&) = delete;
 
 public:
-    void init(unsigned int entries, io_uring_params *params) {
+    int init(unsigned int entries, io_uring_params *params,
+             [[maybe_unused]] void *buf = nullptr,
+             [[maybe_unused]] size_t buf_size = 0) {
         int r;
         assert(!initialized_);
-        r = io_uring_queue_init_params(entries, &ring_, params);
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
+        if (params->flags & IORING_SETUP_NO_MMAP) {
+            r = io_uring_queue_init_mem(entries, &ring_, params, buf, buf_size);
+        } else
+#endif
+            r = io_uring_queue_init_params(entries, &ring_, params);
         if (r < 0) {
-            throw make_system_error("io_uring_queue_init_params", -r);
+            return r;
         }
         features_ = params->features;
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
         initialized_ = true;
+        return r;
     }
 
     void destroy() {
@@ -184,10 +192,7 @@ public:
         }
     }
 
-    void submit() {
-        unsubmitted_count_ = 0;
-        io_uring_submit(&ring_);
-    }
+    void submit() { io_uring_submit(&ring_); }
 
     template <typename Func>
     size_t reap_completions(Func &&process_func, bool submit_and_wait = false) {
@@ -257,7 +262,6 @@ public:
             if (r < 0) {
                 throw make_system_error("io_uring_submit", -r);
             }
-            unsubmitted_count_ = 0;
             if (sqpoll_mode_) {
                 r = io_uring_sqring_wait(&ring_);
                 if (r < 0) {
@@ -274,7 +278,6 @@ private:
     bool initialized_ = false;
     io_uring ring_;
     bool sqpoll_mode_ = false;
-    size_t unsubmitted_count_ = 0;
 
     FdTable fd_table_{ring_};
     BufferTable buffer_table_{ring_};
