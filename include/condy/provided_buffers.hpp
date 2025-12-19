@@ -46,7 +46,7 @@ public:
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) {
             munmap(data, data_size);
-            throw_exception("io_uring_register_buf_ring failed", -r);
+            throw make_system_error("io_uring_register_buf_ring", -r);
         }
 
         bgid_ = bgid;
@@ -205,7 +205,7 @@ public:
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) {
             munmap(data, data_size);
-            throw_exception("io_uring_register_buf_ring failed", -r);
+            throw make_system_error("io_uring_register_buf_ring", -r);
         }
 
         bgid_ = bgid;

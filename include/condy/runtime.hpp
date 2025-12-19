@@ -26,7 +26,7 @@ public:
     AsyncWaiter() {
         notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
         if (notify_fd_ < 0) {
-            throw_exception("Failed to create eventfd for AsyncWaiter");
+            throw make_system_error("eventfd", errno);
         }
     }
 

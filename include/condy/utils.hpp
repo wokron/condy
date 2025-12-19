@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 #if defined(__has_feature)
@@ -112,19 +113,8 @@ private:
     alignas(T) unsigned char storage_[sizeof(T)];
 };
 
-template <typename ExceptionType = std::runtime_error>
-[[noreturn]] inline void throw_exception(const char *msg, int error_code) {
-    std::string full_msg;
-    full_msg += msg;
-    full_msg += ": ";
-    full_msg += std::strerror(error_code);
-    throw ExceptionType(full_msg);
-}
-
-template <typename ExceptionType = std::runtime_error>
-[[noreturn]] inline void throw_exception(const char *msg) {
-    int error_code = errno;
-    throw_exception<ExceptionType>(msg, error_code);
+inline auto make_system_error(const char *msg, int ec) {
+    return std::system_error(ec, std::generic_category(), msg);
 }
 
 template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {

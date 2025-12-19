@@ -170,7 +170,7 @@ public:
         assert(!initialized_);
         r = io_uring_queue_init_params(entries, &ring_, params);
         if (r < 0) {
-            throw_exception("io_uring_queue_init_params failed", -r);
+            throw make_system_error("io_uring_queue_init_params", -r);
         }
         features_ = params->features;
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
@@ -203,7 +203,7 @@ public:
                 } else if (r == -EINTR) {
                     continue;
                 } else {
-                    throw_exception("io_uring_submit_and_wait failed", -r);
+                    throw make_system_error("io_uring_submit_and_wait", -r);
                 }
             } while (true);
 
@@ -255,13 +255,13 @@ public:
             }
             r = io_uring_submit(&ring_);
             if (r < 0) {
-                throw_exception("io_uring_submit failed", -r);
+                throw make_system_error("io_uring_submit", -r);
             }
             unsubmitted_count_ = 0;
             if (sqpoll_mode_) {
                 r = io_uring_sqring_wait(&ring_);
                 if (r < 0) {
-                    throw_exception("io_uring_sqring_wait failed", -r);
+                    throw make_system_error("io_uring_sqring_wait", -r);
                 }
             }
         } while (true);
