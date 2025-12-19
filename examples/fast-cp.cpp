@@ -83,12 +83,12 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
         exit(1);
     }
 
-    auto &fd_table = condy::current_fd_table();
+    auto &fd_table = condy::current_runtime().fd_table();
     fd_table.init(2);
     int fds[2] = {infd, outfd};
     fd_table.update_files(0, fds, 2);
 
-    auto &buffer_table = condy::current_buffer_table();
+    auto &buffer_table = condy::current_runtime().buffer_table();
     buffer_table.init(1);
     iovec iov{
         .iov_base = raw_buffer,

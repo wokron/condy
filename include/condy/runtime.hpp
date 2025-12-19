@@ -308,11 +308,4 @@ private:
 
 inline auto &current_runtime() { return *Context::current().runtime(); }
 
-// TODO: Remove these functions
-inline auto &current_fd_table() { return current_runtime().fd_table(); }
-
-inline auto &current_buffer_table() { return current_runtime().buffer_table(); }
-
-inline auto current_features() { return current_runtime().features(); }
-
 } // namespace condy

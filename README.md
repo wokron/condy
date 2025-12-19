@@ -574,7 +574,7 @@ condy::Coro<void> session(int session_fd) {
 
 An io_uring feature: Fixed file descriptors (fixed fd) reduce per-operation overhead. Normally, each async operation increments/decrements the file's kernel reference count. Registered files bypass these adjustments, improving performance.  
 
-* Use `current_fd_table()` to get the `FdTable` object of the current Runtime.
+* Use `Runtime::fd_table()` to get the `FdTable` object of the current Runtime.
 * Call `init` to initialize the table capacity before usage.
 * Use `update_files` or `async_update_files` to register/unregister a file descriptor
 * In asynchronous operations, pass a fixed fd using `fixed(fd)` to convert an `int` to `FixedFd`.
@@ -587,7 +587,7 @@ Example:
 
 condy::Coro<int> co_main() {
     // Initialize fd table with capacity 4
-    condy::current_fd_table().init(4);
+    condy::current_runtime().fd_table().init(4);
 
     // Create file and register to FdTable; CONDY_FILE_INDEX_ALLOC allocates a free slot
     int fd = co_await condy::async_openat_direct(
@@ -616,7 +616,7 @@ int main() { return condy::sync_wait(co_main()); }
 
 An io_uring feature: fixed buffers reduce per-operation overhead, especially for O_DIRECT reads and writes. Registering a buffer maps it into the kernel once and avoids repeated page reference updates, improving performance.
 
-* Use `current_buffer_table()` to get the `BufferTable` object of the current Runtime.
+* Use `Runtime::buffer_table()` to get the `BufferTable` object of the current Runtime.
 * Call `init` to initialize the table capacity before usage.
 * Use `update_buffers` to register/unregister a buffer.
 * In asynchronous operations, pass a fixed buffer using `fixed(index, buf)` where `index` is the slot in the registration table. The memory region pointed to by buf must be within the range of the corresponding registered buffer.
@@ -628,7 +628,7 @@ Example:
 
 condy::Coro<int> co_main() {
     // Get the buffer registration table of the current Runtime
-    auto &table = condy::current_buffer_table();
+    auto &table = condy::current_runtime().buffer_table();
     table.init(4);  // Initialize capacity to 4
 
     int fd = co_await condy::async_openat(AT_FDCWD, "result.txt",

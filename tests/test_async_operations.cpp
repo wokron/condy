@@ -85,7 +85,7 @@ TEST_CASE("test async_operations - splice fixed fd") {
     REQUIRE(bytes_written == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
 
         auto r = co_await fd_table.async_update_files(pipe_fds1, 2, 0);
@@ -193,7 +193,7 @@ TEST_CASE("test async_operations - read fixed buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         char buf_storage[64];
         iovec buf_storage_iov{
@@ -225,7 +225,7 @@ TEST_CASE("test async_operations - readv fixed buffer") {
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         char buf_storage[64];
         iovec buf_storage_iov{
@@ -406,7 +406,7 @@ TEST_CASE("test async_operations - write fixed buffer") {
     size_t msg_len = std::strlen(msg);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec buf_storage_iov{
             .iov_base = const_cast<char *>(msg),
@@ -438,7 +438,7 @@ TEST_CASE("test async_operations - writev fixed buffer") {
     size_t msg_len = std::strlen(msg);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec buf_storage_iov{
             .iov_base = const_cast<char *>(msg),
@@ -601,7 +601,7 @@ TEST_CASE("test async_operations - test splice - fixed fd") {
     r = write(pipe_fds[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
         auto r1 = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r1 == 2);
@@ -685,7 +685,7 @@ TEST_CASE("test async_operations - test tee - fixed fd") {
     r = write(pipe_fds[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
         auto r1 = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r1 == 2);
@@ -743,7 +743,7 @@ TEST_CASE("test async_operations - test readv - basic") {
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
         // Test fixed fd as well
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -783,7 +783,7 @@ TEST_CASE("test async_operations - test readv - fixed buffer") {
     auto func = [&]() -> condy::Coro<void> {
         char bufs[4][256];
 
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = bufs,
@@ -821,7 +821,7 @@ TEST_CASE("test async_operations - test writev - basic") {
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
         // Test fixed fd as well
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -859,7 +859,7 @@ TEST_CASE("test async_operations - test writev - fixed buffer") {
     auto func = [&]() -> condy::Coro<void> {
         char bufs[4][256];
 
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = bufs,
@@ -1062,7 +1062,7 @@ TEST_CASE("test async_operations - test sendmsg - zero copy fixed buffer") {
         msg_hdr.msg_iov = &iov;
         msg_hdr.msg_iovlen = 1;
 
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         buffer_table.update_buffers(0, &iov, 1);
 
@@ -1199,7 +1199,7 @@ TEST_CASE("test async_operations - test accept - direct") {
     auto main = [&]() -> condy::Coro<void> {
         std::jthread client_thread(client);
 
-        condy::current_fd_table().init(2);
+        condy::current_runtime().fd_table().init(2);
 
         struct sockaddr_in addr {};
         socklen_t addrlen = sizeof(addr);
@@ -1302,7 +1302,7 @@ TEST_CASE("test async_operations - test accept - multishot direct") {
         using condy::operators::operator||;
         std::jthread client_thread(client);
 
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
 
         size_t count = 0;
@@ -1358,7 +1358,7 @@ TEST_CASE("test async_operations - test cancel fd - fixed fd") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         int r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -1453,7 +1453,7 @@ TEST_CASE("test async_operations - test connect - fixed fd") {
     auto main = [&]() -> condy::Coro<void> {
         std::jthread server_thread(server);
 
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
 
         for (int i = 0; i < 4; i++) {
@@ -1507,7 +1507,7 @@ TEST_CASE("test async_operations - test fallocate - fixed fd") {
     });
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
@@ -1546,7 +1546,7 @@ TEST_CASE("test async_operations - test openat - direct") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(8);
 
         int rfd =
@@ -1581,7 +1581,7 @@ TEST_CASE("test async_operations - test open - direct") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(8);
 
         int rfd = co_await condy::async_open_direct(name, O_RDONLY, 0, 0);
@@ -1597,7 +1597,7 @@ TEST_CASE("test async_operations - test close") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         int r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -1640,7 +1640,7 @@ TEST_CASE("test async_operations - test read - fixed fd") {
     r = write(pipe_fds[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -1668,7 +1668,7 @@ TEST_CASE("test async_operations - test read - fixed buffer") {
     auto func = [&]() -> condy::Coro<void> {
         char buf[2048];
 
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = buf,
@@ -1816,7 +1816,7 @@ TEST_CASE("test async_operations - test write - fixed fd") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
@@ -1843,7 +1843,7 @@ TEST_CASE("test async_operations - test write - fixed buffer") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = msg.data(),
@@ -1916,7 +1916,7 @@ TEST_CASE("test async_operations - test fadvise - fixed fd") {
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
@@ -1964,7 +1964,7 @@ TEST_CASE("test async_operations - test fadvise64 - fixed fd") {
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
@@ -2036,7 +2036,7 @@ TEST_CASE("test async_operations - test send - fixed fd") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         int r = co_await fd_table.async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
@@ -2149,7 +2149,7 @@ TEST_CASE("test async_operations - test send - zero copy fixed buffer") {
     auto msg = generate_data(1024);
     bool called = false;
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = const_cast<char *>(msg.data()),
@@ -2227,7 +2227,7 @@ TEST_CASE("test async_operations - test sendto - fixed fd") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(&sender_fd, 1, 0);
         REQUIRE(r == 1);
@@ -2400,7 +2400,7 @@ TEST_CASE("test async_operations - test sendto - zero copy fixed buffer") {
     auto msg = generate_data(1024);
     bool called = false;
     auto func = [&]() -> condy::Coro<void> {
-        auto &buffer_table = condy::current_buffer_table();
+        auto &buffer_table = condy::current_runtime().buffer_table();
         buffer_table.init(1);
         iovec register_iov{
             .iov_base = const_cast<char *>(msg.data()),
@@ -2454,7 +2454,7 @@ TEST_CASE("test async_operations - test recv - fixed fd") {
     REQUIRE(r == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         r = co_await fd_table.async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
@@ -2689,7 +2689,7 @@ TEST_CASE("test async_operations - test openat2 - direct") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
 
         struct open_how how {};
@@ -2725,7 +2725,7 @@ TEST_CASE("test async_operations - test shutdown - fixed fd") {
     create_tcp_socketpair(sv);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
         int r = co_await fd_table.async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
@@ -3094,7 +3094,7 @@ TEST_CASE("test async_operations - test socket - basic") {
 
 TEST_CASE("test async_operations - test socket - direct") {
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
 
         int r = co_await condy::async_socket_direct(AF_INET, SOCK_STREAM, 0,
@@ -3127,7 +3127,7 @@ TEST_CASE("test async_operations - test cmd_sock - fixed fd") {
     int listen_fd = create_accept_socket();
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&listen_fd, 1, 0);
         REQUIRE(r == 1);
@@ -3196,7 +3196,7 @@ TEST_CASE("test async_operations - test fixed_fd_install") {
 
     auto msg = generate_data(512);
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
 
         int r = co_await fd_table.async_update_files(sv, 2, 0);
@@ -3249,7 +3249,7 @@ TEST_CASE("test async_operations - test ftruncate - fixed fd") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
@@ -3298,7 +3298,7 @@ TEST_CASE("test async_operations - test bind - fixed fd") {
     bind_addr.sin_port = 0; // Let OS choose the port
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&sock_fd, 1, 0);
         REQUIRE(r == 1);
@@ -3348,7 +3348,7 @@ TEST_CASE("test async_operations - test listen - fixed fd") {
     REQUIRE(r == 0);
 
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
         int r = co_await fd_table.async_update_files(&sock_fd, 1, 0);
         REQUIRE(r == 1);
@@ -3394,7 +3394,7 @@ TEST_CASE("test async_operations - test pipe - direct") {
 
     auto msg = generate_data(128);
     auto func = [&]() -> condy::Coro<void> {
-        auto &fd_table = condy::current_fd_table();
+        auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
 
         int r = co_await condy::async_pipe_direct(pipe_fds, 0, 0);
