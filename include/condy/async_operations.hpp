@@ -680,13 +680,11 @@ inline auto async_setxattr(const char *name, const char *value,
 
 inline auto async_fgetxattr(int fd, const char *name, char *value,
                             unsigned int len) {
-    // TODO: Seems fixed fd not supported?
     return make_op_awaiter(io_uring_prep_fgetxattr, fd, name, value, len);
 }
 
 inline auto async_fsetxattr(int fd, const char *name, const char *value,
                             int flags, unsigned int len) {
-    // TODO: Seems fixed fd not supported?
     return make_op_awaiter(io_uring_prep_fsetxattr, fd, name, value, flags,
                            len);
 }
