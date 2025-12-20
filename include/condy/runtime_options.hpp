@@ -9,7 +9,6 @@ namespace condy {
 
 class Runtime;
 
-// TODO: Test these options
 struct RuntimeOptions {
 public:
     using Self = RuntimeOptions;
@@ -81,11 +80,8 @@ public:
         return *this;
     }
 
-    Self &enable_no_mmap(void *buf, size_t buf_size) {
-        if (buf == nullptr || buf_size == 0) {
-            throw std::invalid_argument(
-                "Buffer and buffer size must be non-zero for no_mmap");
-        }
+    Self &enable_no_mmap(void *buf = nullptr, size_t buf_size = 0) {
+        enable_no_mmap_ = true;
         no_mmap_buf_ = buf;
         no_mmap_buf_size_ = buf_size;
         return *this;
@@ -100,12 +96,13 @@ protected:
     std::optional<uint32_t> sqpoll_thread_cpu_ = std::nullopt;
     bool enable_defer_taskrun_ = false;
     size_t sq_size_ = 128;
-    size_t cq_size_ = 1024;
+    size_t cq_size_ = 0; // 0 means default
     Runtime *attach_wq_target_ = nullptr;
     bool enable_coop_taskrun_ = false;
     bool enable_coop_taskrun_flag_ = false;
     bool enable_sqe128_ = false;
     bool enable_cqe32_ = false;
+    bool enable_no_mmap_ = false;
     void *no_mmap_buf_ = nullptr;
     size_t no_mmap_buf_size_ = 0;
 

@@ -58,7 +58,7 @@ public:
         params.flags |= IORING_SETUP_R_DISABLED;
 
         size_t ring_entries = options.sq_size_;
-        if (options.cq_size_ != ring_entries * 2) {
+        if (options.cq_size_ != 0) { // 0 means default
             params.flags |= IORING_SETUP_CQSIZE;
             params.cq_entries = options.cq_size_;
         }
@@ -108,7 +108,7 @@ public:
         void *buf = nullptr;
         size_t buf_size = 0;
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
-        if (options.no_mmap_buf_ != nullptr) {
+        if (options.enable_no_mmap_) {
             params.flags |= IORING_SETUP_NO_MMAP;
             buf = options.no_mmap_buf_;
             buf_size = options.no_mmap_buf_size_;
