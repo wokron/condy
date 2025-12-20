@@ -45,14 +45,12 @@ private:
     TimerFinishHandle *handle_ptr_;
 };
 
-template <typename Handle, typename Func, typename... Args>
-class OpAwaiterBase {
+template <typename Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
-    OpAwaiterBase(HandleBox<Handle> handle, Func func, Args... args)
-        : prep_func_(func), args_(std::make_tuple(std::move(args)...)),
-          finish_handle_(std::move(handle)) {}
+    OpAwaiterBase(HandleBox<Handle> handle, Func func)
+        : prep_func_(func), finish_handle_(std::move(handle)) {}
     OpAwaiterBase(OpAwaiterBase &&) = default;
 
     OpAwaiterBase(const OpAwaiterBase &) = delete;
@@ -88,107 +86,85 @@ public:
 public:
     void add_flags(unsigned int flags) { flags_ |= flags; }
 
-    void add_ioprio(unsigned int ioprio) { ioprio_ |= ioprio; }
-
-    void set_bgid(int bgid) { bgid_ = bgid; }
-
 private:
     void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
-        std::apply(
-            [&](auto &&...args) {
-                prep_func_(sqe, std::forward<decltype(args)>(args)...);
-            },
-            args_);
-        sqe->buf_group = bgid_;
+        prep_func_(sqe);
         sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
-        sqe->ioprio |= ioprio_;
         io_uring_sqe_set_data(
             sqe, encode_work(&finish_handle_.get(), Handle::work_type));
     }
 
 protected:
-    // TODO: We don't need both prep_func_ and args_, just a lambda that
-    // captures everything is enough.
     Func prep_func_;
-    std::tuple<Args...> args_;
     HandleBox<Handle> finish_handle_;
-    uint16_t bgid_ = 0;
-    uint16_t ioprio_ = 0;
     uint8_t flags_ = 0;
 };
 
-template <typename Func, typename... Args>
-class [[nodiscard]] OpAwaiter
-    : public OpAwaiterBase<OpFinishHandle, Func, Args...> {
+template <typename Func>
+class [[nodiscard]] OpAwaiter : public OpAwaiterBase<OpFinishHandle, Func> {
 public:
-    using Base = OpAwaiterBase<OpFinishHandle, Func, Args...>;
-    OpAwaiter(Func func, Args... args)
-        : Base(OpFinishHandle(), func, args...) {}
+    using Base = OpAwaiterBase<OpFinishHandle, Func>;
+    OpAwaiter(Func func) : Base(OpFinishHandle(), func) {}
 };
 
-template <typename MultiShotFunc, typename Func, typename... Args>
+template <typename MultiShotFunc, typename Func>
 class [[nodiscard]] MultiShotOpAwaiter
-    : public OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func,
-                           Args...> {
+    : public OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func> {
 public:
-    using Base =
-        OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func, Args...>;
-    MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func, Args... args)
+    using Base = OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func>;
+    MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func)
         : Base(
               MultiShotOpFinishHandle<MultiShotFunc>(std::move(multishot_func)),
-              func, args...) {}
+              func) {}
 };
 
-template <typename FreeFunc, typename Func, typename... Args>
+template <typename FreeFunc, typename Func>
 class [[nodiscard]] ZeroCopyOpAwaiter
-    : public OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func, Args...> {
+    : public OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func> {
 public:
-    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func, Args...>;
-    ZeroCopyOpAwaiter(FreeFunc free_func, Func func, Args... args)
-        : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func,
-               args...) {}
+    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func>;
+    ZeroCopyOpAwaiter(FreeFunc free_func, Func func)
+        : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func) {}
 };
 
-template <typename ProvidedBufferContainer, typename Func, typename... Args>
+template <typename ProvidedBufferContainer, typename Func>
 class [[nodiscard]] SelectBufferOpAwaiter
     : public OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>,
-                           Func, Args...> {
+                           Func> {
 public:
     using Base =
-        OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>, Func,
-                      Args...>;
-    SelectBufferOpAwaiter(ProvidedBufferContainer *buffers, Func func,
-                          Args... args)
+        OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>,
+                      Func>;
+    SelectBufferOpAwaiter(ProvidedBufferContainer *buffers, Func func)
         : Base(SelectBufferOpFinishHandle<ProvidedBufferContainer>(buffers),
-               func, args...) {}
+               func) {}
 };
 
 template <typename MultiShotFunc, typename ProvidedBufferContainer,
-          typename Func, typename... Args>
+          typename Func>
 class [[nodiscard]] MultiShotSelectBufferOpAwaiter
     : public OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
                                MultiShotFunc, ProvidedBufferContainer>,
-                           Func, Args...> {
+                           Func> {
 public:
     using Base = OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
                                    MultiShotFunc, ProvidedBufferContainer>,
-                               Func, Args...>;
+                               Func>;
     MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
-                                   ProvidedBufferContainer *buffers, Func func,
-                                   Args... args)
+                                   ProvidedBufferContainer *buffers, Func func)
         : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc,
                                                    ProvidedBufferContainer>(
                    std::move(multishot_func), buffers),
-               func, args...) {}
+               func) {}
 };
 
-template <typename Func, typename... Args>
+template <typename Func>
 class [[nodiscard]] TimerOpAwaiter
-    : public OpAwaiterBase<TimerFinishHandle, Func, Args...> {
+    : public OpAwaiterBase<TimerFinishHandle, Func> {
 public:
-    using Base = OpAwaiterBase<TimerFinishHandle, Func, Args...>;
-    TimerOpAwaiter(TimerFinishHandle *timer_handle, Func func, Args... args)
-        : Base(HandleBox<TimerFinishHandle>(timer_handle), func, args...) {}
+    using Base = OpAwaiterBase<TimerFinishHandle, Func>;
+    TimerOpAwaiter(TimerFinishHandle *timer_handle, Func func)
+        : Base(HandleBox<TimerFinishHandle>(timer_handle), func) {}
 };
 
 template <typename Awaiter>

@@ -7,8 +7,11 @@ namespace condy {
 
 template <typename Func, typename... Args>
 auto make_op_awaiter(Func &&func, Args &&...args) {
-    return OpAwaiter<std::decay_t<Func>, std::decay_t<Args>...>(
-        std::forward<Func>(func), std::forward<Args>(args)...);
+    auto prep_func = [func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+    };
+    return OpAwaiter<decltype(prep_func)>(std::move(prep_func));
 }
 
 namespace detail {
@@ -43,21 +46,26 @@ template <typename Channel> auto will_push(Channel &channel) {
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                                Args &&...args) {
-    return MultiShotOpAwaiter<std::decay_t<MultiShotFunc>, std::decay_t<Func>,
-                              std::decay_t<Args>...>(
-        std::forward<MultiShotFunc>(multishot_func), std::forward<Func>(func),
-        std::forward<Args>(args)...);
+    auto prep_func = [func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+    };
+    return MultiShotOpAwaiter<std::decay_t<MultiShotFunc>, decltype(prep_func)>(
+        std::forward<MultiShotFunc>(multishot_func), std::move(prep_func));
 }
 
 template <typename ProvidedBufferContainer, typename Func, typename... Args>
 auto make_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
                                    Func &&func, Args &&...args) {
-    int bgid = buffers->bgid();
-    auto op = SelectBufferOpAwaiter<ProvidedBufferContainer, std::decay_t<Func>,
-                                    std::decay_t<Args>...>(
-        buffers, std::forward<Func>(func), std::forward<Args>(args)...);
-    op.add_flags(IOSQE_BUFFER_SELECT);
-    op.set_bgid(bgid);
+    auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+        sqe->flags |= IOSQE_BUFFER_SELECT;
+        sqe->buf_group = bgid;
+    };
+    auto op =
+        SelectBufferOpAwaiter<ProvidedBufferContainer, decltype(prep_func)>(
+            buffers, std::move(prep_func));
     return op;
 }
 
@@ -66,25 +74,35 @@ template <typename MultiShotFunc, typename ProvidedBufferContainer,
 auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
                                              ProvidedBufferContainer *buffers,
                                              Func &&func, Args &&...args) {
-    int bgid = buffers->bgid();
-    auto op = MultiShotSelectBufferOpAwaiter<
-        std::decay_t<MultiShotFunc>, ProvidedBufferContainer,
-        std::decay_t<Func>, std::decay_t<Args>...>(
+    auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+        sqe->flags |= IOSQE_BUFFER_SELECT;
+        sqe->buf_group = bgid;
+    };
+    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>,
+                                             ProvidedBufferContainer,
+                                             decltype(prep_func)>(
         std::forward<MultiShotFunc>(multishot_func), buffers,
-        std::forward<Func>(func), std::forward<Args>(args)...);
-    op.add_flags(IOSQE_BUFFER_SELECT);
-    op.set_bgid(bgid);
+        std::move(prep_func));
     return op;
 }
 
 template <typename ProvidedBufferContainer, typename Func, typename... Args>
 auto make_bundle_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
                                           Func &&func, Args &&...args) {
-    auto op = make_select_buffer_op_awaiter(buffers, std::forward<Func>(func),
-                                            std::forward<Args>(args)...);
+    auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+        sqe->flags |= IOSQE_BUFFER_SELECT;
+        sqe->buf_group = bgid;
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-    op.add_ioprio(IORING_RECVSEND_BUNDLE);
+        sqe->ioprio |= IORING_RECVSEND_BUNDLE;
 #endif
+    };
+    auto op =
+        SelectBufferOpAwaiter<ProvidedBufferContainer, decltype(prep_func)>(
+            buffers, std::move(prep_func));
     return op;
 }
 
@@ -93,22 +111,32 @@ template <typename MultiShotFunc, typename ProvidedBufferContainer,
 auto make_multishot_bundle_select_buffer_op_awaiter(
     MultiShotFunc &&multishot_func, ProvidedBufferContainer *buffers,
     Func &&func, Args &&...args) {
-    auto op = make_multishot_select_buffer_op_awaiter(
-        std::forward<MultiShotFunc>(multishot_func), buffers,
-        std::forward<Func>(func), std::forward<Args>(args)...);
+    auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+        sqe->flags |= IOSQE_BUFFER_SELECT;
+        sqe->buf_group = bgid;
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-    op.add_ioprio(IORING_RECVSEND_BUNDLE);
+        sqe->ioprio |= IORING_RECVSEND_BUNDLE;
 #endif
+    };
+    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>,
+                                             ProvidedBufferContainer,
+                                             decltype(prep_func)>(
+        std::forward<MultiShotFunc>(multishot_func), buffers,
+        std::move(prep_func));
     return op;
 }
 
 template <typename FreeFunc, typename Func, typename... Args>
 auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                                Args &&...args) {
-    return ZeroCopyOpAwaiter<std::decay_t<FreeFunc>, std::decay_t<Func>,
-                             std::decay_t<Args>...>(
-        std::forward<FreeFunc>(free_func), std::forward<Func>(func),
-        std::forward<Args>(args)...);
+    auto prep_func = [func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+    };
+    return ZeroCopyOpAwaiter<std::decay_t<FreeFunc>, decltype(prep_func)>(
+        std::forward<FreeFunc>(free_func), std::move(prep_func));
 }
 
 template <typename Awaiter> auto make_drained_op_awaiter(Awaiter &&awaiter) {
@@ -161,8 +189,7 @@ template <typename Range> auto make_ranged_link_awaiter(Range &&range) {
 
 namespace operators {
 
-template <typename Func, typename... Args>
-auto operator~(OpAwaiter<Func, Args...> op) {
+template <typename Func> auto operator~(OpAwaiter<Func> op) {
     return make_drained_op_awaiter(std::move(op));
 }
 
