@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <condy/async_operations.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <doctest/doctest.h>
 #include <fcntl.h>
@@ -3168,23 +3169,64 @@ TEST_CASE("test async_operations - test waitid") {
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 TEST_CASE("test async_operations - test futex - wait/wake") {
     uint32_t futex_var = 0;
+    bool woken = false;
 
     auto waker = [&]() -> condy::Coro<void> {
-        futex_var = 1;
+        REQUIRE(!woken);
         int r = co_await condy::async_futex_wake(
             &futex_var, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
         REQUIRE(r >= 0);
-        co_return;
     };
 
     auto func = [&]() -> condy::Coro<void> {
         auto t = condy::co_spawn(waker());
         int r = co_await condy::async_futex_wait(
-            &futex_var, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+            &futex_var, 0, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        woken = true;
         REQUIRE(r == 0);
 
         co_await std::move(t);
     };
+    condy::sync_wait(func());
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+TEST_CASE("test async_operations - test futex - waitv") {
+    uint32_t futex_var1 = 0;
+    uint32_t futex_var2 = 0;
+    bool woken = false;
+
+    auto waker = [&]() -> condy::Coro<void> {
+        REQUIRE(!woken);
+        int r = co_await condy::async_futex_wake(
+            &futex_var2, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        REQUIRE(r >= 0);
+        REQUIRE(!woken);
+        r = co_await condy::async_futex_wake(
+            &futex_var1, 1, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        REQUIRE(r >= 0);
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(waker());
+
+        REQUIRE(!woken);
+        futex_waitv waitv[2] = {};
+        waitv[0].uaddr = reinterpret_cast<uint64_t>(&futex_var1);
+        waitv[0].val = 0;
+        waitv[0].flags = FUTEX2_SIZE_U32;
+        waitv[1].uaddr = reinterpret_cast<uint64_t>(&futex_var2);
+        waitv[1].val = 0;
+        waitv[1].flags = FUTEX2_SIZE_U32;
+
+        int r = co_await condy::async_futex_waitv(waitv, 2, 0);
+        REQUIRE(r >= 0);
+        woken = true;
+
+        co_await std::move(t);
+    };
+
     condy::sync_wait(func());
 }
 #endif
