@@ -164,9 +164,14 @@ public:
         }
 #endif
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        global_queue_.push_back(work);
-        notify();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            bool need_notify = global_queue_.empty();
+            global_queue_.push_back(work);
+            if (need_notify) {
+                notify();
+            }
+        }
     }
 
     void pend_work() { pending_works_++; }
