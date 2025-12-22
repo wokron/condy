@@ -2,7 +2,6 @@
 
 #include "condy/utils.hpp"
 #include <cassert>
-#include <cstdint>
 #include <utility>
 
 namespace condy {

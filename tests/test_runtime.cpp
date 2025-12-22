@@ -3,10 +3,7 @@
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
-#include <atomic>
-#include <cstddef>
 #include <doctest/doctest.h>
-#include <unordered_set>
 
 namespace {
 
