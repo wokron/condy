@@ -2,13 +2,12 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <functional>
 #include <iostream>
-#include <memory>
-#include <stdexcept>
 #include <system_error>
 #include <utility>
 
@@ -16,16 +15,12 @@
 #if __has_feature(thread_sanitizer)
 #include <sanitizer/tsan_interface.h>
 #else
-extern "C" {
-inline void __tsan_acquire(void *addr) { (void)addr; }
-inline void __tsan_release(void *addr) { (void)addr; }
-}
+#define __tsan_acquire(addr) static_cast<void>(0)
+#define __tsan_release(addr) static_cast<void>(0)
 #endif
 #else
-extern "C" {
-inline void __tsan_acquire(void *addr) { (void)addr; }
-inline void __tsan_release(void *addr) { (void)addr; }
-}
+#define __tsan_acquire(addr) static_cast<void>(0)
+#define __tsan_release(addr) static_cast<void>(0)
 #endif
 
 namespace condy {
