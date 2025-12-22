@@ -209,6 +209,26 @@ TEST_CASE("test channel - move only type") {
     REQUIRE(**item == 43);
 }
 
+TEST_CASE("test channel - no default constructor") {
+    struct NoDefault {
+        NoDefault(int v) : value(v) {}
+        int value;
+    };
+
+    condy::Channel<NoDefault> channel(2);
+
+    REQUIRE(channel.try_push(NoDefault(10)));
+    REQUIRE(channel.try_push(NoDefault(20)));
+
+    auto item = channel.try_pop();
+    REQUIRE(item.has_value());
+    REQUIRE(item->value == 10);
+
+    item = channel.try_pop();
+    REQUIRE(item.has_value());
+    REQUIRE(item->value == 20);
+}
+
 TEST_CASE("test channel - cross runtimes") {
     condy::Runtime runtime1(options), runtime2(options);
 

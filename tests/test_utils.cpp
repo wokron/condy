@@ -29,8 +29,8 @@ struct int_deleter {
 } // namespace
 
 TEST_CASE("test uninitialized - std::unique_ptr") {
+    int_deleter::called = false;
     auto ptr = std::unique_ptr<int, int_deleter>(new int(99));
-    REQUIRE(!int_deleter::called);
 
     {
         condy::Uninitialized<std::unique_ptr<int, int_deleter>> uninit;
@@ -39,6 +39,24 @@ TEST_CASE("test uninitialized - std::unique_ptr") {
         REQUIRE(*(uninit.get()) == 99);
     }
 
+    REQUIRE(int_deleter::called);
+}
+
+TEST_CASE("test uninitialized - reset") {
+    int_deleter::called = false;
+    {
+        condy::Uninitialized<std::unique_ptr<int, int_deleter>> uninit;
+        uninit.emplace(std::unique_ptr<int, int_deleter>(new int(123)));
+        REQUIRE(!int_deleter::called);
+        REQUIRE(*(uninit.get()) == 123);
+        uninit.reset();
+        REQUIRE(int_deleter::called);
+
+        int_deleter::called = false;
+        uninit.emplace(std::unique_ptr<int, int_deleter>(new int(456)));
+        REQUIRE(!int_deleter::called);
+        REQUIRE(*(uninit.get()) == 456);
+    }
     REQUIRE(int_deleter::called);
 }
 

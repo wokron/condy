@@ -4,6 +4,7 @@
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
+#include "condy/utils.hpp"
 #include <coroutine>
 #include <cstddef>
 #include <memory>
@@ -88,10 +89,11 @@ private:
 
 template <typename T> class ChannelPopFinishHandle;
 
+// TODO: Need to refactor
 template <typename T> class Channel {
 public:
     Channel(size_t capacity)
-        : buffer_(std::make_unique<T[]>(capacity + 1)),
+        : buffer_(std::make_unique<Uninitialized<T>[]>(capacity + 1)),
           actual_capacity_(capacity + 1) {}
     ~Channel() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -220,13 +222,14 @@ private:
 
     template <typename U> void push_inner_(U &&item) {
         assert(!full_inner_());
-        buffer_[tail_] = std::forward<U>(item);
+        buffer_[tail_].emplace(std::forward<U>(item));
         tail_ = (tail_ + 1) % actual_capacity_;
     }
 
     T pop_inner_() {
         assert(!empty_inner_());
-        T item = std::move(buffer_[head_]);
+        T item = std::move(buffer_[head_].get());
+        buffer_[head_].reset();
         head_ = (head_ + 1) % actual_capacity_;
         return item;
     }
@@ -254,7 +257,7 @@ private:
     mutable std::mutex mutex_;
     DoubleList<ChannelPushFinishHandle<T>> push_awaiters_;
     DoubleList<ChannelPopFinishHandle<T>> pop_awaiters_;
-    std::unique_ptr<T[]> buffer_;
+    std::unique_ptr<Uninitialized<T>[]> buffer_;
     const size_t actual_capacity_;
     size_t head_ = 0;
     size_t tail_ = 0;

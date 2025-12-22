@@ -108,9 +108,16 @@ public:
 
     const T &get() const { return *reinterpret_cast<const T *>(&storage_); }
 
+    void reset() {
+        if (initialized_) {
+            get().~T();
+            initialized_ = false;
+        }
+    }
+
 private:
-    bool initialized_ = false;
     alignas(T) unsigned char storage_[sizeof(T)];
+    bool initialized_ = false;
 };
 
 inline auto make_system_error(const char *msg, int ec) {
