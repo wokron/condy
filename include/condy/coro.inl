@@ -6,6 +6,7 @@
 #include <coroutine>
 #include <exception>
 #include <mutex>
+#include <optional>
 
 namespace condy {
 
@@ -190,13 +191,13 @@ template <typename T, typename Allocator>
 class Promise
     : public BindAllocator<PromiseBase<Coro<T, Allocator>>, Allocator> {
 public:
-    void return_value(T value) { value_.emplace(std::move(value)); }
+    void return_value(T value) { value_ = std::move(value); }
 
-    T &value() & noexcept { return value_.get(); }
-    T &&value() && noexcept { return std::move(value_.get()); }
+    T &value() & noexcept { return value_.value(); }
+    T &&value() && noexcept { return std::move(value_).value(); }
 
 private:
-    Uninitialized<T> value_;
+    std::optional<T> value_;
 };
 
 template <typename PromiseType> struct CoroAwaiterBase {

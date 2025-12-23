@@ -84,6 +84,58 @@ inline void panic_on(const char *msg) noexcept {
 #endif
 }
 
+template <typename T> class RawStorage {
+public:
+    template <typename... Args> void construct(Args &&...args) {
+        new (&storage_) T(std::forward<Args>(args)...);
+    }
+
+    T &get() { return *reinterpret_cast<T *>(&storage_); }
+
+    const T &get() const { return *reinterpret_cast<const T *>(&storage_); }
+
+    void destroy() { get().~T(); }
+
+private:
+    alignas(T) unsigned char storage_[sizeof(T)];
+};
+
+template <typename T, size_t N> class SmallArray {
+public:
+    SmallArray(size_t capacity) : capacity_(capacity) {
+        if (!is_small_()) {
+            large_ = new T[capacity];
+        }
+    }
+
+    ~SmallArray() {
+        if (!is_small_()) {
+            delete[] large_;
+        }
+    }
+
+    T &operator[](size_t index) {
+        return is_small_() ? small_[index] : large_[index];
+    }
+
+    const T &operator[](size_t index) const {
+        return is_small_() ? small_[index] : large_[index];
+    }
+
+    size_t capacity() const { return capacity_; }
+
+private:
+    bool is_small_() const { return capacity_ <= N; }
+
+private:
+    size_t capacity_;
+    union {
+        T small_[N];
+        T *large_;
+    };
+};
+
+// TODO: Remove this after channel refactor
 template <typename T> class Uninitialized {
 public:
     Uninitialized() = default;
