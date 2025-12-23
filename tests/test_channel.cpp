@@ -209,6 +209,37 @@ TEST_CASE("test channel - move only type") {
     REQUIRE(**item == 43);
 }
 
+TEST_CASE("test channel - move only in coroutine") {
+    condy::Runtime runtime(options);
+    condy::Channel<std::unique_ptr<int>> channel(2);
+
+    const size_t max_items = 10;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = co_await channel.pop();
+            REQUIRE(item != nullptr);
+            REQUIRE(*item == static_cast<int>(i));
+        }
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(consumer());
+        for (size_t i = 0; i < max_items; ++i) {
+            co_await channel.push(std::make_unique<int>(static_cast<int>(i)));
+        }
+        co_await std::move(t);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+}
+
 TEST_CASE("test channel - no default constructor") {
     struct NoDefault {
         NoDefault(int v) : value(v) {}
@@ -227,6 +258,33 @@ TEST_CASE("test channel - no default constructor") {
     item = channel.try_pop();
     REQUIRE(item.has_value());
     REQUIRE(item->value == 20);
+}
+
+namespace {
+
+struct int_deleter {
+    void operator()(int *p) const {
+        counter++;
+        delete p;
+    }
+    inline static size_t counter = 0;
+};
+
+} // namespace
+
+TEST_CASE("test channel - destruct items") {
+    int_deleter::counter = 0;
+    {
+        condy::Channel<std::unique_ptr<int, int_deleter>> channel(5);
+
+        for (size_t i = 0; i < 5; ++i) {
+            REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
+                new int(static_cast<int>(i)))));
+        }
+
+        REQUIRE(int_deleter::counter == 0);
+    }
+    REQUIRE(int_deleter::counter == 5);
 }
 
 TEST_CASE("test channel - cross runtimes") {
