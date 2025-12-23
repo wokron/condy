@@ -74,7 +74,7 @@ private:
     bool use_mutex_ = false;
 };
 
-inline void panic_on(const char *msg) noexcept {
+[[noreturn]] inline void panic_on(const char *msg) noexcept {
     std::cerr << "Panic: " << msg << std::endl;
 #ifndef CRASH_TEST
     std::terminate();

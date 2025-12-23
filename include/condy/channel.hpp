@@ -8,21 +8,13 @@
 #include <coroutine>
 #include <cstddef>
 #include <optional>
-#include <variant>
 
 namespace condy {
 
 template <typename T, size_t N = 2> class Channel {
 public:
     Channel(size_t capacity) : buffer_(std::bit_ceil(capacity)) {}
-    ~Channel() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        destruct_all_(); // Ensure all items are destructed
-        if (!push_awaiters_.empty() || !pop_awaiters_.empty()) {
-            // There are still awaiters, this is likely a programming error
-            panic_on("Channel destroyed with pending awaiters");
-        }
-    }
+    ~Channel() { close(); }
 
     Channel(const Channel &) = delete;
     Channel &operator=(const Channel &) = delete;
@@ -70,6 +62,16 @@ public:
         return size_ == 0;
     }
 
+    bool is_closed() const noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return closed_;
+    }
+
+    void close() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        close_inner_();
+    }
+
 private:
     class PushFinishHandle;
     class PopFinishHandle;
@@ -77,6 +79,7 @@ private:
     bool request_push_(PushFinishHandle *finish_handle) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (try_push_inner_(std::move(finish_handle->get_item()))) {
+            finish_handle->set_success(true);
             return true;
         }
         assert(pop_awaiters_.empty());
@@ -128,6 +131,7 @@ private:
             assert(full_inner_());
             auto *push_handle = push_awaiters_.pop_front();
             T item = std::move(push_handle->get_item());
+            push_handle->set_success(true);
             push_handle->schedule();
             T result = pop_inner_();
             push_inner_(std::move(item));
@@ -162,6 +166,23 @@ private:
 
     bool full_inner_() const noexcept { return size_ == buffer_.capacity(); }
 
+    void close_inner_() {
+        if (closed_) {
+            return;
+        }
+        closed_ = true;
+        // Cancel all pending pop awaiters
+        PopFinishHandle *pop_handle = nullptr;
+        while ((pop_handle = pop_awaiters_.pop_front()) != nullptr) {
+            pop_handle->schedule();
+        }
+        destruct_all_();
+        // If there are pending push awaiters, panic
+        if (!push_awaiters_.empty()) {
+            panic_on("Channel closed with pending push awaiters");
+        }
+    }
+
     void destruct_all_() {
         while (!empty_inner_()) {
             pop_inner_();
@@ -181,13 +202,14 @@ private:
     size_t tail_ = 0;
     size_t size_ = 0;
     SmallArray<RawStorage<T>, N> buffer_;
+    bool closed_ = false;
 };
 
 template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandle
     : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = std::monostate;
+    using ReturnType = bool;
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
@@ -199,7 +221,7 @@ public:
         }
     }
 
-    ReturnType extract_result() { return {}; }
+    ReturnType extract_result() { return success_; }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
@@ -212,6 +234,8 @@ public:
     }
 
     T &get_item() { return item_; }
+
+    void set_success(bool success) { success_ = success; }
 
     void schedule() {
         if (runtime_ == nullptr) {
@@ -234,6 +258,7 @@ private:
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
     T item_;
+    bool success_ = false;
 };
 
 template <typename T, size_t N>
@@ -280,7 +305,7 @@ private:
     Invoker *invoker_ = nullptr;
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
-    T result_;
+    T result_ = {};
 };
 
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {

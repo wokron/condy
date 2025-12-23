@@ -260,6 +260,43 @@ TEST_CASE("test channel - no default constructor") {
     REQUIRE(item->value == 20);
 }
 
+TEST_CASE("test channel - no default constructor in coroutine") {
+    struct NoDefault {
+        NoDefault(int v) : value(v) {}
+        int value;
+    };
+
+    condy::Runtime runtime(options);
+    // User should use type with default constructor when using
+    // async operations
+    condy::Channel<std::optional<NoDefault>> channel(2);
+
+    const size_t max_items = 10;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = *co_await channel.pop();
+            REQUIRE(item.value == static_cast<int>(i));
+        }
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(consumer());
+        for (size_t i = 0; i < max_items; ++i) {
+            co_await channel.push(NoDefault(static_cast<int>(i)));
+        }
+        co_await std::move(t);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+}
+
 namespace {
 
 struct int_deleter {
