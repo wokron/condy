@@ -74,7 +74,7 @@ private:
     bool use_mutex_ = false;
 };
 
-inline void panic_on(const char *msg) noexcept {
+[[noreturn]] inline void panic_on(const char *msg) noexcept {
     std::cerr << "Panic: " << msg << std::endl;
 #ifndef CRASH_TEST
     std::terminate();
@@ -133,38 +133,6 @@ private:
         T small_[N];
         T *large_;
     };
-};
-
-// TODO: Remove this after channel refactor
-template <typename T> class Uninitialized {
-public:
-    Uninitialized() = default;
-    ~Uninitialized() {
-        if (initialized_) {
-            get().~T();
-        }
-    }
-
-    template <typename... Args> void emplace(Args &&...args) {
-        assert(!initialized_ && "Object is already initialized");
-        new (&storage_) T(std::forward<Args>(args)...);
-        initialized_ = true;
-    }
-
-    T &get() { return *reinterpret_cast<T *>(&storage_); }
-
-    const T &get() const { return *reinterpret_cast<const T *>(&storage_); }
-
-    void reset() {
-        if (initialized_) {
-            get().~T();
-            initialized_ = false;
-        }
-    }
-
-private:
-    alignas(T) unsigned char storage_[sizeof(T)];
-    bool initialized_ = false;
 };
 
 inline auto make_system_error(const char *msg, int ec) {
