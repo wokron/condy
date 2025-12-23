@@ -246,26 +246,6 @@ TEST_CASE("test channel - no default constructor") {
         int value;
     };
 
-    condy::Channel<NoDefault> channel(2);
-
-    REQUIRE(channel.try_push(NoDefault(10)));
-    REQUIRE(channel.try_push(NoDefault(20)));
-
-    auto item = channel.try_pop();
-    REQUIRE(item.has_value());
-    REQUIRE(item->value == 10);
-
-    item = channel.try_pop();
-    REQUIRE(item.has_value());
-    REQUIRE(item->value == 20);
-}
-
-TEST_CASE("test channel - no default constructor in coroutine") {
-    struct NoDefault {
-        NoDefault(int v) : value(v) {}
-        int value;
-    };
-
     condy::Runtime runtime(options);
     // User should use type with default constructor when using
     // async operations
@@ -286,6 +266,40 @@ TEST_CASE("test channel - no default constructor in coroutine") {
         for (size_t i = 0; i < max_items; ++i) {
             co_await channel.push(NoDefault(static_cast<int>(i)));
         }
+        co_await std::move(t);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+}
+
+TEST_CASE("test channel - close") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(2);
+
+    const size_t max_items = 10;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < 2 * max_items; ++i) {
+            auto item = co_await channel.pop();
+            if (i < max_items) {
+                REQUIRE(item == static_cast<int>(i + 1));
+            } else {
+                REQUIRE(item == 0); // Default indicates closed channel
+            }
+        }
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(consumer());
+        for (size_t i = 0; i < max_items; ++i) {
+            co_await channel.push(static_cast<int>(i + 1));
+        }
+        channel.push_close();
         co_await std::move(t);
     };
 
@@ -320,6 +334,28 @@ TEST_CASE("test channel - destruct items") {
         }
 
         REQUIRE(int_deleter::counter == 0);
+    }
+    REQUIRE(int_deleter::counter == 5);
+}
+
+TEST_CASE("test channel - destruct items after close") {
+    int_deleter::counter = 0;
+    {
+        condy::Channel<std::unique_ptr<int, int_deleter>> channel(5);
+
+        for (size_t i = 0; i < 5; ++i) {
+            REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
+                new int(static_cast<int>(i + 1)))));
+        }
+
+        channel.push_close();
+
+        // Close should not destruct items yet, since we can still pop them
+        REQUIRE(int_deleter::counter == 0);
+
+        auto item = channel.try_pop();
+        REQUIRE(item.has_value());
+        REQUIRE(**item == 1);
     }
     REQUIRE(int_deleter::counter == 5);
 }

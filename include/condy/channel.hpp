@@ -14,7 +14,11 @@ namespace condy {
 template <typename T, size_t N = 2> class Channel {
 public:
     Channel(size_t capacity) : buffer_(std::bit_ceil(capacity)) {}
-    ~Channel() { close(); }
+    ~Channel() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        push_close_inner_();
+        destruct_all_();
+    }
 
     Channel(const Channel &) = delete;
     Channel &operator=(const Channel &) = delete;
@@ -67,9 +71,9 @@ public:
         return closed_;
     }
 
-    void close() {
+    void push_close() {
         std::lock_guard<std::mutex> lock(mutex_);
-        close_inner_();
+        push_close_inner_();
     }
 
 private:
@@ -79,18 +83,12 @@ private:
     bool request_push_(PushFinishHandle *finish_handle) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (try_push_inner_(std::move(finish_handle->get_item()))) {
-            finish_handle->set_success(true);
             return true;
         }
         assert(pop_awaiters_.empty());
         push_awaiters_.push_back(finish_handle);
         Context::current().runtime()->pend_work();
         return false;
-    }
-
-    bool cancel_push_(PushFinishHandle *finish_handle) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return push_awaiters_.remove(finish_handle);
     }
 
     std::optional<T> request_pop_(PopFinishHandle *finish_handle) {
@@ -112,6 +110,9 @@ private:
 
 private:
     template <typename U> bool try_push_inner_(U &&item) {
+        if (closed_) [[unlikely]] {
+            panic_on("Push to closed channel");
+        }
         if (!pop_awaiters_.empty()) {
             assert(empty_inner_());
             auto *pop_handle = pop_awaiters_.pop_front();
@@ -131,7 +132,6 @@ private:
             assert(full_inner_());
             auto *push_handle = push_awaiters_.pop_front();
             T item = std::move(push_handle->get_item());
-            push_handle->set_success(true);
             push_handle->schedule();
             T result = pop_inner_();
             push_inner_(std::move(item));
@@ -140,6 +140,11 @@ private:
         if (!empty_inner_()) {
             T result = pop_inner_();
             return result;
+        }
+        if (closed_) [[unlikely]] {
+            // Default indicates closed channel
+            T return_value = {};
+            return return_value;
         }
         return std::nullopt;
     }
@@ -166,7 +171,7 @@ private:
 
     bool full_inner_() const noexcept { return size_ == buffer_.capacity(); }
 
-    void close_inner_() {
+    void push_close_inner_() {
         if (closed_) {
             return;
         }
@@ -174,9 +179,9 @@ private:
         // Cancel all pending pop awaiters
         PopFinishHandle *pop_handle = nullptr;
         while ((pop_handle = pop_awaiters_.pop_front()) != nullptr) {
+            assert(empty_inner_());
             pop_handle->schedule();
         }
-        destruct_all_();
         // If there are pending push awaiters, panic
         if (!push_awaiters_.empty()) {
             panic_on("Channel closed with pending push awaiters");
@@ -192,12 +197,14 @@ private:
     }
 
 private:
-    template <typename Handle>
-    using DoubleList = IntrusiveDoubleList<Handle, &Handle::link_entry_>;
+    using PushList =
+        IntrusiveSingleList<PushFinishHandle, &PushFinishHandle::link_entry_>;
+    using PopList =
+        IntrusiveDoubleList<PopFinishHandle, &PopFinishHandle::link_entry_>;
 
     mutable std::mutex mutex_;
-    DoubleList<PushFinishHandle> push_awaiters_;
-    DoubleList<PopFinishHandle> pop_awaiters_;
+    PushList push_awaiters_;
+    PopList pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
     size_t size_ = 0;
@@ -209,19 +216,11 @@ template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandle
     : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = bool;
+    using ReturnType = void;
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    void cancel() {
-        if (channel_->cancel_push_(this)) {
-            // Successfully canceled
-            runtime_->resume_work();
-            (*invoker_)();
-        }
-    }
-
-    ReturnType extract_result() { return success_; }
+    ReturnType extract_result() { return; }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
@@ -234,8 +233,6 @@ public:
     }
 
     T &get_item() { return item_; }
-
-    void set_success(bool success) { success_ = success; }
 
     void schedule() {
         if (runtime_ == nullptr) {
@@ -251,14 +248,13 @@ public:
     }
 
 public:
-    DoubleLinkEntry link_entry_;
+    SingleLinkEntry link_entry_;
 
 private:
     Invoker *invoker_ = nullptr;
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
     T item_;
-    bool success_ = false;
 };
 
 template <typename T, size_t N>
