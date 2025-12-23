@@ -194,7 +194,7 @@ public:
     void cancel() {
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
-            Context::current().runtime()->resume_work();
+            runtime_->resume_work();
             (*invoker_)();
         }
     }
@@ -203,10 +203,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() {
-        Context::current().runtime()->resume_work();
-        (*invoker_)();
-    }
+    void invoke() { (*invoker_)(); }
 
 public:
     void init(Channel *channel, Runtime *runtime) {
@@ -221,7 +218,11 @@ public:
             // Fake handle, no need to schedule
             delete this;
         } else {
-            runtime_->schedule(this);
+            // The variable `runtime` is required because 'this' may be deleted
+            // once scheduled.
+            auto *runtime = runtime_;
+            runtime->schedule(this);
+            runtime->resume_work();
         }
     }
 
@@ -244,7 +245,7 @@ public:
     void cancel() {
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
-            Context::current().runtime()->resume_work();
+            runtime_->resume_work();
             (*invoker_)();
         }
     }
@@ -253,10 +254,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() {
-        Context::current().runtime()->resume_work();
-        (*invoker_)();
-    }
+    void invoke() { (*invoker_)(); }
 
 public:
     void init(Channel *channel, Runtime *runtime) {
@@ -268,7 +266,11 @@ public:
 
     void schedule() {
         assert(runtime_ != nullptr);
-        runtime_->schedule(this);
+        // The variable `runtime` is required because 'this' may be deleted
+        // once scheduled.
+        auto *runtime = runtime_;
+        runtime->schedule(this);
+        runtime->resume_work();
     }
 
 public:
@@ -303,7 +305,6 @@ public:
         finish_handle_.init(&channel_, runtime);
         bool ok = channel_.request_push_(&finish_handle_);
         if (ok) {
-            runtime->pend_work(); // TODO: Remove this
             runtime->schedule(&finish_handle_);
         }
     }
@@ -349,7 +350,6 @@ public:
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
         if (item.has_value()) {
-            runtime->pend_work(); // TODO: Remove this
             finish_handle_.set_result(std::move(item.value()));
             runtime->schedule(&finish_handle_);
         }
