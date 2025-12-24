@@ -7,4 +7,5 @@ endmacro()
 
 add_crash_test(test_task_not_join)
 add_crash_test(test_detached_task_exception)
-add_crash_test(test_channel_destroy_with_awaiters)
+add_crash_test(test_channel_close_with_awaiters)
+add_crash_test(test_channel_close_and_push)
