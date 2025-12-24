@@ -42,7 +42,7 @@ while getopts "ho:s:d:" opt; do
 done
 shift $((OPTIND -1))
 
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ]; then
     usage
 fi
 

@@ -4,11 +4,12 @@ set -euo pipefail
 
 
 usage() {
-    echo "Usage: $0 [-hk] <bzImage> <static-executable>"
+    echo "Usage: $0 [-hkq] [-a <args>] <bzImage> <static-executable>"
     echo "Run a VM with the specified kernel image and static executable."
     echo "  -h                   Show this help message."
     echo "  -k                   Enable KVM acceleration."
-    echo "  -q                   Quiet mode (no output)."
+    echo "  -q                   Quiet mode (no kernel messages)."
+    echo "  -a <args>            Additional arguments for static executable."
     echo "  <bzImage>            Path to the kernel image."
     echo "  <static-executable>  Path to the static executable to run inside the VM."
     exit 1
@@ -16,14 +17,18 @@ usage() {
 
 KVM_ENABLED=false
 QUIET_MODE=false
+ADDITIONAL_ARGS=""
 
-while getopts "hk" opt; do
+while getopts "hkqa:" opt; do
     case $opt in
         k)
             KVM_ENABLED=true
             ;;
         q)
             QUIET_MODE=true
+            ;;
+        a)
+            ADDITIONAL_ARGS="$OPTARG"
             ;;
         h)
             usage
@@ -61,19 +66,19 @@ STATIC_EXECUTABLE_MD5=$(md5sum "$STATIC_EXECUTABLE" | awk '{print $1}')
 # Cached initrd output filename
 INITRD_OUTPUT="initrd-${STATIC_EXECUTABLE_MD5}.cpio.gz"
 
-CACHE_DIR="$SELF_SCRIPT_DIR/.cache"
-mkdir -p "$CACHE_DIR"
+TEMP_DIR="$SELF_SCRIPT_DIR/.temp"
+mkdir -p "$TEMP_DIR"
+trap "rm -rf $TEMP_DIR" EXIT
 
-if [ ! -f "$CACHE_DIR/$INITRD_OUTPUT" ]; then
-    # Clear previous cached initrd images
-    rm -f "$CACHE_DIR"/initrd-*.cpio.gz
+cat > "$TEMP_DIR/init.sh" <<EOF
+#!/bin/sh
+/root/$(basename "$STATIC_EXECUTABLE") $ADDITIONAL_ARGS
+EOF
+chmod +x "$TEMP_DIR/init.sh"
 
-    echo "Building initrd image..."
-    bash "$LIGHT_INITRD_SCRIPT" -o "$CACHE_DIR/$INITRD_OUTPUT" -s "/root/$(basename "$STATIC_EXECUTABLE")" "$STATIC_EXECUTABLE"
-    echo "Initrd image created at $CACHE_DIR/$INITRD_OUTPUT"
-else
-    echo "Using cached initrd image at $CACHE_DIR/$INITRD_OUTPUT"
-fi
+echo "Building initrd image..."
+bash "$LIGHT_INITRD_SCRIPT" -o "$TEMP_DIR/$INITRD_OUTPUT" -s "/root/init.sh" "$STATIC_EXECUTABLE" "$TEMP_DIR/init.sh"
+echo "Initrd image created at $TEMP_DIR/$INITRD_OUTPUT"
 
 KVM_FLAG=""
 if [ "$KVM_ENABLED" = true ]; then
@@ -90,6 +95,6 @@ qemu-system-x86_64 \
     $KVM_FLAG \
     -m 512M \
     -kernel "$KERNEL_IMAGE" \
-    -initrd "$CACHE_DIR/$INITRD_OUTPUT" \
+    -initrd "$TEMP_DIR/$INITRD_OUTPUT" \
     -append "$KERNEL_ARGS" \
     -nographic
