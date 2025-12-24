@@ -224,7 +224,12 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() { (*invoker_)(); }
+    void invoke() {
+        if (need_resume_) {
+            runtime_->resume_work();
+        }
+        (*invoker_)();
+    }
 
 public:
     void init(Channel *channel, Runtime *runtime) {
@@ -239,11 +244,8 @@ public:
             // Fake handle, no need to schedule
             delete this;
         } else {
-            // The variable `runtime` is required because 'this' may be deleted
-            // once scheduled.
-            auto *runtime = runtime_;
-            runtime->schedule(this);
-            runtime->resume_work();
+            need_resume_ = true;
+            runtime_->schedule(this);
         }
     }
 
@@ -255,6 +257,7 @@ private:
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
     T item_;
+    bool need_resume_ = false;
 };
 
 template <typename T, size_t N>
@@ -275,7 +278,12 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() { (*invoker_)(); }
+    void invoke() {
+        if (need_resume_) {
+            runtime_->resume_work();
+        }
+        (*invoker_)();
+    }
 
 public:
     void init(Channel *channel, Runtime *runtime) {
@@ -287,11 +295,8 @@ public:
 
     void schedule() {
         assert(runtime_ != nullptr);
-        // The variable `runtime` is required because 'this' may be deleted
-        // once scheduled.
-        auto *runtime = runtime_;
-        runtime->schedule(this);
-        runtime->resume_work();
+        need_resume_ = true;
+        runtime_->schedule(this);
     }
 
 public:
@@ -302,6 +307,7 @@ private:
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
     T result_ = {};
+    bool need_resume_ = false;
 };
 
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {
