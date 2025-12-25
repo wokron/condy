@@ -20,7 +20,6 @@ namespace condy {
 using WorkListQueue =
     IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
 
-// TODO: Use futex to implement this
 class AsyncWaiter {
 public:
     AsyncWaiter() {
@@ -145,7 +144,8 @@ public:
             return;
         }
 
-        if (runtime != nullptr && state_.load() == State::Enabled) {
+        auto state = state_.load();
+        if (runtime != nullptr && state == State::Enabled) {
             __tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
@@ -154,7 +154,7 @@ public:
         }
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
-        if (runtime == nullptr && state_.load() == State::Enabled) {
+        if (runtime == nullptr && state == State::Enabled) {
             __tsan_release(work);
             io_uring_sqe sqe = {};
             prep_msg_ring_(&sqe, work);
