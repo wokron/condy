@@ -79,6 +79,40 @@ TEST_CASE("test channel - push and pop with coroutines") {
     REQUIRE(finished == 2);
 }
 
+TEST_CASE("test channel - unbuffered channel") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(0);
+
+    const size_t max_items = 10;
+
+    size_t finished = 0;
+    auto producer = [&]() -> condy::Coro<void> {
+        for (size_t i = 1; i <= max_items; ++i) {
+            co_await channel.push(static_cast<int>(i));
+        }
+        finished++;
+    };
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 1; i <= max_items; ++i) {
+            int item = co_await channel.pop();
+            REQUIRE(item == i);
+        }
+        finished++;
+    };
+
+    auto t1 = condy::co_spawn(runtime, producer());
+    auto t2 = condy::co_spawn(runtime, consumer());
+
+    runtime.done();
+    runtime.run();
+
+    t1.wait();
+    t2.wait();
+
+    REQUIRE(finished == 2);
+}
+
 TEST_CASE("test channel - multi producer and consumer") {
     condy::Runtime runtime(options);
     condy::Channel<int> channel(20);
@@ -311,6 +345,38 @@ TEST_CASE("test channel - close") {
     task.wait();
 }
 
+TEST_CASE("test channel - close and broadcast") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(2);
+
+    const size_t max_tasks = 5;
+
+    size_t finished = 0;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        co_await channel.pop();
+        finished++;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_tasks; ++i) {
+            condy::co_spawn(consumer()).detach();
+        }
+        co_await condy::co_switch(condy::current_runtime());
+        channel.push_close();
+        co_return;
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+
+    REQUIRE(finished == max_tasks);
+}
+
 namespace {
 
 struct int_deleter {
@@ -364,6 +430,50 @@ TEST_CASE("test channel - cross runtimes") {
     condy::Runtime runtime1(options), runtime2(options);
 
     condy::Channel<int> channel(2);
+
+    const size_t max_items = 41;
+
+    std::atomic_size_t finished = 0;
+    auto producer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            co_await channel.push(static_cast<int>(i));
+        }
+        finished++;
+    };
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            int item = co_await channel.pop();
+            REQUIRE(item == static_cast<int>(i));
+        }
+        finished++;
+    };
+
+    std::thread t1([&]() { runtime1.run(); });
+
+    std::thread t2([&]() { runtime2.run(); });
+
+    auto task1 = condy::co_spawn(runtime1, consumer());
+    auto task2 = condy::co_spawn(runtime2, producer());
+
+    task1.wait();
+    task2.wait();
+
+    REQUIRE(finished == 2);
+
+    runtime1.done();
+    runtime2.done();
+
+    REQUIRE(finished == 2);
+
+    t1.join();
+    t2.join();
+}
+
+TEST_CASE("test channel - cross runtimes with unbuffered channel") {
+    condy::Runtime runtime1(options), runtime2(options);
+
+    condy::Channel<int> channel(0);
 
     const size_t max_items = 41;
 
