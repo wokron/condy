@@ -111,7 +111,7 @@ private:
 private:
     template <typename U> bool try_push_inner_(U &&item) {
         if (closed_) [[unlikely]] {
-            panic_on("Push to closed channel");
+            throw std::logic_error("Push to closed channel");
         }
         if (!pop_awaiters_.empty()) {
             assert(empty_inner_());
@@ -182,9 +182,11 @@ private:
             assert(empty_inner_());
             pop_handle->schedule();
         }
-        // If there are pending push awaiters, panic
-        if (!push_awaiters_.empty()) {
-            panic_on("Channel closed with pending push awaiters");
+        // Throw exception to all pending push awaiters
+        PushFinishHandle *push_handle = nullptr;
+        while ((push_handle = push_awaiters_.pop_front()) != nullptr) {
+            push_handle->enable_throw();
+            push_handle->schedule();
         }
     }
 
@@ -220,7 +222,12 @@ public:
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    ReturnType extract_result() { return; }
+    ReturnType extract_result() {
+        if (should_throw_) {
+            throw std::logic_error("Push to closed channel");
+        }
+        return;
+    }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
@@ -249,6 +256,8 @@ public:
         }
     }
 
+    void enable_throw() { should_throw_ = true; }
+
 public:
     SingleLinkEntry link_entry_;
 
@@ -258,6 +267,7 @@ private:
     Runtime *runtime_ = nullptr;
     T item_;
     bool need_resume_ = false;
+    bool should_throw_ = false;
 };
 
 template <typename T, size_t N>

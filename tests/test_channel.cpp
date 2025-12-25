@@ -377,6 +377,52 @@ TEST_CASE("test channel - close and broadcast") {
     REQUIRE(finished == max_tasks);
 }
 
+TEST_CASE("test channel - push to closed channel") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(2);
+
+    channel.push_close();
+
+    REQUIRE_THROWS(channel.try_push(42));
+
+    auto func = [&]() -> condy::Coro<void> {
+        REQUIRE_THROWS(co_await channel.push(42));
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+}
+
+TEST_CASE("test channel - push to closed channel with awaiters") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(1);
+
+    auto close_func = [&]() -> condy::Coro<void> {
+        channel.push_close();
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        co_await channel.push(1); // Fill the channel
+
+        auto task = condy::co_spawn(close_func());
+
+        REQUIRE_THROWS(co_await channel.push(2));
+
+        co_await std::move(task);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+    runtime.done();
+    runtime.run();
+
+    task.wait();
+}
+
 namespace {
 
 struct int_deleter {
