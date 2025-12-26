@@ -5,12 +5,22 @@ project(condy LANGUAGES CXX)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BUILD_TESTS "Build tests" OFF)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(TESTS_STATIC_LINK "Use static linking for tests" OFF)
 option(LINK_LIBURING "Use liburing from third_party and link it to condy" ON)
 
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
+    if(CLANG_TIDY_EXE)
+        message(STATUS "Found clang-tidy: ${CLANG_TIDY_EXE}")
+        set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
+    else()
+        message(WARNING "clang-tidy not found, static analysis will be disabled")
+    endif()
+endif()
 
 add_library(condy INTERFACE)
 target_include_directories(condy INTERFACE include)
