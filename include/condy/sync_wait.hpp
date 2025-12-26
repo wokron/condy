@@ -13,7 +13,7 @@ T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     try {
         runtime.run();
     } catch (...) {
-        t.detach();
+        t.detach(); // Just to avoid panic here
         throw;
     }
     return t.wait();

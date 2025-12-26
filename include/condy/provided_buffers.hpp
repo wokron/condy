@@ -4,6 +4,7 @@
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
 #include "condy/utils.hpp"
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <liburing.h>
@@ -23,17 +24,14 @@ public:
     using ReturnType = BufferInfo;
 
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
-        : capacity_(capacity) {
-        if (!is_power_of_two(capacity)) {
-            throw std::invalid_argument("capacity must be a power of two");
-        }
+        : capacity_(std::bit_ceil(capacity)) {
         auto &context = Context::current();
         auto bgid = context.next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
-        if (data == MAP_FAILED) {
+        if (data == MAP_FAILED) [[unlikely]] {
             throw std::bad_alloc();
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
@@ -44,7 +42,7 @@ public:
         reg.ring_entries = capacity_;
         reg.bgid = bgid;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
-        if (r != 0) {
+        if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }
@@ -74,7 +72,7 @@ public:
     size_t capacity() const { return capacity_; }
 
     template <typename Buffer> uint16_t push(Buffer &&buffer) {
-        if (size_ >= capacity_) {
+        if (size_ >= capacity_) [[unlikely]] {
             throw std::logic_error("Capacity exceeded");
         }
 
@@ -181,18 +179,14 @@ public:
 
     BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                               unsigned int flags = 0)
-        : num_buffers_(num_buffers), buffer_size_(buffer_size) {
-        if (!is_power_of_two(num_buffers)) {
-            throw std::invalid_argument("num_buffers must be a power of two");
-        }
-
+        : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
         auto &context = Context::current();
         auto bgid = context.next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
-        if (data == MAP_FAILED) {
+        if (data == MAP_FAILED) [[unlikely]] {
             throw std::bad_alloc();
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
@@ -203,7 +197,7 @@ public:
         reg.ring_entries = num_buffers_;
         reg.bgid = bgid;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
-        if (r != 0) {
+        if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }

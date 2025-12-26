@@ -149,8 +149,4 @@ template <typename M, typename T> T *container_of(M T::*member, M *ptr) {
     return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
 }
 
-template <typename T> constexpr bool is_power_of_two(T n) {
-    return n > 0 && (n & (n - 1)) == 0;
-}
-
 } // namespace condy

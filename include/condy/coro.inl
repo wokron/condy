@@ -219,7 +219,7 @@ struct CoroAwaiter
     using Base = CoroAwaiterBase<typename Coro<T, Allocator>::promise_type>;
     T await_resume() {
         auto exception = std::move(Base::handle_.promise()).exception();
-        if (exception) {
+        if (exception) [[unlikely]] {
             Base::handle_.destroy();
             std::rethrow_exception(exception);
         }
@@ -236,7 +236,7 @@ struct CoroAwaiter<void, Allocator>
     void await_resume() {
         auto exception = std::move(Base::handle_.promise()).exception();
         Base::handle_.destroy();
-        if (exception) {
+        if (exception) [[unlikely]] {
             std::rethrow_exception(exception);
         }
     }

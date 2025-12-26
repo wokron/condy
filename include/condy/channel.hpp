@@ -223,7 +223,7 @@ public:
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
     ReturnType extract_result() {
-        if (should_throw_) {
+        if (should_throw_) [[unlikely]] {
             throw std::logic_error("Push to closed channel");
         }
         return;
@@ -247,7 +247,7 @@ public:
     T &get_item() { return item_; }
 
     void schedule() {
-        if (runtime_ == nullptr) {
+        if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
             delete this;
         } else {

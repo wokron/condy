@@ -259,12 +259,12 @@ public:
                 break;
             }
             r = io_uring_submit(&ring_);
-            if (r < 0) {
+            if (r < 0) [[unlikely]] {
                 throw make_system_error("io_uring_submit", -r);
             }
             if (sqpoll_mode_) {
                 r = io_uring_sqring_wait(&ring_);
-                if (r < 0) {
+                if (r < 0) [[unlikely]] {
                     throw make_system_error("io_uring_sqring_wait", -r);
                 }
             }

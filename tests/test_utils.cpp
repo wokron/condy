@@ -89,16 +89,3 @@ TEST_CASE("test small_array - large with raw_storage") {
     arr[1].destroy();
     arr[2].destroy();
 }
-
-TEST_CASE("test is_power_of_two") {
-    uint16_t next_power_of_two = 1;
-    uint16_t max = std::numeric_limits<uint16_t>::max();
-    for (uint16_t i = 1; i < max; ++i) {
-        if (i == next_power_of_two) {
-            REQUIRE_MESSAGE(condy::is_power_of_two(i), "i=", i);
-            next_power_of_two <<= 1;
-        } else {
-            REQUIRE_MESSAGE(!condy::is_power_of_two(i), "i=", i);
-        }
-    }
-}
