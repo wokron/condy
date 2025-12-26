@@ -88,6 +88,7 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
     return op;
 }
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 template <typename ProvidedBufferContainer, typename Func, typename... Args>
 auto make_bundle_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
                                           Func &&func, Args &&...args) {
@@ -96,16 +97,16 @@ auto make_bundle_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
         func(sqe, args...);
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
-#endif
     };
     auto op =
         SelectBufferOpAwaiter<ProvidedBufferContainer, decltype(prep_func)>(
             buffers, std::move(prep_func));
     return op;
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 template <typename MultiShotFunc, typename ProvidedBufferContainer,
           typename Func, typename... Args>
 auto make_multishot_bundle_select_buffer_op_awaiter(
@@ -116,9 +117,7 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         func(sqe, args...);
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
-#endif
     };
     auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>,
                                              ProvidedBufferContainer,
@@ -127,6 +126,7 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         std::move(prep_func));
     return op;
 }
+#endif
 
 template <typename FreeFunc, typename Func, typename... Args>
 auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,

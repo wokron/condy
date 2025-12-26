@@ -478,10 +478,13 @@ inline void prep_sendto_zc_fixed(io_uring_sqe *sqe, int sockfd, const void *buf,
 template <typename Fd, typename Buffer>
 inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
         if constexpr (detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_bundle_select_buffer_op_awaiter(
                 &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
-        } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
+        } else
+#endif
+            if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_op_awaiter(&buf, io_uring_prep_send,
                                                  sockfd, nullptr, 0, flags);
         } else {
@@ -497,15 +500,17 @@ template <typename Fd, typename Buffer>
 inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
                          const struct sockaddr *addr, socklen_t addrlen) {
     auto op = [&] {
-        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
-                                   buf.data(), buf.size(), flags, addr, addrlen,
-                                   buf.buf_index());
-        } else if constexpr (detail::is_bundled_provided_buffer_queue_v<
-                                 Buffer>) {
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+        if constexpr (detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_bundle_select_buffer_op_awaiter(
                 &buf, detail::prep_sendto, sockfd, nullptr, 0, flags, addr,
                 addrlen);
+        } else
+#endif
+            if constexpr (detail::is_fixed_buffer_v<Buffer>) {
+            return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
+                                   buf.data(), buf.size(), flags, addr, addrlen,
+                                   buf.buf_index());
         } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_op_awaiter(&buf, detail::prep_sendto,
                                                  sockfd, nullptr, 0, flags,
@@ -561,12 +566,15 @@ inline auto async_sendto_zc(Fd sockfd, Buffer &&buf, int flags,
 template <typename Fd, typename Buffer>
 inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
     auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
         if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
                       detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_bundle_select_buffer_op_awaiter(
                 &buf, io_uring_prep_recv, sockfd, nullptr, 0, flags);
-        } else if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
-                             detail::is_provided_buffer_queue_v<Buffer>) {
+        } else
+#endif
+            if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
+                          detail::is_provided_buffer_queue_v<Buffer>) {
             return make_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
                                                  sockfd, nullptr, 0, flags);
         } else {
@@ -582,16 +590,17 @@ template <typename Fd, typename Buffer, typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
                                  MultiShotFunc &&func) {
     auto op = [&] {
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
         if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
                       detail::is_bundled_provided_buffer_queue_v<Buffer>) {
             return make_multishot_bundle_select_buffer_op_awaiter(
                 std::forward<MultiShotFunc>(func), &buf,
                 io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
-        } else {
+        } else
+#endif
             return make_multishot_select_buffer_op_awaiter(
                 std::forward<MultiShotFunc>(func), &buf,
                 io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
-        }
     }();
     detail::maybe_add_fixed_fd_flag(op, sockfd);
     return op;
