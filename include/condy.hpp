@@ -9,5 +9,4 @@
 #include "condy/runtime_options.hpp"    // IWYU pragma: export
 #include "condy/sync_wait.hpp"          // IWYU pragma: export
 #include "condy/task.hpp"               // IWYU pragma: export
-#include "condy/timer.hpp"              // IWYU pragma: export
 #include "condy/version.hpp"            // IWYU pragma: export

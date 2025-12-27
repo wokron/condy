@@ -62,8 +62,6 @@ protected:
     Invoker::Func extend_func_ = nullptr;
 };
 
-class TimerFinishHandle : public OpFinishHandle {};
-
 template <typename Func, typename HandleBase>
 class MultiShotMixin : public HandleBase {
 public:

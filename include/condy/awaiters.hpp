@@ -35,16 +35,6 @@ private:
     Handle *handle_ptr_;
 };
 
-template <> class HandleBox<TimerFinishHandle> {
-public:
-    HandleBox(TimerFinishHandle *h) : handle_ptr_(h) {}
-
-    TimerFinishHandle &get() { return *handle_ptr_; }
-
-private:
-    TimerFinishHandle *handle_ptr_;
-};
-
 template <typename Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
@@ -156,15 +146,6 @@ public:
                                                    ProvidedBufferContainer>(
                    std::move(multishot_func), buffers),
                func) {}
-};
-
-template <typename Func>
-class [[nodiscard]] TimerOpAwaiter
-    : public OpAwaiterBase<TimerFinishHandle, Func> {
-public:
-    using Base = OpAwaiterBase<TimerFinishHandle, Func>;
-    TimerOpAwaiter(TimerFinishHandle *timer_handle, Func func)
-        : Base(HandleBox<TimerFinishHandle>(timer_handle), func) {}
 };
 
 template <typename Awaiter>
