@@ -3,7 +3,7 @@ Checks: >
   clang-diagnostic-*,
   clang-analyzer-*,
   performance-*
-WarningsAsErrors: ""
+WarningsAsErrors: "*"
 HeaderFilterRegex: 'include/condy/.*\.hpp$'
 FormatStyle: "file"
 CheckOptions: []
