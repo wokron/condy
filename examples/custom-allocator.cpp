@@ -29,7 +29,7 @@ condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
     double tasks_per_second = task_count / duration.count();
     std::cout << "Spawned and completed " << task_count << " tasks in "
               << duration.count() << " seconds (" << tasks_per_second
-              << " tasks/second)" << std::endl;
+              << " tasks/second)\n";
 }
 
 #if !__clang__

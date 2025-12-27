@@ -6,6 +6,7 @@
 #include "condy/ring.hpp"
 #include "condy/work_type.hpp"
 #include <array>
+#include <cerrno>
 #include <cstddef>
 #include <limits>
 #include <tuple>
@@ -45,8 +46,8 @@ public:
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
 protected:
-    int res_;
-    int flags_;
+    int res_ = -EINVAL;
+    int flags_ = 0;
     Invoker *invoker_ = nullptr;
 };
 

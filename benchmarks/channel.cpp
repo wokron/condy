@@ -17,7 +17,7 @@ condy::Coro<void> consumer_task(condy::Channel<int> &channel,
     for (size_t i = 0; i < num_messages; ++i) {
         auto value = co_await channel.pop();
         if (value != static_cast<int>(i)) {
-            std::cerr << "Data corruption detected!" << std::endl;
+            std::cerr << "Data corruption detected!\n";
         }
     }
     co_return;
@@ -27,6 +27,7 @@ condy::Coro<void>
 launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
                  size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
+    tasks.reserve(channels.size());
     for (auto &channel : channels) {
         tasks.emplace_back(
             condy::co_spawn(producer_task(*channel, num_messages)));
@@ -43,6 +44,7 @@ launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
     size_t num_pairs = channels.size();
     std::vector<condy::Task<void>> tasks;
     auto start = std::chrono::high_resolution_clock::now();
+    tasks.reserve(channels.size());
     for (auto &channel : channels) {
         tasks.emplace_back(
             condy::co_spawn(consumer_task(*channel, num_messages)));
@@ -64,6 +66,7 @@ int main() {
     const size_t buffer_size = 1024;
 
     std::vector<std::unique_ptr<condy::Channel<int>>> channels;
+    channels.reserve(num_pairs);
     for (size_t i = 0; i < num_pairs; ++i) {
         channels.push_back(std::make_unique<condy::Channel<int>>(buffer_size));
     }

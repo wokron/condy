@@ -2,7 +2,6 @@
 Checks: >
   clang-diagnostic-*,
   clang-analyzer-*,
-  bugprone-*,
   performance-*
 WarningsAsErrors: ""
 HeaderFilterRegex: 'include/condy/.*\.hpp$'

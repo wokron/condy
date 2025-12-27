@@ -75,7 +75,7 @@ private:
 };
 
 [[noreturn]] inline void panic_on(const char *msg) noexcept {
-    std::cerr << "Panic: " << msg << std::endl;
+    std::cerr << "Panic: " << msg << '\n';
 #ifndef CRASH_TEST
     std::terminate();
 #else
@@ -146,6 +146,7 @@ template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
 
 template <typename M, typename T> T *container_of(M T::*member, M *ptr) {
     auto offset = offset_of(member);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
     return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
 }
 

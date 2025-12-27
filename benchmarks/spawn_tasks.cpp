@@ -23,7 +23,7 @@ condy::Coro<void> spawn_tasks(size_t task_count) {
     double tasks_per_second = task_count / duration.count();
     std::cout << "Spawned and completed " << task_count << " tasks in "
               << duration.count() << " seconds (" << tasks_per_second
-              << " tasks/second)" << std::endl;
+              << " tasks/second)\n";
 }
 
 int main() {

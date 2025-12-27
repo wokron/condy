@@ -18,6 +18,7 @@ TEST_CASE("test runtime_options - event_interval") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(20);
         for (int i = 0; i < 20; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -81,6 +82,7 @@ TEST_CASE("test runtime_options - enable_sqpoll") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -106,6 +108,7 @@ TEST_CASE("test runtime_options - enable_defer_taskrun") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -135,6 +138,7 @@ TEST_CASE("test runtime_options - enable_attach_wq") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -164,6 +168,7 @@ TEST_CASE("test runtime_options - enable_coop_taskrun") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -189,6 +194,7 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }
@@ -219,6 +225,7 @@ TEST_CASE("test runtime_options - enable_no_mmap") {
 
     auto func = [&]() -> condy::Coro<void> {
         std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
         for (int i = 0; i < 1000; i++) {
             tasks.push_back(condy::co_spawn(task_func()));
         }

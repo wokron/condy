@@ -140,11 +140,11 @@ public:
     ProvidedBuffer() = default;
     ProvidedBuffer(void *data, size_t size, BundledProvidedBufferPool *pool)
         : data_(data), size_(size), pool_(pool) {}
-    ProvidedBuffer(ProvidedBuffer &&other)
+    ProvidedBuffer(ProvidedBuffer &&other) noexcept
         : data_(std::exchange(other.data_, nullptr)),
           size_(std::exchange(other.size_, 0)),
           pool_(std::exchange(other.pool_, nullptr)) {}
-    ProvidedBuffer &operator=(ProvidedBuffer &&other) {
+    ProvidedBuffer &operator=(ProvidedBuffer &&other) noexcept {
         if (this != &other) {
             data_ = std::exchange(other.data_, nullptr);
             size_ = std::exchange(other.size_, 0);

@@ -12,7 +12,7 @@ struct SimpleFinishHandle {
     void cancel() { cancelled_++; }
 
     void invoke(int res) {
-        res_ = std::move(res);
+        res_ = res;
         (*invoker_)();
     }
 

@@ -80,6 +80,7 @@ TEST_CASE("test runtime - single thread schedule multiple coroutines") {
     const int num_coros = 20;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    coros.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }
@@ -108,6 +109,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
     const int num_coros = 10;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    coros.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }
@@ -139,6 +141,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
     const int num_coros = 10;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    coros.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }

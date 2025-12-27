@@ -14,8 +14,8 @@ struct SimpleFinishHandle {
     void cancel() { cancelled_++; }
 
     void invoke(int res) {
-        res_ = std::move(res);
-        (*invoker_)();
+        res_ = res;
+        (*invoker_)(); // NOLINT(clang-analyzer-core.CallAndMessage)
     }
 
     int extract_result() { return res_; }

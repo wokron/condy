@@ -301,7 +301,7 @@ private:
     }
 
 private:
-    enum class State {
+    enum class State : uint8_t {
         Idle,    // Not running
         Running, // Started running
         Enabled, // Running and ring enabled

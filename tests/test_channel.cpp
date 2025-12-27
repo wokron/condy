@@ -140,11 +140,13 @@ TEST_CASE("test channel - multi producer and consumer") {
     };
 
     std::vector<condy::Task<void>> producer_tasks;
+    producer_tasks.reserve(num_producers);
     for (size_t i = 0; i < num_producers; ++i) {
         producer_tasks.push_back(condy::co_spawn(runtime, producer(i)));
     }
 
     std::vector<condy::Task<void>> consumer_tasks;
+    consumer_tasks.reserve(num_consumers);
     for (size_t i = 0; i < num_consumers; ++i) {
         consumer_tasks.push_back(condy::co_spawn(runtime, consumer()));
     }
@@ -609,6 +611,7 @@ condy::Coro<void>
 launch_producers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
                  size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
+    tasks.reserve(channels.size());
     for (auto &channel : channels) {
         tasks.emplace_back(
             condy::co_spawn(producer_task(*channel, num_messages)));
@@ -623,6 +626,7 @@ condy::Coro<void>
 launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
                  size_t num_messages) {
     std::vector<condy::Task<void>> tasks;
+    tasks.reserve(channels.size());
     for (auto &channel : channels) {
         tasks.emplace_back(
             condy::co_spawn(consumer_task(*channel, num_messages)));
@@ -641,6 +645,7 @@ TEST_CASE("test channel - two runtime") {
     const size_t buffer_size = 1024;
 
     std::vector<std::unique_ptr<condy::Channel<int>>> channels;
+    channels.reserve(num_pairs);
     for (size_t i = 0; i < num_pairs; ++i) {
         channels.push_back(std::make_unique<condy::Channel<int>>(buffer_size));
     }
