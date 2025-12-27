@@ -121,7 +121,7 @@ private:
             return true;
         }
         if (!full_inner_()) {
-            push_inner_(std::move(item));
+            push_inner_(std::forward<U>(item));
             return true;
         }
         return false;

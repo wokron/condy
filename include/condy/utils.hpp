@@ -11,6 +11,7 @@
 #include <system_error>
 #include <utility>
 
+// NOLINTBEGIN(bugprone-reserved-identifier)
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
 #include <sanitizer/tsan_interface.h>
@@ -22,6 +23,7 @@
 #define __tsan_acquire(addr) static_cast<void>(0)
 #define __tsan_release(addr) static_cast<void>(0)
 #endif
+// NOLINTEND(bugprone-reserved-identifier)
 
 namespace condy {
 

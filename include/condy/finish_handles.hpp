@@ -34,7 +34,7 @@ public:
 
     DEFINE_CANCEL_METHOD_();
 
-    void set_result(int res, int flags) {
+    void set_result(int res, uint32_t flags) {
         res_ = res;
         flags_ = flags;
     }
@@ -47,7 +47,7 @@ public:
 
 protected:
     int res_ = -EINVAL;
-    int flags_ = 0;
+    uint32_t flags_ = 0;
     Invoker *invoker_ = nullptr;
 };
 
