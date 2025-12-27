@@ -251,7 +251,7 @@ public:
     NAPI &napi() { return napi_; }
 
     io_uring_sqe *get_sqe() {
-        int r;
+        [[maybe_unused]] int r;
         io_uring_sqe *sqe;
         do {
             sqe = io_uring_get_sqe(&ring_);
@@ -259,14 +259,10 @@ public:
                 break;
             }
             r = io_uring_submit(&ring_);
-            if (r < 0) [[unlikely]] {
-                throw make_system_error("io_uring_submit", -r);
-            }
+            assert(r >= 0);
             if (sqpoll_mode_) {
                 r = io_uring_sqring_wait(&ring_);
-                if (r < 0) [[unlikely]] {
-                    throw make_system_error("io_uring_sqring_wait", -r);
-                }
+                assert(r >= 0);
             }
         } while (true);
         return sqe;
