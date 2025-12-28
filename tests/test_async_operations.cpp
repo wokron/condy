@@ -11,7 +11,6 @@
 #include <cstring>
 #include <doctest/doctest.h>
 #include <fcntl.h>
-#include <liburing.h>
 #include <linux/futex.h>
 #include <netinet/in.h>
 #include <string_view>

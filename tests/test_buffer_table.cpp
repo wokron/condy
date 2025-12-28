@@ -4,7 +4,6 @@
 #include "condy/ring.hpp"
 #include "condy/sync_wait.hpp"
 #include <doctest/doctest.h>
-#include <liburing.h>
 
 TEST_CASE("test buffer_table - init/destroy") {
     auto func = []() -> condy::Coro<void> {

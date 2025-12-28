@@ -7,7 +7,6 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <liburing.h>
 #include <stdexcept>
 #include <sys/mman.h>
 #include <sys/types.h>

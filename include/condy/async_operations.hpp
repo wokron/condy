@@ -5,7 +5,6 @@
 #include "condy/condy_uring.hpp"
 #include "condy/provided_buffers.hpp"
 #include "condy/ring.hpp"
-#include <liburing.h>
 #include <type_traits>
 
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4

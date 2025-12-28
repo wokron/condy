@@ -5,8 +5,6 @@
 #include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
-#include <liburing.h>
-#include <liburing/io_uring.h>
 
 namespace {
 
