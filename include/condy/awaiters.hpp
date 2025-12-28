@@ -155,8 +155,10 @@ public:
     DrainedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
 
     void register_operation(unsigned int flags) {
+#if IO_URING_CHECK_VERSION(2, 12) // < 2.12
         auto *runtime = Context::current().runtime();
         runtime->notify(); // Ensure every operation before drain will complete
+#endif
         Base::register_operation(flags | IOSQE_IO_DRAIN);
     }
 
