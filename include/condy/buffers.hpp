@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <sys/mman.h>
+#include <sys/uio.h>
 #include <vector>
 
 namespace condy {
@@ -91,6 +92,14 @@ inline MutableBuffer buffer(std::string &str) {
 
 inline ConstBuffer buffer(const std::string &str) {
     return ConstBuffer(static_cast<const void *>(str.data()), str.size());
+}
+
+inline ConstBuffer buffer(std::string_view strv) {
+    return ConstBuffer(static_cast<const void *>(strv.data()), strv.size());
+}
+
+inline MutableBuffer buffer(iovec &iov) {
+    return MutableBuffer(iov.iov_base, iov.iov_len);
 }
 
 } // namespace condy

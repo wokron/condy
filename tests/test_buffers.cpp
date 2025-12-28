@@ -52,6 +52,24 @@ TEST_CASE("test buffers - buffer vector") {
     REQUIRE(cbuf.size() == sizeof(int) * vec.size());
 }
 
+TEST_CASE("test buffers - buffer string_view") {
+    std::string_view strv = "hello world";
+    condy::ConstBuffer cbuf = condy::buffer(strv);
+    REQUIRE(cbuf.data() == reinterpret_cast<const void *>(strv.data()));
+    REQUIRE(cbuf.size() == strv.size());
+}
+
+TEST_CASE("test buffers - buffer iovec") {
+    char data[32] = {};
+    struct iovec iov;
+    iov.iov_base = data;
+    iov.iov_len = sizeof(data);
+
+    condy::MutableBuffer mbuf = condy::buffer(iov);
+    REQUIRE(mbuf.data() == data);
+    REQUIRE(mbuf.size() == sizeof(data));
+}
+
 TEST_CASE("test buffers - provided buffer queue init") {
     auto func = []() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(16);
