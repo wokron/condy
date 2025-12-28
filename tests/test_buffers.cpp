@@ -85,7 +85,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
 
-    int r;
+    ssize_t r;
 
     r = ::write(pipefd[1], "test", 4);
     REQUIRE(r == 4);
@@ -143,7 +143,7 @@ TEST_CASE("test buffers - provided buffer pool usage") {
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
 
-    int r;
+    ssize_t r;
 
     r = ::write(pipefd[1], "test", 4);
     REQUIRE(r == 4);

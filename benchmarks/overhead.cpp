@@ -30,7 +30,7 @@ void run_condy_nop(size_t times) {
 }
 
 // This is the worst case, normal workloads could batch these operations
-int main() {
+int main() noexcept(false) {
     const size_t iterations = 10'000'000;
 
     long duration_raw, duration_condy;
@@ -59,8 +59,10 @@ int main() {
 
     long overhead = duration_condy - duration_raw;
     long overhead_per_op = overhead / static_cast<long>(iterations);
-    std::printf("Overhead: %ld ns per operation (%.2f%%)\n", overhead_per_op,
-                (static_cast<double>(overhead) / duration_raw) * 100.0);
+    std::printf(
+        "Overhead: %ld ns per operation (%.2f%%)\n", overhead_per_op,
+        (static_cast<double>(overhead) / static_cast<double>(duration_raw)) *
+            100.0);
 
     return 0;
 }

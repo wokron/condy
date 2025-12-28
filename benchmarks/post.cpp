@@ -6,7 +6,7 @@ condy::Coro<void> test_post(size_t times) {
     }
 }
 
-int main() {
+int main() noexcept(false) {
     const size_t times = 10'000'000;
 
     auto start = std::chrono::high_resolution_clock::now();

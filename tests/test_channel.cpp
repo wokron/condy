@@ -31,13 +31,11 @@ TEST_CASE("test channel - try push and pop") {
     REQUIRE(channel.size() == 2);
 
     auto item1 = channel.try_pop();
-    REQUIRE(item1.has_value());
-    REQUIRE(item1.value() == 1);
+    REQUIRE((item1.has_value() && item1.value() == 1));
     REQUIRE(channel.size() == 1);
 
     auto item2 = channel.try_pop();
-    REQUIRE(item2.has_value());
-    REQUIRE(item2.value() == 2);
+    REQUIRE((item2.has_value() && item2.value() == 2));
     REQUIRE(channel.size() == 0);
 
     auto item3 = channel.try_pop();
@@ -206,7 +204,7 @@ TEST_CASE("test channel - channel cancel pop") {
 
     auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
-            .tv_sec = 60 * 60,
+            .tv_sec = 60ll * 60ll,
             .tv_nsec = 0,
         };
         auto r = co_await (ch1.pop() || ch2.pop() ||
@@ -237,12 +235,10 @@ TEST_CASE("test channel - move only type") {
     REQUIRE(channel.try_push(std::make_unique<int>(43)));
 
     auto item = channel.try_pop();
-    REQUIRE(item.has_value());
-    REQUIRE(**item == 42);
+    REQUIRE((item.has_value() && **item == 42));
 
     item = channel.try_pop();
-    REQUIRE(item.has_value());
-    REQUIRE(**item == 43);
+    REQUIRE((item.has_value() && **item == 43));
 }
 
 TEST_CASE("test channel - move only in coroutine") {
@@ -468,8 +464,7 @@ TEST_CASE("test channel - destruct items after close") {
         REQUIRE(int_deleter::counter == 0);
 
         auto item = channel.try_pop();
-        REQUIRE(item.has_value());
-        REQUIRE(**item == 1);
+        REQUIRE((item.has_value() && **item == 1));
     }
     REQUIRE(int_deleter::counter == 5);
 }
@@ -578,8 +573,7 @@ TEST_CASE("test channel - force push") {
 
     for (size_t i = 0; i < 12; i++) {
         auto item = channel.try_pop();
-        REQUIRE(item.has_value());
-        REQUIRE(item.value() == static_cast<int>(i + 1));
+        REQUIRE((item.has_value() && item.value() == static_cast<int>(i + 1)));
     }
 
     REQUIRE(channel.size() == 0);

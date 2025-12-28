@@ -124,7 +124,7 @@ TEST_CASE("test op_finish_handle - cancel op") {
 
     auto *sqe = ring.get_sqe();
     __kernel_timespec ts{
-        .tv_sec = 60 * 60,
+        .tv_sec = 60ll * 60ll,
         .tv_nsec = 0,
     };
     io_uring_prep_timeout(sqe, &ts, 0, 0);

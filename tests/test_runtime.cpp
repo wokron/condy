@@ -167,7 +167,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     bool finished = false;
     auto func = [&]() -> condy::Coro<void> {
         __kernel_timespec ts{
-            .tv_sec = 60 * 60,
+            .tv_sec = 60ll * 60ll,
             .tv_nsec = 0,
         };
         auto r = co_await (

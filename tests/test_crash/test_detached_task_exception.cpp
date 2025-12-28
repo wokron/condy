@@ -13,13 +13,13 @@ condy::Coro<int> co_main() {
     condy::co_spawn(simple_task()).detach();
     __kernel_timespec ts{
         .tv_sec = 0,
-        .tv_nsec = 10 * 1000 * 1000 // 10ms
+        .tv_nsec = 10ll * 1000ll * 1000ll // 10ms
     };
     co_await condy::async_timeout(&ts, 0, 0);
     co_return 0;
 }
 
-int main() {
+int main() noexcept(false) {
     condy::sync_wait(co_main());
     return 0;
 }

@@ -48,7 +48,7 @@ TEST_CASE("test intrusive - single list") {
 
     list.push_back(&item3);
     list.push_back(std::move(list2));
-    REQUIRE(list2.empty());
+    REQUIRE(list2.empty()); // NOLINT(bugprone-use-after-move)
     REQUIRE(!list.empty());
 
     REQUIRE(list.pop_front()->value == 3);

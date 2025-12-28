@@ -20,7 +20,7 @@ condy::Coro<> handle_client(int client_fd) {
     char buffer[BUFFER_SIZE];
 
     while (true) {
-        ssize_t n = co_await condy::async_read(
+        int n = co_await condy::async_read(
             client_fd, condy::buffer(buffer, BUFFER_SIZE), 0);
         if (n <= 0) {
             if (n < 0) {
@@ -84,7 +84,7 @@ condy::Coro<> co_main(const std::string &host, uint16_t port) {
     }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv) noexcept(false) {
     if (argc < 3) {
         std::fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
         return 1;

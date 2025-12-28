@@ -208,13 +208,13 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
 }
 
 TEST_CASE("test runtime_options - enable_no_mmap") {
-    void *data = mmap(nullptr, 4096 * 2, PROT_READ | PROT_WRITE,
+    void *data = mmap(nullptr, 4096l * 2, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     REQUIRE(data != MAP_FAILED);
-    auto unmap = condy::defer([data]() { munmap(data, 4096 * 2); });
+    auto unmap = condy::defer([data]() { munmap(data, 4096l * 2); });
 
     condy::RuntimeOptions options;
-    options.enable_no_mmap(data, 4096 * 2).sq_size(8).cq_size(16);
+    options.enable_no_mmap(data, 4096l * 2).sq_size(8).cq_size(16);
     condy::Runtime runtime(options);
 
     auto task_func = [&]() -> condy::Coro<void> {

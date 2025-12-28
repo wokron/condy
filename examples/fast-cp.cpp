@@ -8,7 +8,7 @@
 #include <sys/types.h>
 
 constexpr size_t TASK_NUM = 64;
-constexpr size_t CHUNK_SIZE = 128 * 1024;
+constexpr size_t CHUNK_SIZE = 128 * 1024l;
 
 condy::Coro<> copy_file_task(off_t &offset, off_t file_size, void *ptr) {
     using condy::operators::operator>>;
@@ -71,7 +71,7 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
         exit(1);
     }
 
-    off_t file_size = statx_buf.stx_size;
+    off_t file_size = static_cast<off_t>(statx_buf.stx_size);
     off_t offset = 0;
 
     void *raw_buffer =
@@ -120,7 +120,7 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
     co_return;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv) noexcept(false) {
     if (argc < 3) {
         std::fprintf(stderr, "Usage: %s <infile> <outfile>\n", argv[0]);
         return 1;

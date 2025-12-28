@@ -17,6 +17,7 @@
 #include <string_view>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
 #include <sys/xattr.h>
 #include <thread>
 #include <unistd.h>
@@ -66,7 +67,7 @@ std::string generate_data(size_t size) {
     std::string data;
     data.resize(size);
     for (size_t i = 0; i < size; ++i) {
-        data[i] = 'A' + (i % 26);
+        data[i] = static_cast<char>('A' + (i % 26));
     }
     return data;
 }
@@ -79,7 +80,7 @@ TEST_CASE("test async_operations - splice fixed fd") {
     REQUIRE(pipe(pipe_fds2) == 0);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
     // Write message to the first pipe
     ssize_t bytes_written = write(pipe_fds1[1], msg, msg_len);
@@ -115,7 +116,7 @@ TEST_CASE("test async_operations - recvmsg multishot") {
     const size_t times = 5;
 
     const char *msg = "Hello, condy multishot!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
     auto sender = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < times; ++i) {
@@ -188,9 +189,9 @@ TEST_CASE("test async_operations - read fixed buffer") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(pipe_fds[1], msg, msg_len);
+    ssize_t r = ::write(pipe_fds[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -220,9 +221,9 @@ TEST_CASE("test async_operations - readv fixed buffer") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(pipe_fds[1], msg, msg_len);
+    ssize_t r = ::write(pipe_fds[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -235,15 +236,15 @@ TEST_CASE("test async_operations - readv fixed buffer") {
         };
         buffer_table.update_buffers(0, &buf_storage_iov, 1);
 
-        ssize_t middle = msg_len / 2;
+        size_t middle = msg_len / 2;
         iovec read_iovs[2] = {
             {
                 .iov_base = buf_storage,
-                .iov_len = static_cast<size_t>(middle),
+                .iov_len = middle,
             },
             {
                 .iov_base = static_cast<char *>(buf_storage) + middle,
-                .iov_len = static_cast<size_t>(msg_len - middle),
+                .iov_len = msg_len - middle,
             },
         };
 
@@ -264,9 +265,9 @@ TEST_CASE("test async_operations - read provided buffer") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     const char *msg = "Hello, condy provided buffer!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(pipe_fds[1], msg, msg_len);
+    ssize_t r = ::write(pipe_fds[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -288,9 +289,9 @@ TEST_CASE("test async_operations - read incr provided buffer") {
     REQUIRE(pipe(pipe_fds) == 0);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(pipe_fds[1], msg, msg_len);
+    ssize_t r = ::write(pipe_fds[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -301,7 +302,7 @@ TEST_CASE("test async_operations - read incr provided buffer") {
         REQUIRE(std::memcmp(buf.data(), msg, msg_len) == 0);
         REQUIRE(buf.owns_buffer() == false);
 
-        int r = ::write(pipe_fds[1], msg, msg_len);
+        ssize_t r = ::write(pipe_fds[1], msg, msg_len);
         REQUIRE(r == msg_len);
         auto [n2, buf2] = co_await condy::async_read(pipe_fds[0], buf_pool, 0);
         REQUIRE(n2 == msg_len);
@@ -321,9 +322,9 @@ TEST_CASE("test async_operations - recv bundle provided buffer") {
     create_tcp_socketpair(sv);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(sv[1], msg, msg_len);
+    ssize_t r = ::write(sv[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -351,9 +352,9 @@ TEST_CASE("test async_operations - recv incr and bundle provided buffer") {
     create_tcp_socketpair(sv);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
-    int r = ::write(sv[1], msg, msg_len);
+    ssize_t r = ::write(sv[1], msg, msg_len);
     REQUIRE(r == msg_len);
 
     auto func = [&]() -> condy::Coro<void> {
@@ -366,7 +367,7 @@ TEST_CASE("test async_operations - recv incr and bundle provided buffer") {
         REQUIRE(bufs[0].owns_buffer() == false);
         REQUIRE(std::memcmp(bufs[0].data(), msg, msg_len) == 0);
 
-        int r = ::write(sv[1], msg, msg_len);
+        ssize_t r = ::write(sv[1], msg, msg_len);
         REQUIRE(r == msg_len);
         r = write(sv[1], msg, msg_len);
         REQUIRE(r == msg_len);
@@ -380,12 +381,12 @@ TEST_CASE("test async_operations - recv incr and bundle provided buffer") {
         REQUIRE(bufs2[2].size() == 16);
 
         std::string actual;
-        int rest = n2;
+        ssize_t rest = n2;
         for (const auto &buf : bufs2) {
             REQUIRE(buf.owns_buffer());
             actual.append(static_cast<char *>(buf.data()),
                           std::min<size_t>(buf.size(), rest));
-            rest -= buf.size();
+            rest -= static_cast<ssize_t>(buf.size());
         }
         std::string expected;
         expected.append(msg, msg_len);
@@ -447,15 +448,15 @@ TEST_CASE("test async_operations - writev fixed buffer") {
         };
         buffer_table.update_buffers(0, &buf_storage_iov, 1);
 
-        ssize_t middle = msg_len / 2;
+        size_t middle = msg_len / 2;
         iovec write_iovs[2] = {
             {
                 .iov_base = msg,
-                .iov_len = static_cast<size_t>(middle),
+                .iov_len = middle,
             },
             {
                 .iov_base = msg + middle,
-                .iov_len = static_cast<size_t>(msg_len - middle),
+                .iov_len = msg_len - middle,
             },
         };
 
@@ -545,15 +546,13 @@ TEST_CASE("test async_operations - send zero copy") {
     create_tcp_socketpair(sv);
 
     const char *msg = "Hello, condy!";
-    ssize_t msg_len = std::strlen(msg);
+    size_t msg_len = std::strlen(msg);
 
     auto func = [&]() -> condy::Coro<void> {
         condy::Channel<int> channel(1);
-        char buffer[64];
-        std::memcpy(buffer, msg, msg_len);
         ssize_t n =
-            co_await condy::async_send_zc(sv[1], condy::buffer(buffer, msg_len),
-                                          0, 0, condy::will_push(channel));
+            co_await condy::async_send_zc(sv[1], condy::buffer(msg, msg_len), 0,
+                                          0, condy::will_push(channel));
         REQUIRE(n == msg_len);
         co_await channel.pop();
     };
@@ -562,7 +561,7 @@ TEST_CASE("test async_operations - send zero copy") {
 }
 
 TEST_CASE("test async_operations - test splice - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     int pipe_fds2[2];
     REQUIRE(pipe(pipe_fds) == 0);
@@ -590,7 +589,7 @@ TEST_CASE("test async_operations - test splice - basic") {
 }
 
 TEST_CASE("test async_operations - test splice - fixed fd") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     int pipe_fds2[2];
     REQUIRE(pipe(pipe_fds) == 0);
@@ -641,7 +640,7 @@ TEST_CASE("test async_operations - test splice - fixed fd") {
 }
 
 TEST_CASE("test async_operations - test tee - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     int pipe_fds2[2];
     REQUIRE(pipe(pipe_fds) == 0);
@@ -674,7 +673,7 @@ TEST_CASE("test async_operations - test tee - basic") {
 }
 
 TEST_CASE("test async_operations - test tee - fixed fd") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     int pipe_fds2[2];
     REQUIRE(pipe(pipe_fds) == 0);
@@ -735,7 +734,7 @@ TEST_CASE("test async_operations - test tee - fixed fd") {
 }
 
 TEST_CASE("test async_operations - test readv - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -774,7 +773,7 @@ TEST_CASE("test async_operations - test readv - basic") {
 
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 TEST_CASE("test async_operations - test readv - fixed buffer") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -815,7 +814,7 @@ TEST_CASE("test async_operations - test readv - fixed buffer") {
 #endif
 
 TEST_CASE("test async_operations - test writev - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -830,7 +829,8 @@ TEST_CASE("test async_operations - test writev - basic") {
         char bufs[4][256];
         iovec iovs[4];
         for (int i = 0; i < 4; i++) {
-            std::memcpy(bufs[i], msg.data() + i * 256, 256);
+            std::memcpy(bufs[i], msg.data() + static_cast<ptrdiff_t>(i * 256),
+                        256);
             iovs[i].iov_base = bufs[i];
             iovs[i].iov_len = sizeof(bufs[i]);
         }
@@ -852,7 +852,7 @@ TEST_CASE("test async_operations - test writev - basic") {
 
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 TEST_CASE("test async_operations - test writev - fixed buffer") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -870,7 +870,8 @@ TEST_CASE("test async_operations - test writev - fixed buffer") {
 
         iovec iovs[4];
         for (int i = 0; i < 4; i++) {
-            std::memcpy(bufs[i], msg.data() + i * 256, 256);
+            std::memcpy(bufs[i], msg.data() + static_cast<ptrdiff_t>(i * 256),
+                        256);
             iovs[i].iov_base = bufs[i];
             iovs[i].iov_len = sizeof(bufs[i]);
         }
@@ -896,7 +897,7 @@ TEST_CASE("test async_operations - test recvmsg - basic") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = write(sv[1], msg.data(), msg.size());
+    ssize_t r = write(sv[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
         struct msghdr msg_hdr {};
@@ -926,7 +927,7 @@ TEST_CASE("test async_operations - test recvmsg - multishot") {
 
     auto msg = generate_data(data_size);
 
-    int r = write(sv[1], msg.data(), msg.size());
+    ssize_t r = write(sv[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
 
     close(sv[1]);
@@ -1009,7 +1010,7 @@ TEST_CASE("test async_operations - test sendmsg - basic") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = read(sv[0], read_buf, sizeof(read_buf));
+    ssize_t r = read(sv[0], read_buf, sizeof(read_buf));
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -1040,7 +1041,7 @@ TEST_CASE("test async_operations - test sendmsg - zero copy") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = read(sv[0], read_buf, sizeof(read_buf));
+    ssize_t r = read(sv[0], read_buf, sizeof(read_buf));
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -1076,7 +1077,7 @@ TEST_CASE("test async_operations - test sendmsg - zero copy fixed buffer") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = read(sv[0], read_buf, sizeof(read_buf));
+    ssize_t r = read(sv[0], read_buf, sizeof(read_buf));
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -1487,7 +1488,7 @@ TEST_CASE("test async_operations - test fallocate - basic") {
     });
 
     auto func = [&]() -> condy::Coro<void> {
-        int r = co_await condy::async_fallocate(fd, 0, 0, 1024 * 1024);
+        int r = co_await condy::async_fallocate(fd, 0, 0, 1024ll * 1024ll);
         REQUIRE(r == 0);
     };
     condy::sync_wait(func());
@@ -1513,7 +1514,8 @@ TEST_CASE("test async_operations - test fallocate - fixed fd") {
         int r = co_await fd_table.async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
 
-        r = co_await condy::async_fallocate(condy::fixed(0), 0, 0, 1024 * 1024);
+        r = co_await condy::async_fallocate(condy::fixed(0), 0, 0,
+                                            1024ll * 1024ll);
         REQUIRE(r == 0);
     };
     condy::sync_wait(func());
@@ -1612,7 +1614,7 @@ TEST_CASE("test async_operations - test close") {
 }
 
 TEST_CASE("test async_operations - test read - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1633,7 +1635,7 @@ TEST_CASE("test async_operations - test read - basic") {
 }
 
 TEST_CASE("test async_operations - test read - fixed fd") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1659,7 +1661,7 @@ TEST_CASE("test async_operations - test read - fixed fd") {
 }
 
 TEST_CASE("test async_operations - test read - fixed buffer") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1689,7 +1691,7 @@ TEST_CASE("test async_operations - test read - fixed buffer") {
 }
 
 TEST_CASE("test async_operations - test read - provided buffer") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1737,7 +1739,7 @@ TEST_CASE("test async_operations - test read - provided buffer") {
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 TEST_CASE("test async_operations - test read - multishot") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1789,7 +1791,7 @@ TEST_CASE("test async_operations - test read - multishot") {
 #endif
 
 TEST_CASE("test async_operations - test write - basic") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1811,7 +1813,7 @@ TEST_CASE("test async_operations - test write - basic") {
 }
 
 TEST_CASE("test async_operations - test write - fixed fd") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1838,7 +1840,7 @@ TEST_CASE("test async_operations - test write - fixed fd") {
 }
 
 TEST_CASE("test async_operations - test write - fixed buffer") {
-    int r;
+    ssize_t r;
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
@@ -1872,7 +1874,7 @@ TEST_CASE("test async_operations - test statx") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(1024);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     close(fd);
@@ -1894,7 +1896,7 @@ TEST_CASE("test async_operations - test fadvise - basic") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(1024);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -1913,7 +1915,7 @@ TEST_CASE("test async_operations - test fadvise - fixed fd") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(1024);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -1939,7 +1941,7 @@ TEST_CASE("test async_operations - test fadvise64 - basic") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(1024);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -1961,7 +1963,7 @@ TEST_CASE("test async_operations - test fadvise64 - fixed fd") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(1024);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -2023,7 +2025,7 @@ TEST_CASE("test async_operations - test send - basic") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2049,7 +2051,7 @@ TEST_CASE("test async_operations - test send - fixed fd") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2066,7 +2068,8 @@ TEST_CASE("test async_operations - test send - provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(4);
         for (int i = 0; i < 4; i++) {
-            queue.push(condy::buffer(msg.data() + i * (1024 / 4), 1024 / 4));
+            queue.push(condy::buffer(
+                msg.data() + static_cast<ptrdiff_t>(i * (1024 / 4)), 1024 / 4));
         }
 
         for (int i = 0; i < 4; i++) {
@@ -2080,7 +2083,7 @@ TEST_CASE("test async_operations - test send - provided buffer") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2098,7 +2101,8 @@ TEST_CASE("test async_operations - test send - bundled provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(4);
         for (int i = 0; i < 4; i++) {
-            queue.push(condy::buffer(msg.data() + i * (1024 / 4), 1024 / 4));
+            queue.push(condy::buffer(
+                msg.data() + static_cast<ptrdiff_t>(i * (1024 / 4)), 1024 / 4));
         }
 
         auto [n, binfo] =
@@ -2111,7 +2115,7 @@ TEST_CASE("test async_operations - test send - bundled provided buffer") {
     condy::sync_wait(func());
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2135,7 +2139,7 @@ TEST_CASE("test async_operations - test send - zero copy") {
     REQUIRE(called);
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2167,7 +2171,7 @@ TEST_CASE("test async_operations - test send - zero copy fixed buffer") {
     REQUIRE(called);
 
     char read_buf[2048];
-    int r = recv(sv[0], read_buf, sizeof(read_buf), 0);
+    ssize_t r = recv(sv[0], read_buf, sizeof(read_buf), 0);
     REQUIRE(r == msg.size());
     REQUIRE(std::string_view(read_buf, r) == msg);
 
@@ -2185,7 +2189,7 @@ TEST_CASE("test async_operations - test sendto - basic") {
     recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     recv_addr.sin_port = 0; // Let OS choose the port
 
-    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    ssize_t r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
     REQUIRE(r == 0);
 
     socklen_t addrlen = sizeof(recv_addr);
@@ -2219,7 +2223,7 @@ TEST_CASE("test async_operations - test sendto - fixed fd") {
     recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     recv_addr.sin_port = 0; // Let OS choose the port
 
-    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    ssize_t r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
     REQUIRE(r == 0);
 
     socklen_t addrlen = sizeof(recv_addr);
@@ -2270,7 +2274,8 @@ TEST_CASE("test async_operations - test sendto - provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(4);
         for (int i = 0; i < 4; i++) {
-            queue.push(condy::buffer(msg.data() + i * (1024 / 4), 1024 / 4));
+            queue.push(condy::buffer(
+                msg.data() + static_cast<ptrdiff_t>(i * (1024 / 4)), 1024 / 4));
         }
 
         for (int i = 0; i < 4; i++) {
@@ -2287,8 +2292,8 @@ TEST_CASE("test async_operations - test sendto - provided buffer") {
     char read_buf[2048];
     std::string actual;
     for (int i = 0; i < 4; i++) {
-        int r = recvfrom(receiver_fd, read_buf, sizeof(read_buf), 0, nullptr,
-                         nullptr);
+        ssize_t r = recvfrom(receiver_fd, read_buf, sizeof(read_buf), 0,
+                             nullptr, nullptr);
         REQUIRE(r == msg.size() / 4);
         actual.append(static_cast<char *>(read_buf), r);
     }
@@ -2309,7 +2314,7 @@ TEST_CASE("test async_operations - test sendto - bundled provided buffer") {
     recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     recv_addr.sin_port = 0; // Let OS choose the port
 
-    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    ssize_t r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
     REQUIRE(r == 0);
 
     socklen_t addrlen = sizeof(recv_addr);
@@ -2320,7 +2325,8 @@ TEST_CASE("test async_operations - test sendto - bundled provided buffer") {
     auto func = [&]() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(4);
         for (int i = 0; i < 4; i++) {
-            queue.push(condy::buffer(msg.data() + i * (1024 / 4), 1024 / 4));
+            queue.push(condy::buffer(
+                msg.data() + static_cast<ptrdiff_t>(i * (1024 / 4)), 1024 / 4));
         }
 
         auto [n, binfo] = co_await condy::async_sendto(
@@ -2355,7 +2361,7 @@ TEST_CASE("test async_operations - test sendto - zero copy") {
     recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     recv_addr.sin_port = 0; // Let OS choose the port
 
-    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    ssize_t r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
     REQUIRE(r == 0);
 
     socklen_t addrlen = sizeof(recv_addr);
@@ -2391,7 +2397,7 @@ TEST_CASE("test async_operations - test sendto - zero copy fixed buffer") {
     recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     recv_addr.sin_port = 0; // Let OS choose the port
 
-    int r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
+    ssize_t r = bind(receiver_fd, (sockaddr *)&recv_addr, sizeof(recv_addr));
     REQUIRE(r == 0);
 
     socklen_t addrlen = sizeof(recv_addr);
@@ -2431,7 +2437,7 @@ TEST_CASE("test async_operations - test recv - basic") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = send(sv[1], msg.data(), msg.size(), 0);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
     REQUIRE(r == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -2451,7 +2457,7 @@ TEST_CASE("test async_operations - test recv - fixed fd") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = send(sv[1], msg.data(), msg.size(), 0);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
     REQUIRE(r == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -2477,7 +2483,7 @@ TEST_CASE("test async_operations - test recv - provided buffer") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = send(sv[1], msg.data(), msg.size(), 0);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
     REQUIRE(r == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -2530,7 +2536,7 @@ TEST_CASE("test async_operations - test recv - bundled provided buffer") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = send(sv[1], msg.data(), msg.size(), 0);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
     REQUIRE(r == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {
@@ -2558,7 +2564,7 @@ TEST_CASE("test async_operations - test recv - multishot") {
     create_tcp_socketpair(sv);
 
     auto msg = generate_data(1024);
-    int r = send(sv[1], msg.data(), msg.size(), 0);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
     REQUIRE(r == msg.size());
     close(sv[1]);
 
@@ -2611,7 +2617,7 @@ TEST_CASE("test async_operations - test recv - bundled multishot") {
     auto msg = generate_data(1024);
 
     auto func = [&]() -> condy::Coro<void> {
-        int r;
+        ssize_t r;
         size_t count = 0;
         std::string actual;
 
@@ -2714,7 +2720,7 @@ TEST_CASE("test async_operations - test shutdown - basic") {
     };
     condy::sync_wait(func());
 
-    int r = recv(sv[0], nullptr, 0, 0);
+    ssize_t r = recv(sv[0], nullptr, 0, 0);
     REQUIRE(r == 0); // EOF
 
     close(sv[0]);
@@ -2736,7 +2742,7 @@ TEST_CASE("test async_operations - test shutdown - fixed fd") {
     };
     condy::sync_wait(func());
 
-    int r = recv(sv[0], nullptr, 0, 0);
+    ssize_t r = recv(sv[0], nullptr, 0, 0);
     REQUIRE(r == 0); // EOF
 
     close(sv[0]);
@@ -2842,7 +2848,7 @@ TEST_CASE("test async_operations - test sync_file_range") {
     REQUIRE(fd >= 0);
 
     auto msg = generate_data(4096);
-    int w = write(fd, msg.data(), msg.size());
+    ssize_t w = write(fd, msg.data(), msg.size());
     REQUIRE(w == msg.size());
 
     auto func = [&]() -> condy::Coro<void> {

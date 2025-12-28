@@ -228,7 +228,7 @@ TEST_CASE("test op_awaiter - select buffer op") {
         int pipefd[2];
         REQUIRE(pipe(pipefd) == 0);
 
-        int r = ::write(pipefd[1], "test", 4);
+        ssize_t r = ::write(pipefd[1], "test", 4);
         REQUIRE(r == 4);
 
         size_t unfinished = 1;

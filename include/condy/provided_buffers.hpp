@@ -111,8 +111,8 @@ public:
         while (bytes > 0) {
             auto &buf = br_->bufs[curr_bid];
             assert(buf.bid == curr_bid);
-            size_t buf_size = buf.len;
-            bytes -= buf_size;
+            uint32_t buf_size = buf.len;
+            bytes -= static_cast<int32_t>(buf_size);
             result.num_buffers++;
         }
         assert(size_ >= result.num_buffers);
@@ -209,9 +209,10 @@ public:
         auto mask = io_uring_buf_ring_mask(num_buffers_);
         for (size_t bid = 0; bid < num_buffers_; bid++) {
             char *ptr = buffer_base + bid * buffer_size;
-            io_uring_buf_ring_add(br_, ptr, buffer_size, bid, mask, bid);
+            io_uring_buf_ring_add(br_, ptr, buffer_size, bid, mask,
+                                  static_cast<int>(bid));
         }
-        io_uring_buf_ring_advance(br_, num_buffers_);
+        io_uring_buf_ring_advance(br_, static_cast<int>(num_buffers_));
     }
 
     ~BundledProvidedBufferPool() {
@@ -255,14 +256,14 @@ public:
         }
 #endif
 
-        auto bytes = res;
+        int32_t bytes = res;
         while (bytes > 0) {
             auto *buf_ptr = curr_io_uring_buf_();
             uint16_t bid = buf_ptr->bid;
-            size_t curr_buffer_size = buffer_size_ - partial_size_;
+            uint32_t curr_buffer_size = buffer_size_ - partial_size_;
             char *data = get_buffer_(bid) + partial_size_;
             buffers.emplace_back(data, curr_buffer_size, this);
-            bytes -= curr_buffer_size;
+            bytes -= static_cast<int32_t>(curr_buffer_size);
             partial_size_ = 0;
             advance_io_uring_buf_();
         }
@@ -284,7 +285,7 @@ public:
 
 private:
     char *get_buffer_(uint16_t bid) const {
-        return get_buffers_base_() + bid * buffer_size_;
+        return get_buffers_base_() + static_cast<size_t>(bid) * buffer_size_;
     }
 
     char *get_buffers_base_() const {

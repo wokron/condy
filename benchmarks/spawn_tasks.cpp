@@ -20,13 +20,14 @@ condy::Coro<void> spawn_tasks(size_t task_count) {
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
-    double tasks_per_second = task_count / duration.count();
+    double tasks_per_second =
+        static_cast<double>(task_count) / duration.count();
     std::cout << "Spawned and completed " << task_count << " tasks in "
               << duration.count() << " seconds (" << tasks_per_second
               << " tasks/second)\n";
 }
 
-int main() {
+int main() noexcept(false) {
     const size_t task_count = 1'000'000;
 
     condy::sync_wait(spawn_tasks(task_count));

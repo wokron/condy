@@ -30,11 +30,11 @@ class Ring;
 class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
 public:
     static constexpr WorkType work_type = WorkType::Common;
-    using ReturnType = int;
+    using ReturnType = int32_t;
 
     DEFINE_CANCEL_METHOD_();
 
-    void set_result(int res, int flags) {
+    void set_result(int32_t res, uint32_t flags) {
         res_ = res;
         flags_ = flags;
     }
@@ -46,8 +46,8 @@ public:
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
 protected:
-    int res_ = -EINVAL;
-    int flags_ = 0;
+    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
+    uint32_t flags_ = 0;
     Invoker *invoker_ = nullptr;
 };
 

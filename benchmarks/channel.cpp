@@ -54,13 +54,14 @@ launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
     }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
-    double throughput = num_messages * num_pairs / duration.count(); // ops/s
+    double throughput = static_cast<double>(num_messages * num_pairs) /
+                        duration.count(); // ops/s
     std::printf("Total time: %.4f seconds\n", duration.count());
     std::printf("Throughput: %.2f M msg/s\n", throughput / 1'000'000);
     co_return;
 }
 
-int main() {
+int main() noexcept(false) {
     const size_t num_pairs = 8;
     const size_t num_messages = 1'600'000;
     const size_t buffer_size = 1024;

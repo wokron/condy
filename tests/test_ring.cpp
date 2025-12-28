@@ -62,7 +62,7 @@ TEST_CASE("test ring - cancel ops") {
     ring.init(8, &params);
 
     __kernel_timespec ts{
-        .tv_sec = 60 * 60, // 1 hour
+        .tv_sec = 60ll * 60ll, // 1 hour
         .tv_nsec = 0,
     };
     constexpr size_t num_ops = 8;

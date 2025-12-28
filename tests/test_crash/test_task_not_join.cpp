@@ -11,7 +11,7 @@ condy::Coro<int> co_main() {
     co_return 0;
 }
 
-int main() {
+int main() noexcept(false) {
     condy::sync_wait(co_main());
     return 0;
 }
