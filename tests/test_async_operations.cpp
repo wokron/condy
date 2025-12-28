@@ -14,6 +14,7 @@
 #include <linux/futex.h>
 #include <netinet/in.h>
 #include <string_view>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -3406,6 +3407,50 @@ TEST_CASE("test async_operations - test listen - fixed fd") {
     condy::sync_wait(func());
 
     close(sock_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+TEST_CASE("test async_operations - test epoll_wait") {
+    int epoll_fd = epoll_create1(0);
+    REQUIRE(epoll_fd >= 0);
+
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    int r;
+    epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = pipe_fds[0];
+    r = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, pipe_fds[0], &ev);
+    REQUIRE(r == 0);
+
+    auto msg = generate_data(128);
+
+    auto writer = [&]() -> condy::Coro<void> {
+        co_await condy::async_write(pipe_fds[1], condy::buffer(msg), 0);
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        epoll_event events[4];
+
+        auto t = condy::co_spawn(writer());
+
+        int r = co_await condy::async_epoll_wait(epoll_fd, events, 4, 0);
+        REQUIRE(r == 1);
+
+        co_await std::move(t);
+    };
+    condy::sync_wait(func());
+
+    char buf[128];
+    ssize_t r_read = read(pipe_fds[0], buf, sizeof(buf));
+    REQUIRE(r_read == static_cast<ssize_t>(msg.size()));
+    REQUIRE(std::string_view(buf, r_read) == msg);
+
+    close(epoll_fd);
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
 }
 #endif
 

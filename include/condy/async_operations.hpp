@@ -781,6 +781,14 @@ template <typename Fd> inline auto async_listen(Fd fd, int backlog) {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+inline auto async_epoll_wait(int fd, struct epoll_event *events, int maxevents,
+                             unsigned flags) {
+    return make_op_awaiter(io_uring_prep_epoll_wait, fd, events, maxevents,
+                           flags);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
 template <typename Fd>
 inline auto async_cmd_discard(Fd fd, uint64_t offset, uint64_t nbytes) {
