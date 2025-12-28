@@ -130,7 +130,7 @@ public:
     Runtime &operator=(Runtime &&) = delete;
 
 public:
-    void done() {
+    void allow_exit() {
         pending_works_--;
         notify();
     }

@@ -68,7 +68,7 @@ TEST_CASE("test channel - push and pop with coroutines") {
     auto t1 = condy::co_spawn(runtime, producer());
     auto t2 = condy::co_spawn(runtime, consumer());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     t1.wait();
@@ -102,7 +102,7 @@ TEST_CASE("test channel - unbuffered channel") {
     auto t1 = condy::co_spawn(runtime, producer());
     auto t2 = condy::co_spawn(runtime, consumer());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     t1.wait();
@@ -149,7 +149,7 @@ TEST_CASE("test channel - multi producer and consumer") {
         consumer_tasks.push_back(condy::co_spawn(runtime, consumer()));
     }
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     for (auto &task : producer_tasks) {
@@ -180,7 +180,7 @@ TEST_CASE("test channel - wait two channel") {
     condy::co_spawn(runtime, func()).detach();
 
     std::thread t([&]() {
-        runtime.done();
+        runtime.allow_exit();
         runtime.run();
     });
 
@@ -217,7 +217,7 @@ TEST_CASE("test channel - channel cancel pop") {
     condy::co_spawn(runtime, func()).detach();
 
     std::thread t([&]() {
-        runtime.done();
+        runtime.allow_exit();
         runtime.run();
     });
 
@@ -266,7 +266,7 @@ TEST_CASE("test channel - move only in coroutine") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -303,7 +303,7 @@ TEST_CASE("test channel - no default constructor") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -337,7 +337,7 @@ TEST_CASE("test channel - close") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -367,7 +367,7 @@ TEST_CASE("test channel - close and broadcast") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -389,7 +389,7 @@ TEST_CASE("test channel - push to closed channel") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -415,7 +415,7 @@ TEST_CASE("test channel - push to closed channel with awaiters") {
     };
 
     auto task = condy::co_spawn(runtime, func());
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     task.wait();
@@ -504,8 +504,8 @@ TEST_CASE("test channel - cross runtimes") {
 
     REQUIRE(finished == 2);
 
-    runtime1.done();
-    runtime2.done();
+    runtime1.allow_exit();
+    runtime2.allow_exit();
 
     REQUIRE(finished == 2);
 
@@ -548,8 +548,8 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
 
     REQUIRE(finished == 2);
 
-    runtime1.done();
-    runtime2.done();
+    runtime1.allow_exit();
+    runtime2.allow_exit();
 
     REQUIRE(finished == 2);
 

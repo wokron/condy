@@ -19,7 +19,7 @@ condy::RuntimeOptions options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 TEST_CASE("test runtime - single thread no-op") {
     condy::Runtime runtime(options);
-    runtime.done();
+    runtime.allow_exit();
     runtime.run(); // Should exit immediately
 }
 
@@ -28,7 +28,7 @@ TEST_CASE("test runtime - single thread schedule no-op") {
 
     SetFinishInvoker invoker;
     runtime.schedule(&invoker);
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(invoker.finished);
@@ -42,7 +42,7 @@ TEST_CASE("test runtime - single thread schedule multiple no-op") {
     for (int i = 0; i < num_invokers; ++i) {
         runtime.schedule(&invokers[i]);
     }
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     for (int i = 0; i < num_invokers; ++i) {
@@ -63,7 +63,7 @@ TEST_CASE("test runtime - single thread schedule coroutine") {
     auto h = coro.release();
 
     runtime.schedule(&h.promise());
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -90,7 +90,7 @@ TEST_CASE("test runtime - single thread schedule multiple coroutines") {
         runtime.schedule(&h.promise());
     }
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
@@ -119,7 +119,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
         runtime.schedule(&h.promise());
     }
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
@@ -151,7 +151,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
         runtime.schedule(&h.promise());
     }
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     for (int i = 0; i < num_coros; ++i) {
@@ -180,7 +180,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     auto coro = func();
     auto h = coro.release();
     runtime.schedule(&h.promise());
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -200,7 +200,7 @@ TEST_CASE("test runtime - setup napi") {
     }
     REQUIRE(r == 0);
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(runtime.napi().destroy() == 0);

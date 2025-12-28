@@ -9,7 +9,7 @@ namespace condy {
 template <typename T, typename Allocator>
 T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     auto t = co_spawn(runtime, std::move(coro));
-    runtime.done();
+    runtime.allow_exit();
     try {
         runtime.run();
     } catch (...) {

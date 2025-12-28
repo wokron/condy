@@ -135,10 +135,10 @@ TEST_CASE("test buffer_table - setup buffer before run") {
     REQUIRE(runtime1.buffer_table().init(4) == 0);
     REQUIRE(runtime2.buffer_table().clone_from(runtime1.buffer_table()) == 0);
 
-    runtime2.done();
+    runtime2.allow_exit();
     runtime2.run();
 
-    runtime1.done();
+    runtime1.allow_exit();
     runtime1.run();
 }
 #endif

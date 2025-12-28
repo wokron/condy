@@ -29,7 +29,7 @@ TEST_CASE("test task - local spawn and await") {
     auto h = coro.release();
 
     runtime.schedule(&h.promise());
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -55,10 +55,10 @@ TEST_CASE("test task - remote spawn and await") {
     std::thread rt2_thread([&]() { runtime2.run(); });
 
     runtime1.schedule(&h.promise());
-    runtime1.done();
+    runtime1.allow_exit();
     runtime1.run();
 
-    runtime2.done();
+    runtime2.allow_exit();
     rt2_thread.join();
 
     REQUIRE(finished);
@@ -75,7 +75,7 @@ TEST_CASE("test task - remote spawn and wait 1") {
 
     auto task = condy::co_spawn(runtime, func());
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -99,7 +99,7 @@ TEST_CASE("test task - remote spawn and wait 2") {
 
     REQUIRE(finished);
 
-    runtime.done();
+    runtime.allow_exit();
     rt_thread.join();
 }
 
@@ -129,7 +129,7 @@ TEST_CASE("test task - launch multiple tasks") {
 
     condy::co_spawn(runtime, func()).detach();
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -160,7 +160,7 @@ TEST_CASE("test task - return value") {
 
     condy::co_spawn(runtime, func()).detach();
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -188,7 +188,7 @@ TEST_CASE("test task - return value with wait") {
     REQUIRE(r == 42);
     REQUIRE(finished);
 
-    runtime.done();
+    runtime.allow_exit();
     rt_thread.join();
 }
 
@@ -210,7 +210,7 @@ TEST_CASE("test task - exception propagation") {
     auto task = condy::co_spawn(runtime, main());
     REQUIRE_THROWS_AS(task.wait(), std::runtime_error);
 
-    runtime.done();
+    runtime.allow_exit();
     rt_thread.join();
 }
 
@@ -248,10 +248,10 @@ TEST_CASE("test task - run in different thread") {
 
     condy::co_spawn(runtime1, main()).detach();
 
-    runtime1.done();
+    runtime1.allow_exit();
     runtime1.run();
 
-    runtime2.done();
+    runtime2.allow_exit();
     rt2_thread.join();
 
     REQUIRE(finished1);
@@ -283,7 +283,7 @@ TEST_CASE("test task - spawn from no runtime") {
 
     REQUIRE(count == 10);
 
-    runtime.done();
+    runtime.allow_exit();
     rt_thread.join();
 }
 
@@ -306,7 +306,7 @@ TEST_CASE("test task - detach") {
 
     condy::co_spawn(runtime, main()).detach();
 
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -357,7 +357,7 @@ TEST_CASE("test task - spawn task with custom allocator") {
     auto h = coro.release();
 
     runtime.schedule(&h.promise());
-    runtime.done();
+    runtime.allow_exit();
     runtime.run();
 
     REQUIRE(finished);
@@ -400,10 +400,10 @@ TEST_CASE("test task - co_switch") {
 
     condy::co_spawn(runtime1, main()).detach();
 
-    runtime1.done();
+    runtime1.allow_exit();
     runtime1.run();
 
-    runtime2.done();
+    runtime2.allow_exit();
     rt2_thread.join();
 
     REQUIRE(task_finished);
