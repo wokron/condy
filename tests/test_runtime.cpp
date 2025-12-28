@@ -185,24 +185,3 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
 
     REQUIRE(finished);
 }
-
-#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-TEST_CASE("test runtime - setup napi") {
-    condy::Runtime runtime;
-
-    io_uring_napi napi;
-    napi.prefer_busy_poll = 0;
-    napi.busy_poll_to = 1000; // 1ms
-    int r = runtime.napi().init(&napi);
-    if (r == -EINVAL) {
-        // Kernel doesn't support NAPI
-        return;
-    }
-    REQUIRE(r == 0);
-
-    runtime.allow_exit();
-    runtime.run();
-
-    REQUIRE(runtime.napi().destroy() == 0);
-}
-#endif

@@ -241,8 +241,6 @@ public:
 
     auto &buffer_table() { return ring_.buffer_table(); }
 
-    auto &napi() { return ring_.napi(); }
-
     auto features() { return ring_.features(); }
 
 private:

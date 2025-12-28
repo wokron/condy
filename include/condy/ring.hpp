@@ -120,40 +120,6 @@ private:
     io_uring &ring_;
 };
 
-#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-class NAPI {
-public:
-    NAPI(io_uring &ring) : ring_(ring) {}
-
-    NAPI(const NAPI &) = delete;
-    NAPI &operator=(const NAPI &) = delete;
-    NAPI(NAPI &&) = delete;
-    NAPI &operator=(NAPI &&) = delete;
-
-public:
-    int init(io_uring_napi *params) {
-        return io_uring_register_napi(&ring_, params);
-    }
-
-    int destroy(io_uring_napi *params = nullptr) {
-        return io_uring_unregister_napi(&ring_, params);
-    }
-
-private:
-    io_uring &ring_;
-};
-#else
-class NAPI {
-public:
-    NAPI(io_uring &) {}
-
-    NAPI(const NAPI &) = delete;
-    NAPI &operator=(const NAPI &) = delete;
-    NAPI(NAPI &&) = delete;
-    NAPI &operator=(NAPI &&) = delete;
-};
-#endif
-
 class Ring {
 public:
     Ring() = default;
@@ -248,8 +214,6 @@ public:
 
     BufferTable &buffer_table() { return buffer_table_; }
 
-    NAPI &napi() { return napi_; }
-
     io_uring_sqe *get_sqe() {
         [[maybe_unused]] int r;
         io_uring_sqe *sqe;
@@ -277,7 +241,6 @@ private:
 
     FdTable fd_table_{ring_};
     BufferTable buffer_table_{ring_};
-    NAPI napi_{ring_};
 
     uint32_t features_ = 0;
 };
