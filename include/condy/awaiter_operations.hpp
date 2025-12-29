@@ -14,35 +14,6 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
     return OpAwaiter<decltype(prep_func)>(std::move(prep_func));
 }
 
-namespace detail {
-
-template <typename CoroFunc> struct SpawnHelper {
-    void operator()(auto &&res) {
-        co_spawn(func(std::forward<decltype(res)>(res))).detach();
-    }
-    std::decay_t<CoroFunc> func;
-};
-
-template <typename Channel> struct PushHelper {
-    void operator()(auto &&res) {
-        channel.force_push(std::forward<decltype(res)>(res));
-    }
-    std::decay_t<Channel> &channel;
-};
-
-} // namespace detail
-
-// Helper to spawn a coroutine from a multishot operation
-template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
-    return detail::SpawnHelper<std::decay_t<CoroFunc>>{
-        std::forward<CoroFunc>(coro)};
-}
-
-// Helper to push result to the channel
-template <typename Channel> auto will_push(Channel &channel) {
-    return detail::PushHelper<std::decay_t<Channel>>{channel};
-}
-
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                                Args &&...args) {
