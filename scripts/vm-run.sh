@@ -2,24 +2,26 @@
 
 set -euo pipefail
 
+DEFAULT_COMMAND="/bin/sh"
 
 usage() {
-    echo "Usage: $0 [-hkq] [-a <args>] <bzImage> <static-executable>"
+    echo "Usage: $0 [-hkq] [-c <cmd>] <bzImage> [file]..."
     echo "Run a VM with the specified kernel image and static executable."
     echo "  -h                   Show this help message."
     echo "  -k                   Enable KVM acceleration."
     echo "  -q                   Quiet mode (no kernel messages)."
-    echo "  -a <args>            Additional arguments for static executable."
+    echo "  -c <cmd>             Command to run inside the VM. Default is '$DEFAULT_COMMAND'."
     echo "  <bzImage>            Path to the kernel image."
-    echo "  <static-executable>  Path to the static executable to run inside the VM."
+    echo "  [file]...            One or more files to include in the initrd."
+    echo "                       Static executable is required to run inside the VM."
     exit 1
 }
 
 KVM_ENABLED=false
 QUIET_MODE=false
-ADDITIONAL_ARGS=""
+COMMAND="$DEFAULT_COMMAND"
 
-while getopts "hkqa:" opt; do
+while getopts "hkqc:" opt; do
     case $opt in
         k)
             KVM_ENABLED=true
@@ -27,8 +29,8 @@ while getopts "hkqa:" opt; do
         q)
             QUIET_MODE=true
             ;;
-        a)
-            ADDITIONAL_ARGS="$OPTARG"
+        c)
+            COMMAND="$OPTARG"
             ;;
         h)
             usage
@@ -45,26 +47,25 @@ if [ $# -ne 2 ]; then
 fi
 
 KERNEL_IMAGE="$1"
-STATIC_EXECUTABLE="$2"
+FILES="${@:2}"
 
 if [ ! -f "$KERNEL_IMAGE" ]; then
     echo "Error: Kernel image '$KERNEL_IMAGE' not found."
     exit 1
 fi
 
-if [ ! -f "$STATIC_EXECUTABLE" ]; then
-    echo "Error: Static executable '$STATIC_EXECUTABLE' not found."
-    exit 1
-fi
+for FILE in $FILES; do
+    if [ ! -f "$FILE" ]; then
+        echo "Error: File '$FILE' not found."
+        exit 1
+    fi
+done
 
 SELF_SCRIPT_DIR=$(dirname "$(realpath "$0")")
 LIGHT_INITRD_SCRIPT="$SELF_SCRIPT_DIR/light-initrd.sh"
 
-# MD5 of the static executable
-STATIC_EXECUTABLE_MD5=$(md5sum "$STATIC_EXECUTABLE" | awk '{print $1}')
-
 # Cached initrd output filename
-INITRD_OUTPUT="initrd-${STATIC_EXECUTABLE_MD5}.cpio.gz"
+INITRD_OUTPUT="vm-run-initrd.cpio.gz"
 
 TEMP_DIR="$SELF_SCRIPT_DIR/.temp"
 mkdir -p "$TEMP_DIR"
@@ -72,12 +73,12 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 cat > "$TEMP_DIR/init.sh" <<EOF
 #!/bin/sh
-/root/$(basename "$STATIC_EXECUTABLE") $ADDITIONAL_ARGS
+$COMMAND
 EOF
 chmod +x "$TEMP_DIR/init.sh"
 
 echo "Building initrd image..."
-bash "$LIGHT_INITRD_SCRIPT" -o "$TEMP_DIR/$INITRD_OUTPUT" -s "/root/init.sh" "$STATIC_EXECUTABLE" "$TEMP_DIR/init.sh"
+bash "$LIGHT_INITRD_SCRIPT" -o "$TEMP_DIR/$INITRD_OUTPUT" -s "/root/init.sh" $FILES "$TEMP_DIR/init.sh"
 echo "Initrd image created at $TEMP_DIR/$INITRD_OUTPUT"
 
 KVM_FLAG=""
