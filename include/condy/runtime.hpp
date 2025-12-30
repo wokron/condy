@@ -136,6 +136,7 @@ public:
         }
 
         event_interval_ = options.event_interval_;
+        disable_register_ring_fd_ = options.disable_register_ring_fd_;
     }
 
     ~Runtime() { ring_.destroy(); }
@@ -207,8 +208,12 @@ public:
 
         state_.store(State::Enabled);
 
-        r = io_uring_register_ring_fd(ring_.ring());
-        assert(r == 1); // 1 indicates success for this call
+        if (!disable_register_ring_fd_) {
+            r = io_uring_register_ring_fd(ring_.ring());
+            if (r != 1) { // 1 indicates success for this call
+                throw make_system_error("io_uring_register_ring_fd", -r);
+            }
+        }
 
         Context::current().init(&ring_, this);
         auto d2 = defer([]() { Context::current().reset(); });
@@ -242,6 +247,8 @@ public:
     auto &buffer_table() { return ring_.buffer_table(); }
 
     auto features() { return ring_.features(); }
+
+    auto &settings() { return ring_.settings(); }
 
 private:
     void flush_global_queue_() {
@@ -337,8 +344,13 @@ private:
 
     // Configurable parameters
     size_t event_interval_ = 61;
+    bool disable_register_ring_fd_ = false;
 };
 
 inline auto &current_runtime() { return *Context::current().runtime(); }
+
+inline void set_current_cred_id(uint16_t id) {
+    Context::current().set_cred_id(id);
+}
 
 } // namespace condy

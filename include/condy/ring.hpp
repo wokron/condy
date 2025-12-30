@@ -120,6 +120,81 @@ private:
     io_uring &ring_;
 };
 
+class RingSettings {
+public:
+    RingSettings(io_uring &ring) : ring_(ring) {}
+
+    ~RingSettings() {
+        if (probe_) {
+            io_uring_free_probe(probe_);
+            probe_ = nullptr;
+        }
+    }
+
+    RingSettings(const RingSettings &) = delete;
+    RingSettings &operator=(const RingSettings &) = delete;
+    RingSettings(RingSettings &&) = delete;
+    RingSettings &operator=(RingSettings &&) = delete;
+
+public:
+    int apply_personality() { return io_uring_register_personality(&ring_); }
+    int remove_personality(int id) {
+        return io_uring_unregister_personality(&ring_, id);
+    }
+
+    int set_restrictions(io_uring_restriction *res, unsigned int nr_res) {
+        return io_uring_register_restrictions(&ring_, res, nr_res);
+    }
+
+    int apply_iowq_aff(size_t cpusz, const cpu_set_t *mask) {
+        return io_uring_register_iowq_aff(&ring_, cpusz, mask);
+    }
+    int remove_iowq_aff() { return io_uring_unregister_iowq_aff(&ring_); }
+
+    int set_iowq_max_workers(unsigned int *values) {
+        return io_uring_register_iowq_max_workers(&ring_, values);
+    }
+
+    io_uring_probe *get_probe() {
+        if (probe_) {
+            return probe_;
+        }
+        probe_ = io_uring_get_probe_ring(&ring_);
+        return probe_;
+    }
+
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
+    int apply_napi(io_uring_napi *napi) {
+        return io_uring_register_napi(&ring_, napi);
+    }
+    int remove_napi(io_uring_napi *napi = nullptr) {
+        return io_uring_unregister_napi(&ring_, napi);
+    }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+    int set_clock(io_uring_clock_register *clock_reg) {
+        return io_uring_register_clock(&ring_, clock_reg);
+    }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+    int set_rings_size(io_uring_params *params) {
+        return io_uring_resize_rings(&ring_, params);
+    }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+    int set_iowait(bool enable_iowait) {
+        return io_uring_set_iowait(&ring_, enable_iowait);
+    }
+#endif
+
+private:
+    io_uring &ring_;
+    io_uring_probe *probe_ = nullptr;
+};
+
 class Ring {
 public:
     Ring() = default;
@@ -214,6 +289,8 @@ public:
 
     BufferTable &buffer_table() { return buffer_table_; }
 
+    RingSettings &settings() { return settings_; }
+
     io_uring_sqe *get_sqe() {
         [[maybe_unused]] int r;
         io_uring_sqe *sqe;
@@ -241,6 +318,7 @@ private:
 
     FdTable fd_table_{ring_};
     BufferTable buffer_table_{ring_};
+    RingSettings settings_{ring_};
 
     uint32_t features_ = 0;
 };

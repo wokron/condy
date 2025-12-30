@@ -18,6 +18,11 @@ public:
         return *this;
     }
 
+    Self &disable_register_ring_fd() {
+        disable_register_ring_fd_ = true;
+        return *this;
+    }
+
     Self &enable_iopoll(bool hybrid = false) {
         enable_iopoll_ = true;
         enable_hybrid_iopoll_ = hybrid;
@@ -89,6 +94,7 @@ public:
 
 protected:
     size_t event_interval_ = 61;
+    bool disable_register_ring_fd_ = false;
     bool enable_iopoll_ = false;
     bool enable_hybrid_iopoll_ = false;
     bool enable_sqpoll_ = false;

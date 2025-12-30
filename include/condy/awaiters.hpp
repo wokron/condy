@@ -82,6 +82,7 @@ private:
         sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
         io_uring_sqe_set_data(
             sqe, encode_work(&finish_handle_.get(), Handle::work_type));
+        sqe->personality = Context::current().cred_id();
     }
 
 protected:
