@@ -39,7 +39,10 @@ public:
         flags_ = flags;
     }
 
-    void invoke() { (*invoker_)(); }
+    void invoke() {
+        assert(invoker_ != nullptr);
+        (*invoker_)();
+    }
 
     ReturnType extract_result() { return res_; }
 
@@ -53,13 +56,15 @@ protected:
 
 class ExtendOpFinishHandle : public OpFinishHandle {
 public:
-    void invoke_extend() {
+    using ExtendFunc = void (*)(void *, int32_t);
+
+    void invoke_extend(int32_t res) {
         assert(extend_func_ != nullptr);
-        extend_func_(this);
+        extend_func_(this, res);
     }
 
 protected:
-    Invoker::Func extend_func_ = nullptr;
+    ExtendFunc extend_func_ = nullptr;
 };
 
 template <typename Func, typename HandleBase>
@@ -70,7 +75,7 @@ public:
     template <typename... Args>
     MultiShotMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
-        this->extend_func_ = [](void *data) {
+        this->extend_func_ = [](void *data, int32_t) {
             auto *self = static_cast<MultiShotMixin<Func, HandleBase> *>(data);
             self->invoke_multishot_();
         };
@@ -97,19 +102,44 @@ public:
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
-        this->extend_func_ = [](void *data) {
+        this->func_ = [](void *data) {
             auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
-            self->invoke_notify_();
+            self->invoke();
         };
+        this->extend_func_ = [](void *data, int32_t res) {
+            auto *self = static_cast<ZeroCopyMixin<Func, HandleBase> *>(data);
+            self->invoke_notify_(res);
+        };
+    }
+
+    void invoke() /* fake override */ {
+        assert(this->invoker_ != nullptr);
+        (*this->invoker_)();
+        resumed_ = true;
+        if (notified_) {
+            free_func_(notify_res_);
+            delete this;
+        }
     }
 
     DEFINE_CANCEL_METHOD_();
 
 private:
-    void invoke_notify_() { free_func_(this->res_); }
+    void invoke_notify_(int32_t res) {
+        notify_res_ = res;
+        notified_ = true;
+        if (resumed_) {
+            free_func_(notify_res_);
+            delete this;
+        }
+    }
 
 private:
     Func free_func_;
+    int32_t notify_res_ = -ENOTRECOVERABLE;
+    // Use these flags to handle race between invoke and notify
+    bool resumed_ = false;
+    bool notified_ = false;
 };
 
 template <typename FreeFunc>

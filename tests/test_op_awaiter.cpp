@@ -165,7 +165,7 @@ void mock_multishot_event_loop(size_t &unfinished) {
             }
             auto handle_ptr = static_cast<condy::ExtendOpFinishHandle *>(data);
             handle_ptr->set_result(42, 0);
-            handle_ptr->invoke_extend(); // Multishot
+            handle_ptr->invoke_extend(0); // Multishot
             handle_ptr->set_result(cqe->res, cqe->flags);
             (*handle_ptr)();
         });

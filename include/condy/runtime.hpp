@@ -290,26 +290,25 @@ private:
             auto *handle = static_cast<ExtendOpFinishHandle *>(data);
             handle->set_result(cqe->res, cqe->flags);
             if (cqe->flags & IORING_CQE_F_MORE) {
-                handle->invoke_extend();
+                handle->invoke_extend(0); // res not used here
             } else {
                 pending_works_--;
                 local_queue_.push_back(handle);
             }
         } else if (type == WorkType::ZeroCopy) {
             auto *handle = static_cast<ExtendOpFinishHandle *>(data);
-            handle->set_result(cqe->res, cqe->flags);
             if (cqe->flags & IORING_CQE_F_MORE) {
-                (*handle)();
+                handle->set_result(cqe->res, cqe->flags);
+                local_queue_.push_back(handle);
             } else {
                 pending_works_--;
                 if (cqe->flags & IORING_CQE_F_NOTIF) {
-                    handle->invoke_extend();
+                    handle->invoke_extend(cqe->res);
                 } else {
-                    (*handle)();
-                    handle->set_result(0, 0);
-                    handle->invoke_extend();
+                    handle->set_result(cqe->res, cqe->flags);
+                    local_queue_.push_back(handle);
+                    handle->invoke_extend(0);
                 }
-                delete handle;
             }
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandle *>(data);

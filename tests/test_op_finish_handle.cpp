@@ -168,7 +168,7 @@ TEST_CASE("test op_finish_handle - multishot op") {
         func);
     REQUIRE(!invoker.finished);
     handle.set_result(1, 0);
-    handle.invoke_extend(); // Multishot
+    handle.invoke_extend(0); // Multishot
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
 }
@@ -189,7 +189,6 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     REQUIRE(invoker.finished);
     REQUIRE(handle->extract_result() == 1);
     REQUIRE(res == -1);
-    handle->set_result(2, 0);
-    handle->invoke_extend(); // Notify
+    handle->invoke_extend(2); // Notify
     REQUIRE(res == 2);
 }
