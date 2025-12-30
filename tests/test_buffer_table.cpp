@@ -101,21 +101,21 @@ TEST_CASE("test buffer_table - clone buffer table") {
     auto &table1 = ring1.buffer_table();
     auto &table2 = ring2.buffer_table();
 
-    REQUIRE(table2.clone_from(table1) != 0);
+    REQUIRE(table2.clone_buffers_from(table1) != 0);
 
     table1.init(16);
 
-    REQUIRE(table2.clone_from(table1, 0, 8, 16) != 0);
+    REQUIRE(table2.clone_buffers_from(table1, 0, 8, 16) != 0);
 
-    REQUIRE(table2.clone_from(table1) == 0);
+    REQUIRE(table2.clone_buffers_from(table1) == 0);
     REQUIRE(table2.capacity() == 16);
 
-    REQUIRE(table2.clone_from(table1, 8, 0, 16) == 0);
+    REQUIRE(table2.clone_buffers_from(table1, 8, 0, 16) == 0);
     REQUIRE(table2.capacity() == (16 + 8));
 
     table2.destroy();
 
-    REQUIRE(table2.clone_from(table1, 100, 0, table1.capacity()) == 0);
+    REQUIRE(table2.clone_buffers_from(table1, 100, 0, table1.capacity()) == 0);
     REQUIRE(table2.capacity() == (100 + 16));
 
     char buffer[32];
@@ -132,7 +132,8 @@ TEST_CASE("test buffer_table - clone buffer table") {
 TEST_CASE("test buffer_table - setup buffer before run") {
     condy::Runtime runtime1, runtime2;
     REQUIRE(runtime1.buffer_table().init(4) == 0);
-    REQUIRE(runtime2.buffer_table().clone_from(runtime1.buffer_table()) == 0);
+    REQUIRE(runtime2.buffer_table().clone_buffers_from(
+                runtime1.buffer_table()) == 0);
 
     runtime2.allow_exit();
     runtime2.run();

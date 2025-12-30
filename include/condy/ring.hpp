@@ -38,7 +38,18 @@ public:
 
     auto async_update_files(int *fds, unsigned nr_fds, int offset);
 
+#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
     auto async_fixed_fd_install(int fixed_fd, unsigned int flags);
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
+    auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
+                          unsigned int flags);
+#endif
+
+    template <typename Func> void set_fd_accepter(Func &&accepter) {
+        fd_accepter_ = std::forward<Func>(accepter);
+    }
 
     int set_alloc_range(unsigned offset, unsigned size) {
         alloc_range_offset_ = offset;
@@ -56,7 +67,10 @@ private:
     size_t capacity_ = 0;
     unsigned alloc_range_offset_ = 0;
     unsigned alloc_range_size_ = 0;
+    std::function<void(int32_t)> fd_accepter_ = nullptr;
     io_uring &ring_;
+
+    friend class Runtime;
 };
 
 class BufferTable {
@@ -91,8 +105,8 @@ public:
     }
 
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-    int clone_from(BufferTable &src, unsigned int dst_off = 0,
-                   unsigned int src_off = 0, unsigned int nr = 0) {
+    int clone_buffers_from(BufferTable &src, unsigned int dst_off = 0,
+                           unsigned int src_off = 0, unsigned int nr = 0) {
         auto *src_ring = &src.ring_;
         auto *dst_ring = &ring_;
         unsigned int flags = 0;
