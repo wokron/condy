@@ -35,6 +35,7 @@ private:
     Handle *handle_ptr_;
 };
 
+// TODO: Handle sqe128
 template <typename Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
