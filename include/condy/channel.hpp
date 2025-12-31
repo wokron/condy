@@ -91,6 +91,11 @@ private:
         return false;
     }
 
+    bool cancel_push_(PushFinishHandle *finish_handle) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return push_awaiters_.remove(finish_handle);
+    }
+
     std::optional<T> request_pop_(PopFinishHandle *finish_handle) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto result = try_pop_inner_();
@@ -199,14 +204,12 @@ private:
     }
 
 private:
-    using PushList =
-        IntrusiveSingleList<PushFinishHandle, &PushFinishHandle::link_entry_>;
-    using PopList =
-        IntrusiveDoubleList<PopFinishHandle, &PopFinishHandle::link_entry_>;
+    template <typename Handle>
+    using HandleList = IntrusiveDoubleList<Handle, &Handle::link_entry_>;
 
     mutable std::mutex mutex_;
-    PushList push_awaiters_;
-    PopList pop_awaiters_;
+    HandleList<PushFinishHandle> push_awaiters_;
+    HandleList<PopFinishHandle> pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
     size_t size_ = 0;
@@ -218,15 +221,25 @@ template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandle
     : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = void;
+    using ReturnType = bool;
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
+
+    void cancel() {
+        if (channel_->cancel_push_(this)) {
+            // Successfully canceled
+            canceled_ = true;
+            runtime_->resume_work();
+            (*invoker_)();
+        }
+    }
 
     ReturnType extract_result() {
         if (should_throw_) [[unlikely]] {
             throw std::logic_error("Push to closed channel");
         }
-        return;
+        bool success = !canceled_;
+        return success;
     }
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
@@ -259,7 +272,7 @@ public:
     void enable_throw() { should_throw_ = true; }
 
 public:
-    SingleLinkEntry link_entry_;
+    DoubleLinkEntry link_entry_;
 
 private:
     Invoker *invoker_ = nullptr;
@@ -268,6 +281,7 @@ private:
     T item_;
     bool need_resume_ = false;
     bool should_throw_ = false;
+    bool canceled_ = false;
 };
 
 template <typename T, size_t N>
