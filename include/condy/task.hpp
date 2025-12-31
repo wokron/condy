@@ -35,7 +35,7 @@ public:
         handle_ = nullptr;
     }
 
-    auto operator co_await() &&;
+    auto operator co_await() noexcept;
 
 protected:
     static void wait_inner_(std::coroutine_handle<PromiseType> handle);
@@ -168,7 +168,7 @@ struct TaskAwaiter<void, Allocator> : public TaskAwaiterBase<void, Allocator> {
 };
 
 template <typename T, typename Allocator>
-inline auto TaskBase<T, Allocator>::operator co_await() && {
+inline auto TaskBase<T, Allocator>::operator co_await() noexcept {
     return TaskAwaiter<T, Allocator>(std::exchange(handle_, nullptr),
                                      Context::current().runtime());
 }

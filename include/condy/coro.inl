@@ -243,7 +243,7 @@ struct CoroAwaiter<void, Allocator>
 };
 
 template <typename T, typename Allocator>
-inline auto Coro<T, Allocator>::operator co_await() && {
+inline auto Coro<T, Allocator>::operator co_await() noexcept {
     return CoroAwaiter<T, Allocator>{release()};
 }
 

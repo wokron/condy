@@ -27,7 +27,7 @@ public:
     }
 
 public:
-    auto operator co_await() &&;
+    auto operator co_await() noexcept;
 
     std::coroutine_handle<promise_type> release() noexcept {
         return std::exchange(handle_, nullptr);
