@@ -81,7 +81,7 @@ TEST_CASE("test channel - unbuffered channel") {
     condy::Runtime runtime(options);
     condy::Channel<int> channel(0);
 
-    const size_t max_items = 10;
+    const size_t max_items = 100;
 
     size_t finished = 0;
     auto producer = [&]() -> condy::Coro<void> {
@@ -232,9 +232,7 @@ TEST_CASE("test channel - channel cancel push") {
     using condy::operators::operator||;
 
     condy::Runtime runtime(options);
-    condy::Channel<int> ch1(1);
-
-    REQUIRE(ch1.try_push(1));
+    condy::Channel<int> ch1(0);
 
     bool finished = false;
 
@@ -545,7 +543,7 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
 
     condy::Channel<int> channel(0);
 
-    const size_t max_items = 41;
+    const size_t max_items = 1000;
 
     std::atomic_size_t finished = 0;
     auto producer = [&]() -> condy::Coro<void> {

@@ -13,7 +13,8 @@ namespace condy {
 
 template <typename T, size_t N = 2> class Channel {
 public:
-    Channel(size_t capacity) : buffer_(std::bit_ceil(capacity)) {}
+    Channel(size_t capacity)
+        : buffer_(capacity ? std::bit_ceil(capacity) : 0) {}
     ~Channel() {
         std::lock_guard<std::mutex> lock(mutex_);
         push_close_inner_();
@@ -138,9 +139,13 @@ private:
             auto *push_handle = push_awaiters_.pop_front();
             T item = std::move(push_handle->get_item());
             push_handle->schedule();
-            T result = pop_inner_();
-            push_inner_(std::move(item));
-            return result;
+            if (no_buffer_()) {
+                return item;
+            } else {
+                T result = pop_inner_();
+                push_inner_(std::move(item));
+                return result;
+            }
         }
         if (!empty_inner_()) {
             T result = pop_inner_();
@@ -172,9 +177,21 @@ private:
         return item;
     }
 
-    bool empty_inner_() const noexcept { return size_ == 0; }
+    bool no_buffer_() const noexcept { return buffer_.capacity() == 0; }
 
-    bool full_inner_() const noexcept { return size_ == buffer_.capacity(); }
+    bool empty_inner_() const noexcept {
+        if (no_buffer_()) {
+            return true;
+        }
+        return size_ == 0;
+    }
+
+    bool full_inner_() const noexcept {
+        if (no_buffer_()) {
+            return true;
+        }
+        return size_ == buffer_.capacity();
+    }
 
     void push_close_inner_() {
         if (closed_) {
