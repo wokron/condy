@@ -247,7 +247,7 @@ public:
             // Successfully canceled
             canceled_ = true;
             runtime_->resume_work();
-            (*invoker_)();
+            runtime_->schedule(this);
         }
     }
 
@@ -311,7 +311,7 @@ public:
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
             runtime_->resume_work();
-            (*invoker_)();
+            runtime_->schedule(this);
         }
     }
 
