@@ -114,7 +114,7 @@ TEST_CASE("test op_finish_handle - cancel op") {
     context.init(&ring, &runtime);
 
     condy::OpFinishHandle handle1, handle2;
-    condy::ParallelFinishHandle<condy::WaitOne, condy::OpFinishHandle,
+    condy::ParallelFinishHandle<true, condy::OpFinishHandle,
                                 condy::OpFinishHandle>
         finish_handle;
     finish_handle.init(&handle1, &handle2);

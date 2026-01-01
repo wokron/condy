@@ -29,9 +29,9 @@ struct SimpleFinishHandle {
 
 } // namespace
 
-TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle finish") {
+TEST_CASE("test parallel_finish_handle - RangedWhenAllFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> handle;
+    condy::RangedWhenAllFinishHandle<SimpleFinishHandle> handle;
     handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
 
     SetFinishInvoker invoker;
@@ -53,9 +53,9 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle finish") {
     REQUIRE(r[2] == 3);
 }
 
-TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
+TEST_CASE("test parallel_finish_handle - RangedWhenAllFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> handle;
+    condy::RangedWhenAllFinishHandle<SimpleFinishHandle> handle;
     handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
     SetFinishInvoker invoker;
     handle.set_invoker(&invoker);
@@ -82,9 +82,9 @@ TEST_CASE("test parallel_finish_handle - RangedWaitAllFinishHandle cancel") {
     REQUIRE(r[2] == -1);
 }
 
-TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
+TEST_CASE("test parallel_finish_handle - RangedWhenAnyFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> handle;
+    condy::RangedWhenAnyFinishHandle<SimpleFinishHandle> handle;
     handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
 
     SetFinishInvoker invoker;
@@ -133,10 +133,10 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle finish") {
     }
 }
 
-TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle "
+TEST_CASE("test parallel_finish_handle - RangedWhenAnyFinishHandle "
           "multiple cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::RangedWaitOneFinishHandle<SimpleFinishHandle> handle;
+    condy::RangedWhenAnyFinishHandle<SimpleFinishHandle> handle;
     handle.init(std::vector<SimpleFinishHandle *>{&h1, &h2, &h3});
 
     SetFinishInvoker invoker;
@@ -162,15 +162,15 @@ TEST_CASE("test parallel_finish_handle - RangedWaitOneFinishHandle "
 
 TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_ab;
+    condy::RangedWhenAllFinishHandle<SimpleFinishHandle> finish_handle_ab;
     finish_handle_ab.init(std::vector<SimpleFinishHandle *>{&h1, &h2});
-    condy::RangedWaitAllFinishHandle<SimpleFinishHandle> finish_handle_cd;
+    condy::RangedWhenAllFinishHandle<SimpleFinishHandle> finish_handle_cd;
     finish_handle_cd.init(std::vector<SimpleFinishHandle *>{&h3, &h4});
-    condy::RangedWaitOneFinishHandle<
-        condy::RangedWaitAllFinishHandle<SimpleFinishHandle>>
+    condy::RangedWhenAnyFinishHandle<
+        condy::RangedWhenAllFinishHandle<SimpleFinishHandle>>
         finish_handle;
     finish_handle.init(
-        std::vector<condy::RangedWaitAllFinishHandle<SimpleFinishHandle> *>{
+        std::vector<condy::RangedWhenAllFinishHandle<SimpleFinishHandle> *>{
             &finish_handle_ab, &finish_handle_cd});
 
     SetFinishInvoker invoker;
@@ -223,7 +223,7 @@ TEST_CASE("test parallel_finish_handle - Ranged (a && b) || (c && d)") {
 
 TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
+    condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
         finish_handle;
     finish_handle.init(&h1, &h2, &h3);
@@ -245,9 +245,9 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle finish") {
     REQUIRE(std::get<2>(r) == 3);
 }
 
-TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle cancel") {
+TEST_CASE("test parallel_finish_handle - WhenAllFinishHandle cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
+    condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
         finish_handle;
     finish_handle.init(&h1, &h2, &h3);
@@ -275,9 +275,9 @@ TEST_CASE("test parallel_finish_handle - WaitAllFinishHandle cancel") {
     REQUIRE(std::get<2>(r) == -1);
 }
 
-TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle finish") {
+TEST_CASE("test parallel_finish_handle - WhenAnyFinishHandle finish") {
     SimpleFinishHandle h1, h2, h3;
-    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
+    condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
         finish_handle;
     finish_handle.init(&h1, &h2, &h3);
@@ -327,10 +327,10 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle finish") {
     }
 }
 
-TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle multiple "
+TEST_CASE("test parallel_finish_handle - WhenAnyFinishHandle multiple "
           "cancel") {
     SimpleFinishHandle h1, h2, h3;
-    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
+    condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle,
                                SimpleFinishHandle>
         finish_handle;
     finish_handle.init(&h1, &h2, &h3);
@@ -357,15 +357,15 @@ TEST_CASE("test parallel_finish_handle - WaitOneFinishHandle multiple "
 
 TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
     SimpleFinishHandle h1, h2, h3, h4;
-    condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+    condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
         finish_handle_ab;
     finish_handle_ab.init(&h1, &h2);
-    condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+    condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
         finish_handle_cd;
     finish_handle_cd.init(&h3, &h4);
-    condy::WaitOneFinishHandle<
-        condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
-        condy::WaitAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
+    condy::WhenAnyFinishHandle<
+        condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
+        condy::WhenAllFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
         finish_handle;
     finish_handle.init(&finish_handle_ab, &finish_handle_cd);
 
@@ -419,15 +419,15 @@ TEST_CASE("test parallel_finish_handle - (a && b) || (c && d)") {
 
 TEST_CASE("test parallel_finish_handle - (a || b) && (c || d)") {
     SimpleFinishHandle h1, h2, h3, h4;
-    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+    condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
         finish_handle_ab;
     finish_handle_ab.init(&h1, &h2);
-    condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
+    condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle>
         finish_handle_cd;
     finish_handle_cd.init(&h3, &h4);
-    condy::WaitAllFinishHandle<
-        condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
-        condy::WaitOneFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
+    condy::WhenAllFinishHandle<
+        condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle>,
+        condy::WhenAnyFinishHandle<SimpleFinishHandle, SimpleFinishHandle>>
         finish_handle;
     finish_handle.init(&finish_handle_ab, &finish_handle_cd);
 

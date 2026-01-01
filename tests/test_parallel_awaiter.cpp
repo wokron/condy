@@ -63,7 +63,7 @@ public:
 
 } // namespace
 
-TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
+TEST_CASE("test parallel_awaiter - RangedWhenAllAwaiter") {
     SimpleAwaiter a1, a2, a3;
     auto h1 = a1.handle_ptr_;
     auto h2 = a2.handle_ptr_;
@@ -71,7 +71,7 @@ TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::RangedWaitAllAwaiter<SimpleAwaiter> awaiter(
+        condy::RangedWhenAllAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         std::vector<int> results = co_await awaiter;
         REQUIRE(results.size() == 3);
@@ -101,7 +101,7 @@ TEST_CASE("test parallel_awaiter - RangedWaitAllAwaiter") {
     REQUIRE(finished);
 }
 
-TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
+TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
     SimpleAwaiter a1, a2, a3;
     auto h1 = a1.handle_ptr_;
     auto h2 = a2.handle_ptr_;
@@ -110,7 +110,7 @@ TEST_CASE("test parallel_awaiter - RangedWaitOneAwaiter") {
 
     auto func = [&](size_t expected_idx,
                     int expected_result) -> condy::Coro<void> {
-        condy::RangedWaitOneAwaiter<SimpleAwaiter> awaiter(
+        condy::RangedWhenAnyAwaiter<SimpleAwaiter> awaiter(
             std::vector<SimpleAwaiter>{a1, a2, a3});
         auto [idx, result] = co_await awaiter;
         REQUIRE(idx == expected_idx);
@@ -189,8 +189,8 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
 
     auto func = [&](size_t expected_idx,
                     std::vector<int> expected_results) -> condy::Coro<void> {
-        using WaitAll = condy::RangedWaitAllAwaiter<SimpleAwaiter>;
-        using WaitOne = condy::RangedWaitOneAwaiter<WaitAll>;
+        using WaitAll = condy::RangedWhenAllAwaiter<SimpleAwaiter>;
+        using WaitOne = condy::RangedWhenAnyAwaiter<WaitAll>;
         WaitAll awaiter_ab(std::vector<SimpleAwaiter>{a1, a2});
         WaitAll awaiter_cd(std::vector<SimpleAwaiter>{a3, a4});
         std::vector<WaitAll> awaiters;
@@ -225,7 +225,7 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
     }
 }
 
-TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
+TEST_CASE("test parallel_awaiter - WhenAllAwaiter") {
     SimpleAwaiter a1, a2, a3;
     auto h1 = a1.handle_ptr_;
     auto h2 = a2.handle_ptr_;
@@ -233,7 +233,7 @@ TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
-        condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
+        condy::WhenAllAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         std::tuple<int, int, int> results = co_await awaiter;
         REQUIRE(std::get<0>(results) == 1);
@@ -262,7 +262,7 @@ TEST_CASE("test parallel_awaiter - WaitAllAwaiter") {
     REQUIRE(finished);
 }
 
-TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
+TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
     SimpleAwaiter a1, a2, a3;
     auto h1 = a1.handle_ptr_;
     auto h2 = a2.handle_ptr_;
@@ -272,7 +272,7 @@ TEST_CASE("test parallel_awaiter - WaitOneAwaiter") {
     auto func =
         [&](size_t expected_idx,
             std::variant<int, int, int> expected_result) -> condy::Coro<void> {
-        condy::WaitOneAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
+        condy::WhenAnyAwaiter<SimpleAwaiter, SimpleAwaiter, SimpleAwaiter>
             awaiter(a1, a2, a3);
         auto result = co_await awaiter;
         REQUIRE(result.index() == expected_idx);
@@ -356,8 +356,8 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
     auto func = [&](size_t expected_idx,
                     std::variant<std::tuple<int, int>, std::tuple<int, int>>
                         expected_results) -> condy::Coro<void> {
-        using WaitAll = condy::WaitAllAwaiter<SimpleAwaiter, SimpleAwaiter>;
-        using WaitOne = condy::WaitOneAwaiter<WaitAll, WaitAll>;
+        using WaitAll = condy::WhenAllAwaiter<SimpleAwaiter, SimpleAwaiter>;
+        using WaitOne = condy::WhenAnyAwaiter<WaitAll, WaitAll>;
         WaitAll awaiter_ab(a1, a2);
         WaitAll awaiter_cd(a3, a4);
         WaitOne awaiter(std::move(awaiter_ab), std::move(awaiter_cd));

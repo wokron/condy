@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
@@ -67,7 +68,7 @@ protected:
     ExtendFunc extend_func_ = nullptr;
 };
 
-template <typename Func, typename HandleBase>
+template <typename Func, OpFinishHandleLike HandleBase>
 class MultiShotMixin : public HandleBase {
 public:
     static constexpr WorkType work_type = WorkType::MultiShot;
@@ -94,7 +95,7 @@ template <typename MultiShotFunc>
 using MultiShotOpFinishHandle =
     MultiShotMixin<MultiShotFunc, ExtendOpFinishHandle>;
 
-template <typename Func, typename HandleBase>
+template <typename Func, OpFinishHandleLike HandleBase>
 class ZeroCopyMixin : public HandleBase {
 public:
     static constexpr WorkType work_type = WorkType::ZeroCopy;
@@ -145,7 +146,7 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
-template <typename ProvidedBufferContainer, typename HandleBase>
+template <typename ProvidedBufferContainer, OpFinishHandleLike HandleBase>
 class SelectBufferMixin : public HandleBase {
 public:
     using ReturnType =
@@ -174,7 +175,7 @@ using MultiShotSelectBufferOpFinishHandle =
     MultiShotMixin<MultiShotFunc, SelectBufferMixin<ProvidedBufferContainer,
                                                     ExtendOpFinishHandle>>;
 
-template <bool Cancel, typename Handle> class RangedParallelFinishHandle {
+template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType =
@@ -251,15 +252,16 @@ private:
     Invoker *invoker_ = nullptr;
 };
 
-constexpr bool WaitAll = false;
+template <HandleLike Handle>
+using RangedParallelAllFinishHandle = RangedParallelFinishHandle<false, Handle>;
 
-constexpr bool WaitOne = true;
+template <HandleLike Handle>
+using RangedParallelAnyFinishHandle = RangedParallelFinishHandle<true, Handle>;
 
-template <typename Handle>
-class RangedWaitAllFinishHandle
-    : public RangedParallelFinishHandle<WaitAll, Handle> {
+template <HandleLike Handle>
+class RangedWhenAllFinishHandle : public RangedParallelAllFinishHandle<Handle> {
 public:
-    using Base = RangedParallelFinishHandle<WaitAll, Handle>;
+    using Base = RangedParallelAllFinishHandle<Handle>;
     using ReturnType = std::vector<typename Handle::ReturnType>;
 
     ReturnType extract_result() {
@@ -268,11 +270,10 @@ public:
     }
 };
 
-template <typename Handle>
-class RangedWaitOneFinishHandle
-    : public RangedParallelFinishHandle<WaitOne, Handle> {
+template <HandleLike Handle>
+class RangedWhenAnyFinishHandle : public RangedParallelAnyFinishHandle<Handle> {
 public:
-    using Base = RangedParallelFinishHandle<WaitOne, Handle>;
+    using Base = RangedParallelAnyFinishHandle<Handle>;
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
@@ -283,7 +284,7 @@ public:
     }
 };
 
-template <bool Cancel, typename... Handles> class ParallelFinishHandle {
+template <bool Cancel, HandleLike... Handles> class ParallelFinishHandle {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
@@ -379,10 +380,16 @@ private:
     Invoker *invoker_ = nullptr;
 };
 
-template <typename... Handles>
-class WaitAllFinishHandle : public ParallelFinishHandle<WaitAll, Handles...> {
+template <HandleLike... Handles>
+using ParallelAllFinishHandle = ParallelFinishHandle<false, Handles...>;
+
+template <HandleLike... Handles>
+using ParallelAnyFinishHandle = ParallelFinishHandle<true, Handles...>;
+
+template <HandleLike... Handles>
+class WhenAllFinishHandle : public ParallelAllFinishHandle<Handles...> {
 public:
-    using Base = ParallelFinishHandle<WaitAll, Handles...>;
+    using Base = ParallelAllFinishHandle<Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
     ReturnType extract_result() {
@@ -391,10 +398,10 @@ public:
     }
 };
 
-template <typename... Handles>
-class WaitOneFinishHandle : public ParallelFinishHandle<WaitOne, Handles...> {
+template <HandleLike... Handles>
+class WhenAnyFinishHandle : public ParallelAnyFinishHandle<Handles...> {
 public:
-    using Base = ParallelFinishHandle<WaitOne, Handles...>;
+    using Base = ParallelAnyFinishHandle<Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
     ReturnType extract_result() {

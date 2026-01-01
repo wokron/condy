@@ -59,7 +59,7 @@ TEST_CASE("test awaiter_operations - test make_op_awaiter") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_all_awaiter") {
+TEST_CASE("test awaiter_operations - test when_all") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -72,7 +72,7 @@ TEST_CASE("test awaiter_operations - test make_all_awaiter") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto [r1, r2, r3] = co_await condy::make_all_awaiter(
+        auto [r1, r2, r3] = co_await condy::when_all(
             std::move(aw1), std::move(aw2), std::move(aw3));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
@@ -92,7 +92,7 @@ TEST_CASE("test awaiter_operations - test make_all_awaiter") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_one_awaiter") {
+TEST_CASE("test awaiter_operations - test when_any") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -109,8 +109,8 @@ TEST_CASE("test awaiter_operations - test make_one_awaiter") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto r = co_await condy::make_one_awaiter(
-            std::move(aw1), std::move(aw2), std::move(aw3));
+        auto r = co_await condy::when_any(std::move(aw1), std::move(aw2),
+                                          std::move(aw3));
         REQUIRE(r.index() == 1);
         --unfinished;
     };
@@ -127,7 +127,7 @@ TEST_CASE("test awaiter_operations - test make_one_awaiter") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
+TEST_CASE("test awaiter_operations - test ranged when_all") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -144,7 +144,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
         awaiters.emplace_back(std::move(aw3));
-        auto r = co_await condy::make_ranged_all_awaiter(std::move(awaiters));
+        auto r = co_await condy::when_all(std::move(awaiters));
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});
         --unfinished;
@@ -162,7 +162,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_all_awaiter") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
+TEST_CASE("test awaiter_operations - test ranged when_any") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -187,8 +187,7 @@ TEST_CASE("test awaiter_operations - test make_ranged_one_awaiter") {
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
         awaiters.emplace_back(std::move(aw3));
-        auto [idx, r] =
-            co_await condy::make_ranged_one_awaiter(std::move(awaiters));
+        auto [idx, r] = co_await condy::when_any(std::move(awaiters));
         REQUIRE(idx == 1);
         --unfinished;
     };
@@ -309,7 +308,7 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - ranged +=") {
+TEST_CASE("test awaiter_operations - ranged awaiter push") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -322,16 +321,15 @@ TEST_CASE("test awaiter_operations - ranged +=") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto awaiter =
-            condy::make_ranged_all_awaiter(std::vector<decltype(aw1)>{});
+        auto awaiter = condy::when_all(std::vector<decltype(aw1)>{});
 #if !__clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow="
 #endif
         // This is a false positive warning in GCC
-        awaiter += std::move(aw1);
-        awaiter += std::move(aw2);
-        awaiter += std::move(aw3);
+        awaiter.push(std::move(aw1));
+        awaiter.push(std::move(aw2));
+        awaiter.push(std::move(aw3));
 #if !__clang__
 #pragma GCC diagnostic pop
 #endif
@@ -353,7 +351,7 @@ TEST_CASE("test awaiter_operations - ranged +=") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_link_awaiter") {
+TEST_CASE("test awaiter_operations - test link") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -370,8 +368,8 @@ TEST_CASE("test awaiter_operations - test make_link_awaiter") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto [r1, r2, r3] = co_await condy::make_link_awaiter(
-            std::move(aw1), std::move(aw2), std::move(aw3));
+        auto [r1, r2, r3] = co_await condy::link(std::move(aw1), std::move(aw2),
+                                                 std::move(aw3));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == -ETIME);
         REQUIRE(r3 == -ECANCELED);
@@ -427,7 +425,7 @@ TEST_CASE("test awaiter_operations - test >>") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
+TEST_CASE("test awaiter_operations - test flags") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -438,7 +436,7 @@ TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
         auto aw = condy::make_op_awaiter(io_uring_prep_nop);
-        co_await condy::make_drained_op_awaiter(std::move(aw));
+        co_await condy::flag<IOSQE_IO_DRAIN>(std::move(aw));
         --unfinished;
     };
 
@@ -454,7 +452,7 @@ TEST_CASE("test awaiter_operations - test make_drained_op_awaiter") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test ~") {
+TEST_CASE("test awaiter_operations - test drain with when_all") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -467,7 +465,8 @@ TEST_CASE("test awaiter_operations - test ~") {
         auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        co_await (std::move(aw1) && std::move(aw2) && ~std::move(aw3));
+        co_await (std::move(aw1) && std::move(aw2) &&
+                  condy::flag<IOSQE_IO_DRAIN>(std::move(aw3)));
         --unfinished;
     };
 
@@ -483,7 +482,7 @@ TEST_CASE("test awaiter_operations - test ~") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
+TEST_CASE("test awaiter_operations - test parallel all") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -497,7 +496,7 @@ TEST_CASE("test awaiter_operations - test make_parallel_awaiter") {
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         auto [order, results] =
-            co_await condy::make_parallel_awaiter<condy::WaitAll>(
+            co_await condy::parallel<condy::ParallelAllAwaiter>(
                 std::move(aw1), std::move(aw2), std::move(aw3));
         auto [r1, r2, r3] = results;
         REQUIRE(r1 == 0);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/finish_handles.hpp"
@@ -13,7 +14,7 @@
 
 namespace condy {
 
-template <typename Handle> class HandleBox {
+template <OpFinishHandleLike Handle> class HandleBox {
 public:
     HandleBox(Handle h) : handle_(std::move(h)) {}
 
@@ -23,7 +24,7 @@ private:
     Handle handle_;
 };
 
-template <typename Func, typename HandleBase>
+template <typename Func, OpFinishHandleLike HandleBase>
 class HandleBox<ZeroCopyMixin<Func, HandleBase>> {
 public:
     using Handle = ZeroCopyMixin<Func, HandleBase>;
@@ -36,7 +37,7 @@ private:
 };
 
 // TODO: Handle sqe128
-template <typename Handle, typename Func> class OpAwaiterBase {
+template <OpFinishHandleLike Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
@@ -150,18 +151,21 @@ public:
                func) {}
 };
 
-template <typename Awaiter>
-class [[nodiscard]] DrainedOpAwaiter : public Awaiter {
+template <unsigned int Flags, AwaiterLike Awaiter>
+class [[nodiscard]] FlaggedOpAwaiter : public Awaiter {
 public:
     using Base = Awaiter;
-    DrainedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
+    FlaggedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
 
     void register_operation(unsigned int flags) {
 #if IO_URING_CHECK_VERSION(2, 12) // < 2.12
-        auto *runtime = Context::current().runtime();
-        runtime->notify(); // Ensure every operation before drain will complete
+        if constexpr (Flags & IOSQE_IO_DRAIN) {
+            auto *runtime = Context::current().runtime();
+            // Ensure every operation before drain will complete
+            runtime->notify();
+        }
 #endif
-        Base::register_operation(flags | IOSQE_IO_DRAIN);
+        Base::register_operation(flags | Flags);
     }
 
     template <typename PromiseType>
@@ -172,18 +176,19 @@ public:
     }
 };
 
-template <typename Handle, typename Awaiter>
-class [[nodiscard]] RangedParallelAwaiter {
+template <HandleLike Handle, AwaiterLike Awaiter>
+class [[nodiscard]] RangedParallelAwaiterBase {
 public:
     using HandleType = Handle;
 
-    RangedParallelAwaiter(std::vector<Awaiter> awaiters)
+    RangedParallelAwaiterBase(std::vector<Awaiter> awaiters)
         : awaiters_(std::move(awaiters)) {}
-    RangedParallelAwaiter(RangedParallelAwaiter &&) = default;
+    RangedParallelAwaiterBase(RangedParallelAwaiterBase &&) = default;
 
-    RangedParallelAwaiter(const RangedParallelAwaiter &) = delete;
-    RangedParallelAwaiter &operator=(const RangedParallelAwaiter &) = delete;
-    RangedParallelAwaiter &operator=(RangedParallelAwaiter &&) = delete;
+    RangedParallelAwaiterBase(const RangedParallelAwaiterBase &) = delete;
+    RangedParallelAwaiterBase &
+    operator=(const RangedParallelAwaiterBase &) = delete;
+    RangedParallelAwaiterBase &operator=(RangedParallelAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -220,38 +225,41 @@ public:
     }
 
 public:
-    void append_awaiter(Awaiter awaiter) {
-        awaiters_.push_back(std::move(awaiter));
-    }
+    void push(Awaiter awaiter) { awaiters_.push_back(std::move(awaiter)); }
 
 protected:
     HandleType finish_handle_;
     std::vector<Awaiter> awaiters_;
 };
 
-template <bool Cancel, typename Awaiter>
-using RangedParallelAwaiterWrapper = RangedParallelAwaiter<
-    RangedParallelFinishHandle<Cancel, typename Awaiter::HandleType>, Awaiter>;
+template <typename Awaiter>
+using RangedParallelAllAwaiter = RangedParallelAwaiterBase<
+    RangedParallelAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
 template <typename Awaiter>
-using RangedWaitAllAwaiter = RangedParallelAwaiter<
-    RangedWaitAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
+using RangedParallelAnyAwaiter = RangedParallelAwaiterBase<
+    RangedParallelAnyFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
 template <typename Awaiter>
-using RangedWaitOneAwaiter = RangedParallelAwaiter<
-    RangedWaitOneFinishHandle<typename Awaiter::HandleType>, Awaiter>;
+using RangedWhenAllAwaiter = RangedParallelAwaiterBase<
+    RangedWhenAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
 template <typename Awaiter>
-class [[nodiscard]] RangedLinkAwaiter : public RangedWaitAllAwaiter<Awaiter> {
+using RangedWhenAnyAwaiter = RangedParallelAwaiterBase<
+    RangedWhenAnyFinishHandle<typename Awaiter::HandleType>, Awaiter>;
+
+template <unsigned int Flags, AwaiterLike Awaiter>
+class [[nodiscard]] RangedLinkAwaiterBase
+    : public RangedWhenAllAwaiter<Awaiter> {
 public:
-    using Base = RangedWaitAllAwaiter<Awaiter>;
+    using Base = RangedWhenAllAwaiter<Awaiter>;
     using Base::Base;
 
     void register_operation(unsigned int flags) {
         auto *ring = Context::current().ring();
         ring->reserve_space(Base::awaiters_.size());
         for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
-            Base::awaiters_[i].register_operation(flags | IOSQE_IO_LINK);
+            Base::awaiters_[i].register_operation(flags | Flags);
         }
         Base::awaiters_.back().register_operation(flags);
     }
@@ -264,17 +272,28 @@ public:
     }
 };
 
-template <typename Handle, typename... Awaiters>
-class [[nodiscard]] ParallelAwaiter {
+template <typename Awaiter>
+using RangedLinkAwaiter = RangedLinkAwaiterBase<IOSQE_IO_LINK, Awaiter>;
+
+template <typename Awaiter>
+using RangedHardLinkAwaiter = RangedLinkAwaiterBase<IOSQE_IO_HARDLINK, Awaiter>;
+
+template <HandleLike Handle, AwaiterLike... Awaiters>
+class [[nodiscard]] ParallelAwaiterBase {
 public:
     using HandleType = Handle;
 
-    ParallelAwaiter(Awaiters... awaiters) : awaiters_(std::move(awaiters)...) {}
-    ParallelAwaiter(ParallelAwaiter &&) = default;
+    ParallelAwaiterBase(Awaiters... awaiters)
+        : awaiters_(std::move(awaiters)...) {}
+    ParallelAwaiterBase(ParallelAwaiterBase &&) = default;
+    template <typename ParallelAwaiter, AwaiterLike New>
+    ParallelAwaiterBase(ParallelAwaiter &&aws, New new_awaiter)
+        : awaiters_(std::tuple_cat(std::move(aws.awaiters_),
+                                   std::make_tuple(std::move(new_awaiter)))) {}
 
-    ParallelAwaiter(const ParallelAwaiter &) = delete;
-    ParallelAwaiter &operator=(const ParallelAwaiter &) = delete;
-    ParallelAwaiter &operator=(ParallelAwaiter &&) = delete;
+    ParallelAwaiterBase(const ParallelAwaiterBase &) = delete;
+    ParallelAwaiterBase &operator=(const ParallelAwaiterBase &) = delete;
+    ParallelAwaiterBase &operator=(ParallelAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -309,9 +328,6 @@ public:
         return finish_handle_.extract_result();
     }
 
-public:
-    auto awaiters() && { return std::move(awaiters_); }
-
 private:
     template <size_t Idx = 0> auto foreach_init_finish_handle_() {
         if constexpr (Idx < sizeof...(Awaiters)) {
@@ -335,26 +351,33 @@ private:
 protected:
     HandleType finish_handle_;
     std::tuple<Awaiters...> awaiters_;
+
+    // Make awaiters_ accessible to all template instantiations
+    template <HandleLike, AwaiterLike...> friend class ParallelAwaiterBase;
 };
 
-template <bool Cancel, typename... Awaiter>
-using ParallelAwaiterWrapper = ParallelAwaiter<
-    ParallelFinishHandle<Cancel, typename Awaiter::HandleType...>, Awaiter...>;
+template <typename... Awaiter>
+using ParallelAllAwaiter = ParallelAwaiterBase<
+    ParallelAllFinishHandle<typename Awaiter::HandleType...>, Awaiter...>;
 
 template <typename... Awaiter>
-using WaitAllAwaiter =
-    ParallelAwaiter<WaitAllFinishHandle<typename Awaiter::HandleType...>,
-                    Awaiter...>;
+using ParallelAnyAwaiter = ParallelAwaiterBase<
+    ParallelAnyFinishHandle<typename Awaiter::HandleType...>, Awaiter...>;
 
 template <typename... Awaiter>
-using WaitOneAwaiter =
-    ParallelAwaiter<WaitOneFinishHandle<typename Awaiter::HandleType...>,
-                    Awaiter...>;
+using WhenAllAwaiter =
+    ParallelAwaiterBase<WhenAllFinishHandle<typename Awaiter::HandleType...>,
+                        Awaiter...>;
 
 template <typename... Awaiter>
-class [[nodiscard]] LinkAwaiter : public WaitAllAwaiter<Awaiter...> {
+using WhenAnyAwaiter =
+    ParallelAwaiterBase<WhenAnyFinishHandle<typename Awaiter::HandleType...>,
+                        Awaiter...>;
+
+template <unsigned int Flags, AwaiterLike... Awaiter>
+class [[nodiscard]] LinkAwaiterBase : public WhenAllAwaiter<Awaiter...> {
 public:
-    using Base = WaitAllAwaiter<Awaiter...>;
+    using Base = WhenAllAwaiter<Awaiter...>;
     using Base::Base;
 
     void register_operation(unsigned int flags) {
@@ -375,12 +398,17 @@ private:
     void foreach_register_operation_(unsigned int flags) {
         if constexpr (Idx < sizeof...(Awaiter)) {
             std::get<Idx>(Base::awaiters_)
-                .register_operation(Idx < sizeof...(Awaiter) - 1
-                                        ? flags | IOSQE_IO_LINK
-                                        : flags);
+                .register_operation(Idx < sizeof...(Awaiter) - 1 ? flags | Flags
+                                                                 : flags);
             foreach_register_operation_<Idx + 1>(flags);
         }
     }
 };
+
+template <typename... Awaiter>
+using LinkAwaiter = LinkAwaiterBase<IOSQE_IO_LINK, Awaiter...>;
+
+template <typename... Awaiter>
+using HardLinkAwaiter = LinkAwaiterBase<IOSQE_IO_HARDLINK, Awaiter...>;
 
 } // namespace condy

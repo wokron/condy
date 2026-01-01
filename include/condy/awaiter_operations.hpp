@@ -1,6 +1,7 @@
 #pragma once
 
 #include "condy/awaiters.hpp"
+#include "condy/concepts.hpp"
 #include "condy/task.hpp"
 
 namespace condy {
@@ -110,108 +111,86 @@ auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
         std::forward<FreeFunc>(free_func), std::move(prep_func));
 }
 
-template <typename Awaiter> auto make_drained_op_awaiter(Awaiter &&awaiter) {
-    return DrainedOpAwaiter<std::decay_t<Awaiter>>(
+template <unsigned int Flags, AwaiterLike Awaiter>
+auto flag(Awaiter &&awaiter) {
+    return FlaggedOpAwaiter<Flags, std::decay_t<Awaiter>>(
         std::forward<Awaiter>(awaiter));
 }
 
-template <bool Cancel, typename... Awaiters>
-auto make_parallel_awaiter(Awaiters &&...awaiters) {
-    return ParallelAwaiterWrapper<Cancel, std::decay_t<Awaiters>...>(
-        std::forward<Awaiters>(awaiters)...);
+template <template <AwaiterLike... Awaiter> typename AwaiterType,
+          AwaiterLike... Awaiter>
+auto parallel(Awaiter &&...awaiters) {
+    return AwaiterType<std::decay_t<Awaiter>...>(
+        std::forward<Awaiter>(awaiters)...);
 }
 
-template <typename... Awaiters> auto make_all_awaiter(Awaiters &&...awaiters) {
-    return WaitAllAwaiter<std::decay_t<Awaiters>...>(
-        std::forward<Awaiters>(awaiters)...);
-}
-
-template <typename... Awaiters> auto make_one_awaiter(Awaiters &&...awaiters) {
-    return WaitOneAwaiter<std::decay_t<Awaiters>...>(
-        std::forward<Awaiters>(awaiters)...);
-}
-
-template <typename... Awaiters> auto make_link_awaiter(Awaiters &&...awaiters) {
-    return LinkAwaiter<std::decay_t<Awaiters>...>(
-        std::forward<Awaiters>(awaiters)...);
-}
-
-template <bool Cancel, typename Range>
-auto make_ranged_parallel_awaiter(Range &&range) {
+template <template <typename Awaiter> typename RangedAwaiterType,
+          AwaiterRange Range>
+auto parallel(Range &&range) {
     using AwaiterType = typename std::decay_t<Range>::value_type;
-    return RangedParallelAwaiterWrapper<Cancel, AwaiterType>(
-        std::forward<Range>(range));
+    auto begin = std::make_move_iterator(std::begin(range));
+    auto end = std::make_move_iterator(std::end(range));
+    std::vector<AwaiterType> awaiters(begin, end);
+    return RangedAwaiterType<AwaiterType>(std::move(awaiters));
 }
 
-template <typename Range> auto make_ranged_all_awaiter(Range &&range) {
-    using AwaiterType = typename std::decay_t<Range>::value_type;
-    return RangedWaitAllAwaiter<AwaiterType>(std::forward<Range>(range));
+template <AwaiterLike... Awaiters> auto when_all(Awaiters &&...awaiters) {
+    return parallel<WhenAllAwaiter>(std::forward<Awaiters>(awaiters)...);
 }
 
-template <typename Range> auto make_ranged_one_awaiter(Range &&range) {
-    using AwaiterType = typename std::decay_t<Range>::value_type;
-    return RangedWaitOneAwaiter<AwaiterType>(std::forward<Range>(range));
+template <AwaiterRange Range> auto when_all(Range &&range) {
+    return parallel<RangedWhenAllAwaiter>(std::forward<Range>(range));
 }
 
-template <typename Range> auto make_ranged_link_awaiter(Range &&range) {
-    using AwaiterType = typename std::decay_t<Range>::value_type;
-    return RangedLinkAwaiter<AwaiterType>(std::forward<Range>(range));
+template <AwaiterLike... Awaiters> auto when_any(Awaiters &&...awaiters) {
+    return parallel<WhenAnyAwaiter>(std::forward<Awaiters>(awaiters)...);
+}
+
+template <AwaiterRange Range> auto when_any(Range &&range) {
+    return parallel<RangedWhenAnyAwaiter>(std::forward<Range>(range));
+}
+
+template <AwaiterLike... Awaiters> auto link(Awaiters &&...awaiters) {
+    return parallel<LinkAwaiter>(std::forward<Awaiters>(awaiters)...);
+}
+
+template <AwaiterRange Range> auto link(Range &&range) {
+    return parallel<RangedLinkAwaiter>(std::forward<Range>(range));
 }
 
 namespace operators {
 
-template <typename Func> auto operator~(OpAwaiter<Func> op) {
-    return make_drained_op_awaiter(std::move(op));
+template <AwaiterLike Awaiter1, AwaiterLike Awaiter2>
+auto operator&&(Awaiter1 aw1, Awaiter2 aw2) {
+    return when_all(std::move(aw1), std::move(aw2));
 }
 
-template <typename Awaiter1, typename Awaiter2>
-auto operator&&(Awaiter1 op1, Awaiter2 op2) {
-    return make_all_awaiter(std::move(op1), std::move(op2));
+template <AwaiterLike Awaiter, AwaiterLike... Awaiters>
+auto operator&&(WhenAllAwaiter<Awaiters...> aws, Awaiter aw) {
+    return WhenAllAwaiter<Awaiters..., std::decay_t<Awaiter>>(std::move(aws),
+                                                              std::move(aw));
 }
 
-template <typename Awaiter, typename... Awaiters>
-auto operator&&(WaitAllAwaiter<Awaiters...> wa, Awaiter a) {
-    return std::apply(
-        [a = std::move(a)](auto &&...args) mutable {
-            return make_all_awaiter(std::forward<decltype(args)>(args)...,
-                                    std::move(a));
-        },
-        std::move(wa).awaiters());
+template <AwaiterLike Awaiter1, AwaiterLike Awaiter2>
+auto operator||(Awaiter1 aw1, Awaiter2 aw2) {
+    return when_any(std::move(aw1), std::move(aw2));
 }
 
-template <typename Awaiter1, typename Awaiter2>
-auto operator||(Awaiter1 op1, Awaiter2 op2) {
-    return make_one_awaiter(std::move(op1), std::move(op2));
+template <AwaiterLike Awaiter, AwaiterLike... Awaiters>
+auto operator||(WhenAnyAwaiter<Awaiters...> aws, Awaiter aw) {
+    return WhenAnyAwaiter<Awaiters..., std::decay_t<Awaiter>>(std::move(aws),
+                                                              std::move(aw));
 }
 
-template <typename Awaiter, typename... Awaiters>
-auto operator||(WaitOneAwaiter<Awaiters...> wa, Awaiter a) {
-    return std::apply(
-        [a = std::move(a)](auto &&...args) mutable {
-            return make_one_awaiter(std::forward<decltype(args)>(args)...,
-                                    std::move(a));
-        },
-        std::move(wa).awaiters());
+template <AwaiterLike Awaiter1, AwaiterLike Awaiter2>
+auto operator>>(Awaiter1 aw1, Awaiter2 aw2) {
+    return link(std::move(aw1), std::move(aw2));
 }
 
-template <typename Awaiter1, typename Awaiter2>
-auto operator>>(Awaiter1 op1, Awaiter2 op2) {
-    return make_link_awaiter(std::move(op1), std::move(op2));
-}
-
-template <typename Awaiter, typename... Awaiters>
-auto operator>>(LinkAwaiter<Awaiters...> la, Awaiter a) {
-    return std::apply(
-        [a = std::move(a)](auto &&...args) mutable {
-            return make_link_awaiter(std::forward<decltype(args)>(args)...,
-                                     std::move(a));
-        },
-        std::move(la).awaiters());
-}
-
-template <typename Handle, typename Awaiter>
-void operator+=(RangedParallelAwaiter<Handle, Awaiter> &rwa, Awaiter a) {
-    rwa.append_awaiter(std::move(a));
+template <AwaiterLike Awaiter, AwaiterLike... Awaiters>
+auto operator>>(LinkAwaiter<Awaiters...> aws, Awaiter aw) {
+    return LinkAwaiter<Awaiters..., std::decay_t<Awaiter>>(std::move(aws),
+                                                           std::move(aw));
 }
 
 } // namespace operators
