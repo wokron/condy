@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/buffers.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
@@ -134,7 +135,7 @@ public:
 
 class BundledProvidedBufferPool;
 
-struct ProvidedBuffer {
+struct ProvidedBuffer : public BufferBase {
 public:
     ProvidedBuffer() = default;
     ProvidedBuffer(void *data, size_t size, BundledProvidedBufferPool *pool)

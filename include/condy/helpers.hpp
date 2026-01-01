@@ -1,6 +1,6 @@
 #pragma once
 
-#include "condy/buffers.hpp"
+#include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/provided_buffers.hpp"
 #include <type_traits>
@@ -31,13 +31,11 @@ template <typename Channel> struct PushHelper {
 
 } // namespace detail
 
-// Helper to spawn a coroutine from a multishot operation
 template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
     return detail::SpawnHelper<std::decay_t<CoroFunc>>{
         std::forward<CoroFunc>(coro)};
 }
 
-// Helper to push result to the channel
 template <typename Channel> auto will_push(Channel &channel) {
     return detail::PushHelper<std::decay_t<Channel>>{channel};
 }
@@ -49,99 +47,28 @@ struct FixedFd {
     operator int() const { return value; }
 };
 
-template <typename OpAwaiter>
-void maybe_add_fixed_fd_flag(OpAwaiter &op, const FixedFd &) {
-    op.add_flags(IOSQE_FIXED_FILE);
-}
-
-template <typename OpAwaiter>
-void maybe_add_fixed_fd_flag(OpAwaiter &, int) { /* No-op */ }
-
-template <typename Fd>
-constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
-
-template <typename Buffer>
-constexpr bool is_provided_buffer_pool_v =
-    std::is_same_v<Buffer, ProvidedBufferPool &>;
-
-template <typename Buffer>
-constexpr bool is_bundled_provided_buffer_pool_v =
-    std::is_same_v<Buffer, BundledProvidedBufferPool &>;
-
-template <typename Buffer>
-constexpr bool is_provided_buffer_queue_v =
-    std::is_same_v<Buffer, ProvidedBufferQueue &>;
-
-template <typename Buffer>
-constexpr bool is_bundled_provided_buffer_queue_v =
-    std::is_same_v<Buffer, BundledProvidedBufferQueue &>;
-
-template <typename BufferBase> class FixedBuffer : public BufferBase {
-public:
-    FixedBuffer(int buf_index, BufferBase base)
-        : BufferBase(base), buf_index_(buf_index) {}
-
-    int buf_index() const { return buf_index_; }
-
-private:
-    int buf_index_;
-};
-
-template <typename Buffer>
-constexpr bool is_basic_buffer =
-    std::is_same_v<std::decay_t<Buffer>, MutableBuffer> ||
-    std::is_same_v<std::decay_t<Buffer>, ConstBuffer>;
-
-template <typename Buffer> struct is_fixed_buffer : public std::false_type {};
-template <typename BufferBase>
-struct is_fixed_buffer<FixedBuffer<BufferBase>> : public std::true_type {};
-template <typename Buffer>
-constexpr bool is_fixed_buffer_v = is_fixed_buffer<std::decay_t<Buffer>>::value;
-
-struct FixedIoVec {
+template <typename T> struct FixedBuffer {
+    T value;
     int buf_index;
-    iovec *iov;
 };
-
-template <typename IoVec> struct is_fixed_iovec : public std::false_type {};
-template <> struct is_fixed_iovec<FixedIoVec> : public std::true_type {};
-template <typename IoVec>
-constexpr bool is_fixed_iovec_v = is_fixed_iovec<std::decay_t<IoVec>>::value;
-
-struct FixedMsghdr {
-    int buf_index;
-    msghdr *msg;
-};
-
-template <typename MsgHdr> struct is_fixed_msghdr : public std::false_type {};
-template <> struct is_fixed_msghdr<FixedMsghdr> : public std::true_type {};
-template <typename MsgHdr>
-constexpr bool is_fixed_msghdr_v = is_fixed_msghdr<std::decay_t<MsgHdr>>::value;
 
 } // namespace detail
 
-// Helper to specify a fixed fd
 inline auto fixed(int fd) { return detail::FixedFd{fd}; }
 
-// Helper to specify a fixed buffer
-template <typename Buffer>
-    requires(detail::is_basic_buffer<Buffer>)
-auto fixed(int buf_index, Buffer &&buf) {
-    return detail::FixedBuffer<std::decay_t<Buffer>>(buf_index,
-                                                     std::forward<Buffer>(buf));
+template <BufferLike Buffer> auto fixed(int buf_index, Buffer &&buf) {
+    return detail::FixedBuffer<std::decay_t<Buffer>>{std::forward<Buffer>(buf),
+                                                     buf_index};
 }
 
-// Helper to specify a fixed iovec
-inline auto fixed(int buf_index, iovec *iov) {
-    return detail::FixedIoVec{buf_index, iov};
+inline auto fixed(int buf_index, const struct iovec *iov) {
+    return detail::FixedBuffer<const iovec *>{iov, buf_index};
 }
 
-// Helper to specify a fixed msghdr
-inline auto fixed(int buf_index, struct msghdr *msg) {
-    return detail::FixedMsghdr{buf_index, msg};
+inline auto fixed(int buf_index, const struct msghdr *msg) {
+    return detail::FixedBuffer<const msghdr *>{msg, buf_index};
 }
 
-// Helper to bundle provided buffers
 inline auto &bundled(ProvidedBufferPool &buffer) {
     return static_cast<BundledProvidedBufferPool &>(buffer);
 }

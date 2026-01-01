@@ -62,14 +62,14 @@ TEST_CASE("test fd_table - use fixed fd") {
 
         auto write_op = condy::make_op_awaiter(io_uring_prep_write, 1,
                                                write_buf, sizeof(write_buf), 0);
-        write_op.add_flags(IOSQE_FIXED_FILE);
-        int write_res = co_await write_op;
+        int write_res =
+            co_await condy::flag<IOSQE_FIXED_FILE>(std::move(write_op));
         REQUIRE(write_res == sizeof(write_buf));
 
         auto read_op = condy::make_op_awaiter(io_uring_prep_read, 0, read_buf,
                                               sizeof(read_buf), 0);
-        read_op.add_flags(IOSQE_FIXED_FILE);
-        int read_res = co_await read_op;
+        int read_res =
+            co_await condy::flag<IOSQE_FIXED_FILE>(std::move(read_op));
         REQUIRE(read_res == sizeof(read_buf));
         REQUIRE(std::memcmp(write_buf, read_buf, sizeof(write_buf)) == 0);
         co_return;

@@ -10,7 +10,10 @@
 
 namespace condy {
 
-class MutableBuffer {
+// Just a tag
+class BufferBase {};
+
+class MutableBuffer : public BufferBase {
 public:
     MutableBuffer() = default;
     MutableBuffer(void *data, size_t size) : data_(data), size_(size) {}
@@ -24,7 +27,7 @@ private:
     size_t size_ = 0;
 };
 
-class ConstBuffer {
+class ConstBuffer : public BufferBase {
 public:
     ConstBuffer() = default;
     ConstBuffer(const void *data, size_t size) : data_(data), size_(size) {}

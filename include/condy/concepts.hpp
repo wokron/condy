@@ -1,9 +1,17 @@
 #pragma once
 
+#include "condy/buffers.hpp"
 #include "condy/invoker.hpp"
+#include "condy/provided_buffers.hpp"
 #include <coroutine>
 
 namespace condy {
+
+namespace detail {
+
+struct FixedFd;
+
+}
 
 template <typename T>
 concept HandleLike = requires(T handle, Invoker *invoker) {
@@ -35,5 +43,27 @@ concept AwaiterLike = requires(T awaiter) {
 template <typename T>
 concept AwaiterRange =
     std::ranges::range<T> && AwaiterLike<std::ranges::range_value_t<T>>;
+
+template <typename T>
+concept BufferRingLike = requires(T br) {
+    typename T::ReturnType;
+    { br.bgid() } -> std::same_as<uint16_t>;
+    { br.handle_finish(0, 0) } -> std::same_as<typename T::ReturnType>;
+};
+
+template <typename T>
+concept BundledBufferRing =
+    std::same_as<std::decay_t<T>, BundledProvidedBufferPool> ||
+    std::same_as<std::decay_t<T>, BundledProvidedBufferQueue>;
+
+template <typename T>
+concept NotBundledBufferRing = BufferRingLike<T> && !BundledBufferRing<T>;
+
+template <typename T>
+concept BufferLike = std::derived_from<std::decay_t<T>, BufferBase>;
+
+template <typename T>
+concept FdLike = std::same_as<std::decay_t<T>, int> ||
+                 std::same_as<std::decay_t<T>, detail::FixedFd>;
 
 } // namespace condy

@@ -25,34 +25,31 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
         std::forward<MultiShotFunc>(multishot_func), std::move(prep_func));
 }
 
-template <typename ProvidedBufferContainer, typename Func, typename... Args>
-auto make_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
-                                   Func &&func, Args &&...args) {
+template <BufferRingLike Br, typename Func, typename... Args>
+auto make_select_buffer_op_awaiter(Br *buffers, Func &&func, Args &&...args) {
     auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    auto op =
-        SelectBufferOpAwaiter<ProvidedBufferContainer, decltype(prep_func)>(
-            buffers, std::move(prep_func));
+    auto op = SelectBufferOpAwaiter<Br, decltype(prep_func)>(
+        buffers, std::move(prep_func));
     return op;
 }
 
-template <typename MultiShotFunc, typename ProvidedBufferContainer,
-          typename Func, typename... Args>
+template <typename MultiShotFunc, BufferRingLike Br, typename Func,
+          typename... Args>
 auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
-                                             ProvidedBufferContainer *buffers,
-                                             Func &&func, Args &&...args) {
+                                             Br *buffers, Func &&func,
+                                             Args &&...args) {
     auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>,
-                                             ProvidedBufferContainer,
+    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>, Br,
                                              decltype(prep_func)>(
         std::forward<MultiShotFunc>(multishot_func), buffers,
         std::move(prep_func));
@@ -60,9 +57,9 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
 }
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename ProvidedBufferContainer, typename Func, typename... Args>
-auto make_bundle_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
-                                          Func &&func, Args &&...args) {
+template <BufferRingLike Br, typename Func, typename... Args>
+auto make_bundle_select_buffer_op_awaiter(Br *buffers, Func &&func,
+                                          Args &&...args) {
     auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
@@ -70,19 +67,17 @@ auto make_bundle_select_buffer_op_awaiter(ProvidedBufferContainer *buffers,
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    auto op =
-        SelectBufferOpAwaiter<ProvidedBufferContainer, decltype(prep_func)>(
-            buffers, std::move(prep_func));
+    auto op = SelectBufferOpAwaiter<Br, decltype(prep_func)>(
+        buffers, std::move(prep_func));
     return op;
 }
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename MultiShotFunc, typename ProvidedBufferContainer,
-          typename Func, typename... Args>
+template <typename MultiShotFunc, BufferRingLike Br, typename Func,
+          typename... Args>
 auto make_multishot_bundle_select_buffer_op_awaiter(
-    MultiShotFunc &&multishot_func, ProvidedBufferContainer *buffers,
-    Func &&func, Args &&...args) {
+    MultiShotFunc &&multishot_func, Br *buffers, Func &&func, Args &&...args) {
     auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
@@ -90,8 +85,7 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>,
-                                             ProvidedBufferContainer,
+    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>, Br,
                                              decltype(prep_func)>(
         std::forward<MultiShotFunc>(multishot_func), buffers,
         std::move(prep_func));

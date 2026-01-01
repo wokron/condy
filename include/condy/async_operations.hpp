@@ -1,12 +1,30 @@
 #pragma once
 
 #include "condy/awaiter_operations.hpp"
+#include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/helpers.hpp"
+#include "condy/provided_buffers.hpp"
 
 namespace condy {
 
-template <typename Fd1, typename Fd2>
+namespace detail {
+
+template <AwaiterLike Awaiter>
+auto maybe_flag_fixed_fd(Awaiter &&op, const FixedFd &) {
+    return flag<IOSQE_FIXED_FILE>(std::forward<Awaiter>(op));
+}
+
+template <AwaiterLike Awaiter> auto maybe_flag_fixed_fd(Awaiter &&op, int) {
+    return std::forward<Awaiter>(op);
+}
+
+template <typename Fd>
+constexpr bool is_fixed_fd_v = std::is_same_v<std::decay_t<Fd>, FixedFd>;
+
+} // namespace detail
+
+template <FdLike Fd1, FdLike Fd2>
 inline auto async_splice(Fd1 fd_in, int64_t off_in, Fd2 fd_out, int64_t off_out,
                          unsigned int nbytes, unsigned int splice_flags) {
     if constexpr (detail::is_fixed_fd_v<Fd1>) {
@@ -14,11 +32,10 @@ inline auto async_splice(Fd1 fd_in, int64_t off_in, Fd2 fd_out, int64_t off_out,
     }
     auto op = make_op_awaiter(io_uring_prep_splice, fd_in, off_in, fd_out,
                               off_out, nbytes, splice_flags);
-    detail::maybe_add_fixed_fd_flag(op, fd_out);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd_out);
 }
 
-template <typename Fd1, typename Fd2>
+template <FdLike Fd1, FdLike Fd2>
 inline auto async_tee(Fd1 fd_in, Fd2 fd_out, unsigned int nbytes,
                       unsigned int splice_flags) {
     if constexpr (detail::is_fixed_fd_v<Fd1>) {
@@ -26,94 +43,88 @@ inline auto async_tee(Fd1 fd_in, Fd2 fd_out, unsigned int nbytes,
     }
     auto op =
         make_op_awaiter(io_uring_prep_tee, fd_in, fd_out, nbytes, splice_flags);
-    detail::maybe_add_fixed_fd_flag(op, fd_out);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd_out);
 }
 
-template <typename Fd, typename IoVec>
-inline auto async_readv(Fd fd, IoVec &&iovecs, unsigned nr_vecs, __u64 offset,
-                        int flags) {
-    auto op = [&] {
+template <FdLike Fd>
+inline auto async_readv(Fd fd, const struct iovec *iovecs, unsigned nr_vecs,
+                        __u64 offset, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs, offset,
+                              flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-        if constexpr (detail::is_fixed_iovec_v<IoVec>) {
-            return make_op_awaiter(io_uring_prep_readv_fixed, fd, iovecs.iov,
-                                   nr_vecs, offset, flags, iovecs.buf_index);
-        } else
+template <FdLike Fd>
+inline auto async_readv(Fd fd, detail::FixedBuffer<const iovec *> iovecs,
+                        unsigned nr_vecs, __u64 offset, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_readv_fixed, fd, iovecs.value,
+                              nr_vecs, offset, flags, iovecs.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
 #endif
-            return make_op_awaiter(io_uring_prep_readv2, fd, iovecs, nr_vecs,
-                                   offset, flags);
-    }();
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+
+template <FdLike Fd>
+inline auto async_writev(Fd fd, const struct iovec *iovecs,
+                         unsigned int nr_vecs, __u64 offset, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs,
+                              offset, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd, typename IoVec>
-inline auto async_writev(Fd fd, IoVec &&iovecs, unsigned nr_vecs, __u64 offset,
-                         int flags) {
-    auto op = [&] {
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-        if constexpr (detail::is_fixed_iovec_v<IoVec>) {
-            return make_op_awaiter(io_uring_prep_writev_fixed, fd, iovecs.iov,
-                                   nr_vecs, offset, flags, iovecs.buf_index);
-        } else
-#endif
-            return make_op_awaiter(io_uring_prep_writev2, fd, iovecs, nr_vecs,
-                                   offset, flags);
-    }();
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+template <FdLike Fd>
+inline auto async_writev(Fd fd, detail::FixedBuffer<const iovec *> iovecs,
+                         unsigned int nr_vecs, __u64 offset, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_writev_fixed, fd, iovecs.value,
+                              nr_vecs, offset, flags, iovecs.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
+#endif
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
     auto op = make_op_awaiter(io_uring_prep_recvmsg, fd, msg, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd, typename MultiShotFunc, typename Buffer>
+template <FdLike Fd, typename MultiShotFunc, NotBundledBufferRing Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
-                                    Buffer &&buf, MultiShotFunc &&func) {
-    static_assert(detail::is_provided_buffer_pool_v<Buffer> ||
-                      detail::is_provided_buffer_queue_v<Buffer>,
-                  "Buffer must be a ProvidedBufferPool or ProvidedBufferQueue");
+                                    Buffer &buf, MultiShotFunc &&func) {
     auto op = make_multishot_select_buffer_op_awaiter(
         std::forward<MultiShotFunc>(func), &buf,
         io_uring_prep_recvmsg_multishot, fd, msg, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_sendmsg(Fd fd, const struct msghdr *msg, unsigned flags) {
     auto op = make_op_awaiter(io_uring_prep_sendmsg, fd, msg, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd, typename MsgHdr, typename FreeFunc>
-inline auto async_sendmsg_zc(Fd fd, MsgHdr &&msg, unsigned flags,
+template <FdLike Fd, typename FreeFunc>
+inline auto async_sendmsg_zc(Fd fd, const struct msghdr *msg, unsigned flags,
                              FreeFunc &&func) {
-    auto op = [&] {
-#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-        if constexpr (detail::is_fixed_msghdr_v<MsgHdr>) {
-            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
-                                             io_uring_prep_sendmsg_zc_fixed, fd,
-                                             msg.msg, flags, msg.buf_index);
-        } else
-#endif
-            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
-                                             io_uring_prep_sendmsg, fd, msg,
-                                             flags);
-    }();
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    auto op = make_zero_copy_op_awaiter(
+        std::forward<FreeFunc>(func), io_uring_prep_sendmsg_zc, fd, msg, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd> inline auto async_fsync(Fd fd, unsigned fsync_flags) {
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+template <FdLike Fd, typename FreeFunc>
+inline auto async_sendmsg_zc(Fd fd, detail::FixedBuffer<const msghdr *> msg,
+                             unsigned flags, FreeFunc &&func) {
+    auto op = make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
+                                        io_uring_prep_sendmsg_zc_fixed, fd,
+                                        msg.value, flags, msg.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
+
+template <FdLike Fd> inline auto async_fsync(Fd fd, unsigned fsync_flags) {
     auto op = make_op_awaiter(io_uring_prep_fsync, fd, fsync_flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto async_nop() { return make_op_awaiter(io_uring_prep_nop); }
@@ -134,47 +145,43 @@ inline auto async_timeout_multishot(struct __kernel_timespec *ts,
 }
 #endif
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_accept(Fd fd, struct sockaddr *addr, socklen_t *addrlen,
                          int flags) {
     auto op = make_op_awaiter(io_uring_prep_accept, fd, addr, addrlen, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_accept_direct(Fd fd, struct sockaddr *addr,
                                 socklen_t *addrlen, int flags,
                                 unsigned int file_index) {
     auto op = make_op_awaiter(io_uring_prep_accept_direct, fd, addr, addrlen,
                               flags, file_index);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd, typename MultiShotFunc>
+template <FdLike Fd, typename MultiShotFunc>
 inline auto async_multishot_accept(Fd fd, struct sockaddr *addr,
                                    socklen_t *addrlen, int flags,
                                    MultiShotFunc &&func) {
     auto op = make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
                                         io_uring_prep_multishot_accept, fd,
                                         addr, addrlen, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd, typename MultiShotFunc>
+template <FdLike Fd, typename MultiShotFunc>
 inline auto async_multishot_accept_direct(Fd fd, struct sockaddr *addr,
                                           socklen_t *addrlen, int flags,
                                           MultiShotFunc &&func) {
     auto op = make_multishot_op_awaiter(std::forward<MultiShotFunc>(func),
                                         io_uring_prep_multishot_accept_direct,
                                         fd, addr, addrlen, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-template <typename Fd> inline auto async_cancel_fd(Fd fd, unsigned int flags) {
+template <FdLike Fd> inline auto async_cancel_fd(Fd fd, unsigned int flags) {
     if constexpr (detail::is_fixed_fd_v<Fd>) {
         flags |= IORING_ASYNC_CANCEL_FD_FIXED;
     }
@@ -185,12 +192,11 @@ inline auto async_link_timeout(struct __kernel_timespec *ts, unsigned flags) {
     return make_op_awaiter(io_uring_prep_link_timeout, ts, flags);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_connect(Fd fd, const struct sockaddr *addr,
                           socklen_t addrlen) {
     auto op = make_op_awaiter(io_uring_prep_connect, fd, addr, addrlen);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto FdTable::async_update_files(int *fds, unsigned nr_fds, int offset) {
@@ -199,11 +205,10 @@ inline auto FdTable::async_update_files(int *fds, unsigned nr_fds, int offset) {
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_fallocate(Fd fd, int mode, __u64 offset, __u64 len) {
     auto op = make_op_awaiter(io_uring_prep_fallocate, fd, mode, offset, len);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto async_openat(int dfd, const char *path, int flags, mode_t mode) {
@@ -233,53 +238,50 @@ inline auto async_close(detail::FixedFd fd) {
     return make_op_awaiter(io_uring_prep_close_direct, fd);
 }
 
-template <typename Fd, typename Buffer>
-inline auto async_read(Fd fd, Buffer &&buf, __u64 offset) {
-    auto op = [&] {
-        if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
-                      detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_op_awaiter(&buf, io_uring_prep_read, fd,
-                                                 nullptr, 0, offset);
-        } else if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(io_uring_prep_read_fixed, fd, buf.data(),
-                                   buf.size(), offset, buf.buf_index());
-        } else {
-            return make_op_awaiter(io_uring_prep_read, fd, buf.data(),
-                                   buf.size(), offset);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_read(Fd fd, Buffer buf, __u64 offset) {
+    auto op =
+        make_op_awaiter(io_uring_prep_read, fd, buf.data(), buf.size(), offset);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_read(Fd fd, detail::FixedBuffer<Buffer> buf, __u64 offset) {
+    auto op = make_op_awaiter(io_uring_prep_read_fixed, fd, buf.value.data(),
+                              buf.value.size(), offset, buf.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+
+template <FdLike Fd, NotBundledBufferRing Buffer>
+inline auto async_read(Fd fd, Buffer &buf, __u64 offset) {
+    auto op = make_select_buffer_op_awaiter(&buf, io_uring_prep_read, fd,
+                                            nullptr, 0, offset);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-template <typename Fd, typename Buffer, typename MultiShotFunc>
-inline auto async_read_multishot(Fd fd, Buffer &&buf, __u64 offset,
+template <FdLike Fd, NotBundledBufferRing Buffer, typename MultiShotFunc>
+inline auto async_read_multishot(Fd fd, Buffer &buf, __u64 offset,
                                  MultiShotFunc &&func) {
-    static_assert(detail::is_provided_buffer_queue_v<Buffer> ||
-                      detail::is_provided_buffer_pool_v<Buffer>,
-                  "Buffer must be a ProvidedBufferPool or ProvidedBufferQueue");
     auto op = make_multishot_select_buffer_op_awaiter(
         std::forward<MultiShotFunc>(func), &buf, io_uring_prep_read_multishot,
         fd, 0, offset, buf.bgid());
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
-template <typename Fd, typename Buffer>
-inline auto async_write(Fd fd, Buffer &&buf, __u64 offset) {
-    auto op = [&] {
-        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(io_uring_prep_write_fixed, fd, buf.data(),
-                                   buf.size(), offset, buf.buf_index());
-        } else {
-            return make_op_awaiter(io_uring_prep_write, fd, buf.data(),
-                                   buf.size(), offset);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_write(Fd fd, Buffer buf, __u64 offset) {
+    auto op = make_op_awaiter(io_uring_prep_write, fd, buf.data(), buf.size(),
+                              offset);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_write(Fd fd, detail::FixedBuffer<Buffer> buf, __u64 offset) {
+    auto op = make_op_awaiter(io_uring_prep_write_fixed, fd, buf.value.data(),
+                              buf.value.size(), offset, buf.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto async_statx(int dfd, const char *path, int flags, unsigned mask,
@@ -288,19 +290,17 @@ inline auto async_statx(int dfd, const char *path, int flags, unsigned mask,
                            statxbuf);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_fadvise(Fd fd, __u64 offset, off_t len, int advice) {
     auto op = make_op_awaiter(io_uring_prep_fadvise, fd, offset, len, advice);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_fadvise64(Fd fd, __u64 offset, off_t len, int advice) {
     auto op = make_op_awaiter(io_uring_prep_fadvise64, fd, offset, len, advice);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
@@ -358,136 +358,137 @@ inline void prep_sendto_zc_fixed(io_uring_sqe *sqe, int sockfd, const void *buf,
 
 } // namespace detail
 
-template <typename Fd, typename Buffer>
-inline auto async_send(Fd sockfd, Buffer &&buf, int flags) {
-    auto op = [&] {
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-        if constexpr (detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_bundle_select_buffer_op_awaiter(
-                &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
-        } else
-#endif
-            if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_op_awaiter(&buf, io_uring_prep_send,
-                                                 sockfd, nullptr, 0, flags);
-        } else {
-            return make_op_awaiter(io_uring_prep_send, sockfd, buf.data(),
-                                   buf.size(), flags);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_send(Fd sockfd, Buffer buf, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_send, sockfd, buf.data(),
+                              buf.size(), flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
 
-template <typename Fd, typename Buffer>
-inline auto async_sendto(Fd sockfd, Buffer &&buf, int flags,
+template <FdLike Fd>
+inline auto async_send(Fd sockfd, ProvidedBufferQueue &buf, int flags) {
+    auto op = make_select_buffer_op_awaiter(&buf, io_uring_prep_send, sockfd,
+                                            nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <FdLike Fd>
+inline auto async_send(Fd sockfd, BundledProvidedBufferQueue &buf, int flags) {
+    auto op = make_bundle_select_buffer_op_awaiter(&buf, io_uring_prep_send,
+                                                   sockfd, nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+#endif
+
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_sendto(Fd sockfd, Buffer buf, int flags,
                          const struct sockaddr *addr, socklen_t addrlen) {
-    auto op = [&] {
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-        if constexpr (detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_bundle_select_buffer_op_awaiter(
-                &buf, detail::prep_sendto, sockfd, nullptr, 0, flags, addr,
-                addrlen);
-        } else
-#endif
-            if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_op_awaiter(detail::prep_sendto_fixed, sockfd,
-                                   buf.data(), buf.size(), flags, addr, addrlen,
-                                   buf.buf_index());
-        } else if constexpr (detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_op_awaiter(&buf, detail::prep_sendto,
-                                                 sockfd, nullptr, 0, flags,
-                                                 addr, addrlen);
-        } else {
-            return make_op_awaiter(detail::prep_sendto, sockfd, buf.data(),
-                                   buf.size(), flags, addr, addrlen);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+    auto op = make_op_awaiter(detail::prep_sendto, sockfd, buf.data(),
+                              buf.size(), flags, addr, addrlen);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
 
-template <typename Fd, typename Buffer, typename FreeFunc>
+template <FdLike Fd>
+inline auto async_sendto(Fd sockfd, ProvidedBufferQueue &buf, int flags,
+                         const struct sockaddr *addr, socklen_t addrlen) {
+    auto op = make_select_buffer_op_awaiter(&buf, detail::prep_sendto, sockfd,
+                                            nullptr, 0, flags, addr, addrlen);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <FdLike Fd>
+inline auto async_sendto(Fd sockfd, BundledProvidedBufferQueue &buf, int flags,
+                         const struct sockaddr *addr, socklen_t addrlen) {
+    auto op = make_bundle_select_buffer_op_awaiter(
+        &buf, detail::prep_sendto, sockfd, nullptr, 0, flags, addr, addrlen);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+#endif
+
+template <FdLike Fd, typename Buffer, typename FreeFunc>
 inline auto async_send_zc(Fd sockfd, Buffer &&buf, int flags, unsigned zc_flags,
                           FreeFunc &&func) {
-    auto op = [&] {
-        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_zero_copy_op_awaiter(std::forward<FreeFunc>(func),
-                                             io_uring_prep_send_zc_fixed,
-                                             sockfd, buf.data(), buf.size(),
-                                             flags, zc_flags, buf.buf_index());
-        } else {
-            return make_zero_copy_op_awaiter(
-                std::forward<FreeFunc>(func), io_uring_prep_send_zc, sockfd,
-                buf.data(), buf.size(), flags, zc_flags);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+    auto op = make_zero_copy_op_awaiter(
+        std::forward<FreeFunc>(func), io_uring_prep_send_zc, sockfd, buf.data(),
+        buf.size(), flags, zc_flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
 
-template <typename Fd, typename Buffer, typename FreeFunc>
-inline auto async_sendto_zc(Fd sockfd, Buffer &&buf, int flags,
+template <FdLike Fd, BufferLike Buffer, typename FreeFunc>
+inline auto async_send_zc(Fd sockfd, detail::FixedBuffer<Buffer> buf, int flags,
+                          unsigned zc_flags, FreeFunc &&func) {
+    auto op = make_zero_copy_op_awaiter(
+        std::forward<FreeFunc>(func), io_uring_prep_send_zc_fixed, sockfd,
+        buf.value.data(), buf.value.size(), flags, zc_flags, buf.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
+template <FdLike Fd, BufferLike Buffer, typename FreeFunc>
+inline auto async_sendto_zc(Fd sockfd, Buffer buf, int flags,
                             const struct sockaddr *addr, socklen_t addrlen,
                             unsigned zc_flags, FreeFunc &&func) {
-    auto op = [&] {
-        if constexpr (detail::is_fixed_buffer_v<Buffer>) {
-            return make_zero_copy_op_awaiter(
-                std::forward<FreeFunc>(func), detail::prep_sendto_zc_fixed,
-                sockfd, buf.data(), buf.size(), flags, addr, addrlen, zc_flags,
-                buf.buf_index());
-        } else {
-            return make_zero_copy_op_awaiter(
-                std::forward<FreeFunc>(func), detail::prep_sendto_zc, sockfd,
-                buf.data(), buf.size(), flags, addr, addrlen, zc_flags);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+    auto op = make_zero_copy_op_awaiter(
+        std::forward<FreeFunc>(func), detail::prep_sendto_zc, sockfd,
+        buf.data(), buf.size(), flags, addr, addrlen, zc_flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
 
-template <typename Fd, typename Buffer>
-inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
-    auto op = [&] {
+template <FdLike Fd, BufferLike Buffer, typename FreeFunc>
+inline auto async_sendto_zc(Fd sockfd, detail::FixedBuffer<Buffer> buf,
+                            int flags, const struct sockaddr *addr,
+                            socklen_t addrlen, unsigned zc_flags,
+                            FreeFunc &&func) {
+    auto op = make_zero_copy_op_awaiter(
+        std::forward<FreeFunc>(func), detail::prep_sendto_zc_fixed, sockfd,
+        buf.value.data(), buf.value.size(), flags, addr, addrlen, zc_flags,
+        buf.buf_index);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
+template <FdLike Fd, BufferLike Buffer>
+inline auto async_recv(Fd sockfd, Buffer buf, int flags) {
+    auto op = make_op_awaiter(io_uring_prep_recv, sockfd, buf.data(),
+                              buf.size(), flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
+template <FdLike Fd, NotBundledBufferRing Buffer>
+inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
+    auto op = make_select_buffer_op_awaiter(&buf, io_uring_prep_recv, sockfd,
+                                            nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
-                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_bundle_select_buffer_op_awaiter(
-                &buf, io_uring_prep_recv, sockfd, nullptr, 0, flags);
-        } else
-#endif
-            if constexpr (detail::is_provided_buffer_pool_v<Buffer> ||
-                          detail::is_provided_buffer_queue_v<Buffer>) {
-            return make_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
-                                                 sockfd, nullptr, 0, flags);
-        } else {
-            return make_op_awaiter(io_uring_prep_recv, sockfd, buf.data(),
-                                   buf.size(), flags);
-        }
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+template <FdLike Fd, BundledBufferRing Buffer>
+inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
+    auto op = make_bundle_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
+                                                   sockfd, nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
+#endif
 
-template <typename Fd, typename Buffer, typename MultiShotFunc>
-inline auto async_recv_multishot(Fd sockfd, Buffer &&buf, int flags,
+template <FdLike Fd, NotBundledBufferRing Buffer, typename MultiShotFunc>
+inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
                                  MultiShotFunc &&func) {
-    auto op = [&] {
-#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-        if constexpr (detail::is_bundled_provided_buffer_pool_v<Buffer> ||
-                      detail::is_bundled_provided_buffer_queue_v<Buffer>) {
-            return make_multishot_bundle_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf,
-                io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
-        } else
-#endif
-            return make_multishot_select_buffer_op_awaiter(
-                std::forward<MultiShotFunc>(func), &buf,
-                io_uring_prep_recv_multishot, sockfd, nullptr, 0, flags);
-    }();
-    detail::maybe_add_fixed_fd_flag(op, sockfd);
-    return op;
+    auto op = make_multishot_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func), &buf, io_uring_prep_recv_multishot,
+        sockfd, nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+template <FdLike Fd, BundledBufferRing Buffer, typename MultiShotFunc>
+inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
+                                 MultiShotFunc &&func) {
+    auto op = make_multishot_bundle_select_buffer_op_awaiter(
+        std::forward<MultiShotFunc>(func), &buf, io_uring_prep_recv_multishot,
+        sockfd, nullptr, 0, flags);
+    return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
+}
+#endif
 
 inline auto async_openat2(int dfd, const char *path, struct open_how *how) {
     return make_op_awaiter(io_uring_prep_openat2, dfd, path, how);
@@ -499,10 +500,9 @@ inline auto async_openat2_direct(int dfd, const char *path,
                            file_index);
 }
 
-template <typename Fd> inline auto async_shutdown(Fd fd, int how) {
+template <FdLike Fd> inline auto async_shutdown(Fd fd, int how) {
     auto op = make_op_awaiter(io_uring_prep_shutdown, fd, how);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto async_unlinkat(int dfd, const char *path, int flags) {
@@ -523,13 +523,12 @@ inline auto async_rename(const char *oldpath, const char *newpath) {
     return async_renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
 }
 
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_sync_file_range(Fd fd, unsigned len, __u64 offset,
                                   int flags) {
     auto op =
         make_op_awaiter(io_uring_prep_sync_file_range, fd, len, offset, flags);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
 inline auto async_mkdirat(int dfd, const char *path, mode_t mode) {
@@ -593,13 +592,12 @@ inline auto async_socket_direct(int domain, int type, int protocol,
 }
 
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
                            void *optval, int optlen) {
     auto op = make_op_awaiter(io_uring_prep_cmd_sock, cmd_op, fd, level,
                               optname, optval, optlen);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
@@ -657,27 +655,24 @@ inline auto FdTable::async_send_fd_to(FdTable &dst, int source_fd,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-template <typename Fd> inline auto async_ftruncate(Fd fd, loff_t len) {
+template <FdLike Fd> inline auto async_ftruncate(Fd fd, loff_t len) {
     auto op = make_op_awaiter(io_uring_prep_ftruncate, fd, len);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_bind(Fd fd, struct sockaddr *addr, socklen_t addrlen) {
     auto op = make_op_awaiter(io_uring_prep_bind, fd, addr, addrlen);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
-template <typename Fd> inline auto async_listen(Fd fd, int backlog) {
+template <FdLike Fd> inline auto async_listen(Fd fd, int backlog) {
     auto op = make_op_awaiter(io_uring_prep_listen, fd, backlog);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 
@@ -690,11 +685,10 @@ inline auto async_epoll_wait(int fd, struct epoll_event *events, int maxevents,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-template <typename Fd>
+template <FdLike Fd>
 inline auto async_cmd_discard(Fd fd, uint64_t offset, uint64_t nbytes) {
     auto op = make_op_awaiter(io_uring_prep_cmd_discard, fd, offset, nbytes);
-    detail::maybe_add_fixed_fd_flag(op, fd);
-    return op;
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
 

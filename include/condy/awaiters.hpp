@@ -75,13 +75,10 @@ public:
 
     auto await_resume() { return finish_handle_.get().extract_result(); }
 
-public:
-    void add_flags(unsigned int flags) { flags_ |= flags; }
-
 private:
     void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
         prep_func_(sqe);
-        sqe->flags |= static_cast<uint8_t>(flags) | this->flags_;
+        sqe->flags |= static_cast<uint8_t>(flags);
         io_uring_sqe_set_data(
             sqe, encode_work(&finish_handle_.get(), Handle::work_type));
         sqe->personality = Context::current().cred_id();
@@ -90,7 +87,6 @@ private:
 protected:
     Func prep_func_;
     HandleBox<Handle> finish_handle_;
-    uint8_t flags_ = 0;
 };
 
 template <typename Func>
@@ -120,33 +116,26 @@ public:
         : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func) {}
 };
 
-template <typename ProvidedBufferContainer, typename Func>
+template <BufferRingLike Br, typename Func>
 class [[nodiscard]] SelectBufferOpAwaiter
-    : public OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>,
-                           Func> {
+    : public OpAwaiterBase<SelectBufferOpFinishHandle<Br>, Func> {
 public:
-    using Base =
-        OpAwaiterBase<SelectBufferOpFinishHandle<ProvidedBufferContainer>,
-                      Func>;
-    SelectBufferOpAwaiter(ProvidedBufferContainer *buffers, Func func)
-        : Base(SelectBufferOpFinishHandle<ProvidedBufferContainer>(buffers),
-               func) {}
+    using Base = OpAwaiterBase<SelectBufferOpFinishHandle<Br>, Func>;
+    SelectBufferOpAwaiter(Br *buffers, Func func)
+        : Base(SelectBufferOpFinishHandle<Br>(buffers), func) {}
 };
 
-template <typename MultiShotFunc, typename ProvidedBufferContainer,
-          typename Func>
+template <typename MultiShotFunc, BufferRingLike Br, typename Func>
 class [[nodiscard]] MultiShotSelectBufferOpAwaiter
-    : public OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
-                               MultiShotFunc, ProvidedBufferContainer>,
-                           Func> {
+    : public OpAwaiterBase<
+          MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>, Func> {
 public:
-    using Base = OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<
-                                   MultiShotFunc, ProvidedBufferContainer>,
-                               Func>;
-    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func,
-                                   ProvidedBufferContainer *buffers, Func func)
-        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc,
-                                                   ProvidedBufferContainer>(
+    using Base =
+        OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>,
+                      Func>;
+    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func, Br *buffers,
+                                   Func func)
+        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>(
                    std::move(multishot_func), buffers),
                func) {}
 };

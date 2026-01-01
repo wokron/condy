@@ -146,14 +146,13 @@ private:
 template <typename FreeFunc>
 using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, ExtendOpFinishHandle>;
 
-template <typename ProvidedBufferContainer, OpFinishHandleLike HandleBase>
+template <BufferRingLike Br, OpFinishHandleLike HandleBase>
 class SelectBufferMixin : public HandleBase {
 public:
-    using ReturnType =
-        std::pair<int, typename ProvidedBufferContainer::ReturnType>;
+    using ReturnType = std::pair<int, typename Br::ReturnType>;
 
     template <typename... Args>
-    SelectBufferMixin(ProvidedBufferContainer *buffers, Args &&...args)
+    SelectBufferMixin(Br *buffers, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), buffers_(buffers) {}
 
     ReturnType extract_result() {
@@ -163,17 +162,15 @@ public:
     }
 
 private:
-    ProvidedBufferContainer *buffers_;
+    Br *buffers_;
 };
 
-template <typename ProvidedBufferContainer>
-using SelectBufferOpFinishHandle =
-    SelectBufferMixin<ProvidedBufferContainer, OpFinishHandle>;
+template <BufferRingLike Br>
+using SelectBufferOpFinishHandle = SelectBufferMixin<Br, OpFinishHandle>;
 
-template <typename MultiShotFunc, typename ProvidedBufferContainer>
+template <typename MultiShotFunc, BufferRingLike Br>
 using MultiShotSelectBufferOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferMixin<ProvidedBufferContainer,
-                                                    ExtendOpFinishHandle>>;
+    MultiShotMixin<MultiShotFunc, SelectBufferMixin<Br, ExtendOpFinishHandle>>;
 
 template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
 public:
