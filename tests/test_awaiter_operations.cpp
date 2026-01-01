@@ -425,7 +425,7 @@ TEST_CASE("test awaiter_operations - test >>") {
     context.reset();
 }
 
-TEST_CASE("test awaiter_operations - test flags") {
+TEST_CASE("test awaiter_operations - test drain") {
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -436,7 +436,7 @@ TEST_CASE("test awaiter_operations - test flags") {
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
         auto aw = condy::make_op_awaiter(io_uring_prep_nop);
-        co_await condy::flag<IOSQE_IO_DRAIN>(std::move(aw));
+        co_await condy::drain(std::move(aw));
         --unfinished;
     };
 
@@ -466,7 +466,7 @@ TEST_CASE("test awaiter_operations - test drain with when_all") {
         auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
         co_await (std::move(aw1) && std::move(aw2) &&
-                  condy::flag<IOSQE_IO_DRAIN>(std::move(aw3)));
+                  condy::drain(std::move(aw3)));
         --unfinished;
     };
 

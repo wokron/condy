@@ -2,7 +2,6 @@
 
 #include "condy/awaiters.hpp"
 #include "condy/concepts.hpp"
-#include "condy/task.hpp"
 
 namespace condy {
 
@@ -117,6 +116,14 @@ auto flag(Awaiter &&awaiter) {
         std::forward<Awaiter>(awaiter));
 }
 
+template <AwaiterLike Awaiter> auto drain(Awaiter &&awaiter) {
+    return flag<IOSQE_IO_DRAIN>(std::forward<Awaiter>(awaiter));
+}
+
+template <AwaiterLike Awaiter> auto always_async(Awaiter &&awaiter) {
+    return flag<IOSQE_ASYNC>(std::forward<Awaiter>(awaiter));
+}
+
 template <template <AwaiterLike... Awaiter> typename AwaiterType,
           AwaiterLike... Awaiter>
 auto parallel(Awaiter &&...awaiters) {
@@ -156,6 +163,14 @@ template <AwaiterLike... Awaiters> auto link(Awaiters &&...awaiters) {
 
 template <AwaiterRange Range> auto link(Range &&range) {
     return parallel<RangedLinkAwaiter>(std::forward<Range>(range));
+}
+
+template <AwaiterLike... Awaiters> auto hard_link(Awaiters &&...awaiters) {
+    return parallel<HardLinkAwaiter>(std::forward<Awaiters>(awaiters)...);
+}
+
+template <AwaiterRange Range> auto hard_link(Range &&range) {
+    return parallel<RangedHardLinkAwaiter>(std::forward<Range>(range));
 }
 
 namespace operators {
