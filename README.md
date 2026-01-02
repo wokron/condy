@@ -22,6 +22,11 @@ Condy is designed to provide an intuitive, high-performance coroutine runtime on
 > [!WARNING]
 > **Alpha Stage** - Condy is currently in early development. API is not stable and may change without notice.
 
+> [!WARNING]
+> **Outdated API in README**  
+> Some of the APIs shown in this README are outdated. The documentation will be updated soon to reflect the latest API changes.  
+> For the most up-to-date usage, please refer to the source code.
+
 ## Quick Start
 
 ```cpp
