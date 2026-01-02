@@ -258,8 +258,6 @@ public:
 
     auto &buffer_table() { return ring_.buffer_table(); }
 
-    auto features() { return ring_.features(); }
-
     auto &settings() { return ring_.settings(); }
 
 private:

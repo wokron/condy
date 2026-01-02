@@ -177,6 +177,8 @@ public:
         return probe_;
     }
 
+    uint32_t get_features() const { return features_; }
+
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
     int apply_napi(io_uring_napi *napi) {
         return io_uring_register_napi(&ring_, napi);
@@ -207,6 +209,9 @@ public:
 private:
     io_uring &ring_;
     io_uring_probe *probe_ = nullptr;
+    uint32_t features_ = 0;
+
+    friend class Ring;
 };
 
 class Ring {
@@ -234,7 +239,7 @@ public:
         if (r < 0) {
             return r;
         }
-        features_ = params->features;
+        settings_.features_ = params->features;
         sqpoll_mode_ = (params->flags & IORING_SETUP_SQPOLL) != 0;
         initialized_ = true;
         return r;
@@ -323,8 +328,6 @@ public:
         return sqe;
     }
 
-    uint32_t features() const { return features_; }
-
 private:
     bool initialized_ = false;
     io_uring ring_;
@@ -333,8 +336,6 @@ private:
     FdTable fd_table_{ring_};
     BufferTable buffer_table_{ring_};
     RingSettings settings_{ring_};
-
-    uint32_t features_ = 0;
 };
 
 } // namespace condy
