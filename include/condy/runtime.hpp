@@ -175,7 +175,7 @@ public:
 
         auto state = state_.load();
         if (runtime != nullptr && state == State::Enabled) {
-            __tsan_release(work);
+            tsan_release(work);
             io_uring_sqe *sqe = runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work);
             runtime->pend_work();
@@ -184,7 +184,7 @@ public:
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
         if (runtime == nullptr && state == State::Enabled) {
-            __tsan_release(work);
+            tsan_release(work);
             io_uring_sqe sqe = {};
             prep_msg_ring_(&sqe, work);
             [[maybe_unused]] int r = io_uring_register_sync_msg(&sqe);
@@ -306,7 +306,7 @@ private:
                 pending_works_--;
             } else {
                 auto *work = static_cast<WorkInvoker *>(data);
-                __tsan_acquire(data);
+                tsan_acquire(data);
                 local_queue_.push_back(work);
             }
         } else if (type == WorkType::MultiShot) {

@@ -11,19 +11,19 @@
 #include <system_error>
 #include <utility>
 
-// NOLINTBEGIN(bugprone-reserved-identifier)
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
 #include <sanitizer/tsan_interface.h>
+#define tsan_acquire(addr) __tsan_acquire(addr)
+#define tsan_release(addr) __tsan_release(addr)
 #else
-#define __tsan_acquire(addr) static_cast<void>(0)
-#define __tsan_release(addr) static_cast<void>(0)
+#define tsan_acquire(addr) static_cast<void>(0)
+#define tsan_release(addr) static_cast<void>(0)
 #endif
 #else
-#define __tsan_acquire(addr) static_cast<void>(0)
-#define __tsan_release(addr) static_cast<void>(0)
+#define tsan_acquire(addr) static_cast<void>(0)
+#define tsan_release(addr) static_cast<void>(0)
 #endif
-// NOLINTEND(bugprone-reserved-identifier)
 
 namespace condy {
 
