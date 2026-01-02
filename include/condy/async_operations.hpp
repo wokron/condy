@@ -199,9 +199,7 @@ inline auto async_connect(Fd fd, const struct sockaddr *addr,
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-inline auto FdTable::async_update_files(int *fds, unsigned nr_fds, int offset) {
-    assert(Context::current().ring() &&
-           Context::current().ring()->ring() == &ring_);
+inline auto async_update_files(int *fds, unsigned nr_fds, int offset) {
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
 }
 
@@ -633,15 +631,14 @@ inline auto async_futex_waitv(struct futex_waitv *futex, uint32_t nr_futex,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-inline auto FdTable::async_fixed_fd_install(int fixed_fd, unsigned int flags) {
+inline auto async_fixed_fd_install(int fixed_fd, unsigned int flags) {
     return make_op_awaiter(io_uring_prep_fixed_fd_install, fixed_fd, flags);
 }
 #endif
 
-// TODO: Better place for definition
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
-inline auto FdTable::async_send_fd_to(FdTable &dst, int source_fd,
-                                      int target_fd, unsigned int flags) {
+inline auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
+                             unsigned int flags) {
     void *payload = nullptr;
     if (static_cast<unsigned int>(target_fd) != CONDY_FILE_INDEX_ALLOC) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)

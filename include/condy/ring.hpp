@@ -29,17 +29,6 @@ public:
         return io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
     }
 
-    auto async_update_files(int *fds, unsigned nr_fds, int offset);
-
-#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-    auto async_fixed_fd_install(int fixed_fd, unsigned int flags);
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
-    auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
-                          unsigned int flags);
-#endif
-
     template <typename Func> void set_fd_accepter(Func &&accepter) {
         fd_accepter_ = std::forward<Func>(accepter);
     }
@@ -53,6 +42,8 @@ private:
     io_uring &ring_;
 
     friend class Runtime;
+    friend auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
+                                 unsigned int flags);
 };
 
 class BufferTable {

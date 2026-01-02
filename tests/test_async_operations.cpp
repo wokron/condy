@@ -90,9 +90,9 @@ TEST_CASE("test async_operations - splice fixed fd") {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
 
-        auto r = co_await fd_table.async_update_files(pipe_fds1, 2, 0);
+        auto r = co_await condy::async_update_files(pipe_fds1, 2, 0);
         REQUIRE(r == 2);
-        auto r2 = co_await fd_table.async_update_files(pipe_fds2, 2, 2);
+        auto r2 = co_await condy::async_update_files(pipe_fds2, 2, 2);
         REQUIRE(r2 == 2);
 
         // Splice data from pipe_fds1[0] to pipe_fds2[1]
@@ -603,9 +603,9 @@ TEST_CASE("test async_operations - test splice - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
-        auto r1 = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        auto r1 = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r1 == 2);
-        auto r2 = co_await fd_table.async_update_files(pipe_fds2, 2, 2);
+        auto r2 = co_await condy::async_update_files(pipe_fds2, 2, 2);
         REQUIRE(r2 == 2);
 
         // 1. in_fd fixed
@@ -687,9 +687,9 @@ TEST_CASE("test async_operations - test tee - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(4);
-        auto r1 = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        auto r1 = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r1 == 2);
-        auto r2 = co_await fd_table.async_update_files(pipe_fds2, 2, 2);
+        auto r2 = co_await condy::async_update_files(pipe_fds2, 2, 2);
         REQUIRE(r2 == 2);
 
         size_t tee_data_size = data_size / 4;
@@ -745,7 +745,7 @@ TEST_CASE("test async_operations - test readv - basic") {
         // Test fixed fd as well
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         char bufs[4][256];
@@ -823,7 +823,7 @@ TEST_CASE("test async_operations - test writev - basic") {
         // Test fixed fd as well
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         char bufs[4][256];
@@ -1362,7 +1362,7 @@ TEST_CASE("test async_operations - test cancel fd - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        int r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        int r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         auto cancel_func = [&]() -> condy::Coro<void> {
@@ -1462,7 +1462,7 @@ TEST_CASE("test async_operations - test connect - fixed fd") {
             int sockfd = socket(AF_INET, SOCK_STREAM, 0);
             REQUIRE(sockfd >= 0);
 
-            r = co_await fd_table.async_update_files(&sockfd, 1, i);
+            r = co_await condy::async_update_files(&sockfd, 1, i);
             REQUIRE(r == 1);
 
             int r = co_await condy::async_connect(
@@ -1511,7 +1511,7 @@ TEST_CASE("test async_operations - test fallocate - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&fd, 1, 0);
+        int r = co_await condy::async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_fallocate(condy::fixed(0), 0, 0,
@@ -1602,7 +1602,7 @@ TEST_CASE("test async_operations - test close") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        int r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        int r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         r = co_await condy::async_close(condy::fixed(0));
@@ -1645,7 +1645,7 @@ TEST_CASE("test async_operations - test read - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         char buf[2048];
@@ -1821,7 +1821,7 @@ TEST_CASE("test async_operations - test write - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(pipe_fds, 2, 0);
+        r = co_await condy::async_update_files(pipe_fds, 2, 0);
         REQUIRE(r == 2);
 
         ssize_t n =
@@ -1921,7 +1921,7 @@ TEST_CASE("test async_operations - test fadvise - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&fd, 1, 0);
+        int r = co_await condy::async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_fadvise(condy::fixed(0), 0, 1024,
@@ -1969,7 +1969,7 @@ TEST_CASE("test async_operations - test fadvise64 - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&fd, 1, 0);
+        int r = co_await condy::async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_fadvise64(condy::fixed(0), 0, 1024,
@@ -2041,7 +2041,7 @@ TEST_CASE("test async_operations - test send - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        int r = co_await fd_table.async_update_files(sv, 2, 0);
+        int r = co_await condy::async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
 
         ssize_t n =
@@ -2234,7 +2234,7 @@ TEST_CASE("test async_operations - test sendto - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(&sender_fd, 1, 0);
+        r = co_await condy::async_update_files(&sender_fd, 1, 0);
         REQUIRE(r == 1);
 
         ssize_t n = co_await condy::async_sendto(
@@ -2463,7 +2463,7 @@ TEST_CASE("test async_operations - test recv - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        r = co_await fd_table.async_update_files(sv, 2, 0);
+        r = co_await condy::async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
 
         char buf[2048];
@@ -2734,7 +2734,7 @@ TEST_CASE("test async_operations - test shutdown - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
-        int r = co_await fd_table.async_update_files(sv, 2, 0);
+        int r = co_await condy::async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
 
         r = co_await condy::async_shutdown(condy::fixed(1), SHUT_RDWR);
@@ -3136,7 +3136,7 @@ TEST_CASE("test async_operations - test cmd_sock - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&listen_fd, 1, 0);
+        int r = co_await condy::async_update_files(&listen_fd, 1, 0);
         REQUIRE(r == 1);
 
         int val;
@@ -3247,10 +3247,10 @@ TEST_CASE("test async_operations - test fixed_fd_install") {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(2);
 
-        int r = co_await fd_table.async_update_files(sv, 2, 0);
+        int r = co_await condy::async_update_files(sv, 2, 0);
         REQUIRE(r == 2);
 
-        int write_fd = co_await fd_table.async_fixed_fd_install(1, 0);
+        int write_fd = co_await condy::async_fixed_fd_install(1, 0);
         REQUIRE(write_fd >= 0);
         REQUIRE(write_fd != sv[1]);
 
@@ -3299,7 +3299,7 @@ TEST_CASE("test async_operations - test ftruncate - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&fd, 1, 0);
+        int r = co_await condy::async_update_files(&fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_ftruncate(condy::fixed(0), 4096);
@@ -3348,7 +3348,7 @@ TEST_CASE("test async_operations - test bind - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&sock_fd, 1, 0);
+        int r = co_await condy::async_update_files(&sock_fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_bind(condy::fixed(0), (sockaddr *)&bind_addr,
@@ -3398,7 +3398,7 @@ TEST_CASE("test async_operations - test listen - fixed fd") {
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await fd_table.async_update_files(&sock_fd, 1, 0);
+        int r = co_await condy::async_update_files(&sock_fd, 1, 0);
         REQUIRE(r == 1);
 
         r = co_await condy::async_listen(condy::fixed(0), 10);
