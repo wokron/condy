@@ -30,7 +30,7 @@ TEST_CASE("test fd_table - register/unregister fd") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        fd_table.update_files(0, pipes, 2);
+        fd_table.update(0, pipes, 2);
 
         close(pipes[0]);
         close(pipes[1]);
@@ -38,7 +38,7 @@ TEST_CASE("test fd_table - register/unregister fd") {
         pipes[0] = -1;
         pipes[1] = -1;
 
-        fd_table.update_files(0, pipes, 2);
+        fd_table.update(0, pipes, 2);
 
         co_return;
     };
@@ -55,7 +55,7 @@ TEST_CASE("test fd_table - use fixed fd") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        fd_table.update_files(0, pipes, 2);
+        fd_table.update(0, pipes, 2);
 
         char write_buf[] = "hello";
         char read_buf[sizeof(write_buf)] = {0};
@@ -100,10 +100,10 @@ TEST_CASE("test fd_table - send fd - basic") {
 
         auto &fd_table = condy::current_runtime().fd_table();
 
-        fd_table.update_files(0, reinterpret_cast<int *>(pipes), 4);
+        fd_table.update(0, reinterpret_cast<int *>(pipes), 4);
         for (int i = 0; i < 4; i++) {
-            int r =
-                co_await condy::async_send_fd_to(runtime2.fd_table(), i, i, 0);
+            int r = co_await condy::async_fixed_fd_send(runtime2.fd_table(), i,
+                                                        i, 0);
             REQUIRE(r == 0);
         }
     };
@@ -147,10 +147,10 @@ TEST_CASE("test fd_table - send fd - auto allocate") {
 
         auto &fd_table = condy::current_runtime().fd_table();
 
-        fd_table.update_files(0, reinterpret_cast<int *>(pipes), 4);
+        fd_table.update(0, reinterpret_cast<int *>(pipes), 4);
         for (int i = 0; i < 4; i++) {
-            int r = co_await condy::async_send_fd_to(runtime2.fd_table(), i,
-                                                     CONDY_FILE_INDEX_ALLOC, 0);
+            int r = co_await condy::async_fixed_fd_send(
+                runtime2.fd_table(), i, CONDY_FILE_INDEX_ALLOC, 0);
             REQUIRE(r == i);
         }
     };
@@ -187,9 +187,9 @@ TEST_CASE("test fd_table - send fd - throw without accepter") {
 
         auto &fd_table = condy::current_runtime().fd_table();
 
-        fd_table.update_files(0, pipe_fds, 2);
-        int r = co_await condy::async_send_fd_to(runtime2.fd_table(), 0,
-                                                 CONDY_FILE_INDEX_ALLOC, 0);
+        fd_table.update(0, pipe_fds, 2);
+        int r = co_await condy::async_fixed_fd_send(runtime2.fd_table(), 0,
+                                                    CONDY_FILE_INDEX_ALLOC, 0);
         REQUIRE(r == 0);
     };
 

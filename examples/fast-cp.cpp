@@ -86,7 +86,7 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
     auto &fd_table = condy::current_runtime().fd_table();
     fd_table.init(2);
     int fds[2] = {infd, outfd};
-    fd_table.update_files(0, fds, 2);
+    fd_table.update(0, fds, 2);
 
     auto &buffer_table = condy::current_runtime().buffer_table();
     buffer_table.init(1);
@@ -94,7 +94,7 @@ condy::Coro<> co_main(const char *infile, const char *outfile) {
         .iov_base = raw_buffer,
         .iov_len = TASK_NUM * CHUNK_SIZE,
     };
-    buffer_table.update_buffers(0, &iov, 1);
+    buffer_table.update(0, &iov, 1);
 
     std::vector<condy::Task<>> tasks;
     for (size_t i = 0; i < TASK_NUM; i++) {

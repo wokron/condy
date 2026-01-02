@@ -25,7 +25,7 @@ public:
 
     int destroy() { return io_uring_unregister_files(&ring_); }
 
-    int update_files(unsigned index_base, const int *fds, unsigned nr_fds) {
+    int update(unsigned index_base, const int *fds, unsigned nr_fds) {
         return io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
     }
 
@@ -42,8 +42,8 @@ private:
     io_uring &ring_;
 
     friend class Runtime;
-    friend auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
-                                 unsigned int flags);
+    friend auto async_fixed_fd_send(FdTable &dst, int source_fd, int target_fd,
+                                    unsigned int flags);
 };
 
 class BufferTable {
@@ -70,15 +70,14 @@ public:
         return io_uring_unregister_buffers(&ring_);
     }
 
-    int update_buffers(unsigned index_base, const iovec *vecs,
-                       unsigned nr_vecs) {
+    int update(unsigned index_base, const iovec *vecs, unsigned nr_vecs) {
         return io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
                                                     nullptr, nr_vecs);
     }
 
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-    int clone_buffers_from(BufferTable &src, unsigned int dst_off = 0,
-                           unsigned int src_off = 0, unsigned int nr = 0) {
+    int clone_buffers(BufferTable &src, unsigned int dst_off = 0,
+                      unsigned int src_off = 0, unsigned int nr = 0) {
         auto *src_ring = &src.ring_;
         auto *dst_ring = &ring_;
         unsigned int flags = 0;

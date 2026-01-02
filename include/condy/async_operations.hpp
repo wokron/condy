@@ -199,7 +199,7 @@ inline auto async_connect(Fd fd, const struct sockaddr *addr,
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
-inline auto async_update_files(int *fds, unsigned nr_fds, int offset) {
+inline auto async_files_update(int *fds, unsigned nr_fds, int offset) {
     return make_op_awaiter(io_uring_prep_files_update, fds, nr_fds, offset);
 }
 
@@ -637,8 +637,8 @@ inline auto async_fixed_fd_install(int fixed_fd, unsigned int flags) {
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
-inline auto async_send_fd_to(FdTable &dst, int source_fd, int target_fd,
-                             unsigned int flags) {
+inline auto async_fixed_fd_send(FdTable &dst, int source_fd, int target_fd,
+                                unsigned int flags) {
     void *payload = nullptr;
     if (static_cast<unsigned int>(target_fd) != CONDY_FILE_INDEX_ALLOC) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
