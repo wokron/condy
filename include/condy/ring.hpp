@@ -20,14 +20,7 @@ public:
 
 public:
     int init(size_t capacity) {
-        int r = io_uring_register_files_sparse(&ring_, capacity);
-        if (r < 0) {
-            return r;
-        }
-        capacity_ = capacity;
-        alloc_range_offset_ = 0;
-        alloc_range_size_ = capacity;
-        return r;
+        return io_uring_register_files_sparse(&ring_, capacity);
     }
 
     int destroy() { return io_uring_unregister_files(&ring_); }
@@ -51,22 +44,11 @@ public:
         fd_accepter_ = std::forward<Func>(accepter);
     }
 
-    int set_alloc_range(unsigned offset, unsigned size) {
-        alloc_range_offset_ = offset;
-        alloc_range_size_ = size;
+    int set_file_alloc_range(unsigned offset, unsigned size) {
         return io_uring_register_file_alloc_range(&ring_, offset, size);
     }
 
-    std::pair<unsigned, unsigned> get_alloc_range() const {
-        return {alloc_range_offset_, alloc_range_size_};
-    }
-
-    size_t capacity() const { return capacity_; }
-
 private:
-    size_t capacity_ = 0;
-    unsigned alloc_range_offset_ = 0;
-    unsigned alloc_range_size_ = 0;
     std::function<void(int32_t)> fd_accepter_ = nullptr;
     io_uring &ring_;
 
@@ -88,7 +70,6 @@ public:
         if (r < 0) {
             return r;
         }
-        capacity_ = capacity;
         initialized_ = true;
         return r;
     }
@@ -118,20 +99,14 @@ public:
         if (r < 0) {
             return r;
         }
-        bool is_full_clone = dst_off == 0 && src_off == 0 && nr == 0;
-        size_t clone_cap = is_full_clone ? src.capacity_ : dst_off + nr;
-        capacity_ = std::max(capacity_, clone_cap);
         initialized_ = true;
         return r;
     }
 #endif
 
-    size_t capacity() const { return capacity_; }
-
 private:
-    bool initialized_ = false;
-    size_t capacity_ = 0;
     io_uring &ring_;
+    bool initialized_ = false;
 };
 
 class RingSettings {

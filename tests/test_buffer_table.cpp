@@ -15,7 +15,6 @@ TEST_CASE("test buffer_table - init/destroy") {
 
         REQUIRE(buffer_table.init(8) == 0);
         REQUIRE(buffer_table.init(8) != 0); // already initialized
-        REQUIRE(buffer_table.capacity() == 8);
 
         REQUIRE(buffer_table.update_buffers(0, &vec, 1) == 1);
 
@@ -107,16 +106,16 @@ TEST_CASE("test buffer_table - clone buffer table") {
 
     REQUIRE(table2.clone_buffers_from(table1, 0, 8, 16) != 0);
 
+    // capacity == 16
     REQUIRE(table2.clone_buffers_from(table1) == 0);
-    REQUIRE(table2.capacity() == 16);
 
+    // capacity == 16 + 8
     REQUIRE(table2.clone_buffers_from(table1, 8, 0, 16) == 0);
-    REQUIRE(table2.capacity() == (16 + 8));
 
     table2.destroy();
 
-    REQUIRE(table2.clone_buffers_from(table1, 100, 0, table1.capacity()) == 0);
-    REQUIRE(table2.capacity() == (100 + 16));
+    // capacity == 100 + 16
+    REQUIRE(table2.clone_buffers_from(table1, 100, 0, 16) == 0);
 
     char buffer[32];
     iovec vec = {
