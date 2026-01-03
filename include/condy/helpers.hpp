@@ -39,11 +39,23 @@ template <typename Channel> struct PushHelper {
 
 } // namespace detail
 
+/**
+ * @brief Helper to build a function that spawns a coroutine on invocation.
+ * @tparam CoroFunc Type of the coroutine function.
+ * @param coro The coroutine function to be spawned.
+ * @return A helper object that spawns the coroutine when invoked.
+ */
 template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
     return detail::SpawnHelper<std::decay_t<CoroFunc>>{
         std::forward<CoroFunc>(coro)};
 }
 
+/**
+ * @brief Helper to build a function that pushes to a channel on invocation.
+ * @tparam Channel Type of the channel.
+ * @param channel The channel to push to.
+ * @return A helper object that pushes to the channel when invoked.
+ */
 template <typename Channel> auto will_push(Channel &channel) {
     return detail::PushHelper<std::decay_t<Channel>>{channel};
 }

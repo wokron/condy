@@ -37,11 +37,27 @@ public:
     }
 
 public:
+    /**
+     * @brief Detach the task to run independently.
+     * @details This function detaches the task, allowing it to run
+     * independently in the associated runtime. The caller will not be able to
+     * await the task or retrieve its result after detachment.
+     * @warning Unhandled exceptions in a detached task will cause a panic.
+     */
     void detach() noexcept {
         handle_.promise().request_detach();
         handle_ = nullptr;
     }
 
+    /**
+     * @brief Await the task asynchronously.
+     * @return T The result of the coroutine.
+     * @throws Any exception thrown inside the coroutine.
+     * @details This function allows the caller to await the completion of the
+     * coroutine associated with the task. It suspends the caller coroutine
+     * until the task completes, and then retrieves the result of the coroutine.
+     * If the coroutine throws an exception, it will be rethrown here.
+     */
     auto operator co_await() noexcept;
 
 protected:
@@ -74,12 +90,34 @@ void TaskBase<T, Allocator>::wait_inner_(
     }
 }
 
+/**
+ * @brief Task represent a coroutine task that runs concurrently in the runtime.
+ * @tparam T Return type of the coroutine.
+ * @tparam Allocator Allocator type used for memory management, default is
+ * `void`, which means use the default allocator.
+ * @details Task is a handle to a coroutine that can be awaited or detached. The
+ * coroutine will be scheduled and executed in the associated runtime. User can
+ * await the task to get the result of the coroutine, or detach the task to let
+ * it run independently.
+ * @warning Destroying a Task without awaiting or detaching it will cause a
+ * panic.
+ * @warning Unhandled exceptions in a detached task will also cause a panic.
+ */
 template <typename T = void, typename Allocator = void>
 class [[nodiscard]] Task : public TaskBase<T, Allocator> {
 public:
     using Base = TaskBase<T, Allocator>;
     using Base::Base;
 
+    /**
+     * @brief Wait synchronously for the task to complete and get the result.
+     * @return T The result of the coroutine.
+     * @throws Any exception thrown inside the coroutine.
+     * @details This function blocks the current thread until the coroutine
+     * associated with the task completes. It then retrieves the result of the
+     * coroutine. If the coroutine throws an exception, it will be rethrown
+     * here.
+     */
     T wait() {
         auto handle = std::exchange(Base::handle_, nullptr);
         Base::wait_inner_(handle);
@@ -100,6 +138,13 @@ public:
     using Base = TaskBase<void, Allocator>;
     using Base::Base;
 
+    /**
+     * @brief Wait synchronously for the task to complete.
+     * @throws Any exception thrown inside the coroutine.
+     * @details This function blocks the current thread until the coroutine
+     * associated with the task completes. If the coroutine throws an exception,
+     * it will be rethrown here.
+     */
     void wait() {
         auto handle = std::exchange(Base::handle_, nullptr);
         Base::wait_inner_(handle);
@@ -180,6 +225,17 @@ inline auto TaskBase<T, Allocator>::operator co_await() noexcept {
                                      Context::current().runtime());
 }
 
+/**
+ * @brief Spawn a coroutine as a task in the given runtime.
+ * @tparam T Return type of the coroutine.
+ * @tparam Allocator Allocator type used for memory management.
+ * @param runtime The runtime to spawn the coroutine in.
+ * @param coro The coroutine to be spawned.
+ * @return Task<T, Allocator> The spawned task.
+ * @details This function schedules the given coroutine to run as a task in the
+ * specified runtime. The coroutine will be executed concurrently in the
+ * runtime.
+ */
 template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     auto handle = coro.release();
@@ -190,6 +246,14 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
     return {handle};
 }
 
+/**
+ * @brief Spawn a coroutine as a task in the current runtime.
+ * @tparam T Return type of the coroutine.
+ * @tparam Allocator Allocator type used for memory management.
+ * @param coro The coroutine to be spawned.
+ * @return Task<T, Allocator> The spawned task.
+ * @throws std::logic_error If there is no current runtime.
+ */
 template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
     auto *runtime = Context::current().runtime();
@@ -216,13 +280,27 @@ struct [[nodiscard]] SwitchAwaiter {
 
 } // namespace detail
 
+/**
+ * @brief Switch current coroutine task to the given runtime.
+ * @param runtime The runtime to switch to.
+ * @return detail::SwitchAwaiter Awaiter object for the switch operation.
+ * @details This function suspends the current coroutine and reschedules it to
+ * run in the specified runtime. The caller coroutine will be resumed in the
+ * target runtime.
+ */
 inline detail::SwitchAwaiter co_switch(Runtime &runtime) { return {&runtime}; }
 
 namespace pmr {
 
+/**
+ * @brief Task type using polymorphic allocator.
+ * @tparam T Return type of the coroutine.
+ * @details This is a type alias for `condy::Task` that uses
+ * `std::pmr::polymorphic_allocator<std::byte>` as the allocator type.
+ */
 template <typename T>
 using Task = condy::Task<T, std::pmr::polymorphic_allocator<std::byte>>;
 
-}
+} // namespace pmr
 
 } // namespace condy

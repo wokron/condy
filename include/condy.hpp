@@ -25,3 +25,13 @@
  * are encapsulated within this namespace.
  */
 namespace condy {}
+
+/**
+ * @brief Polymorphic memory resource (PMR) related types and utilities.
+ */
+namespace condy::pmr {}
+
+/**
+ * @brief Operators for composing awaiters.
+ */
+namespace condy::operators {}

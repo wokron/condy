@@ -66,8 +66,18 @@ private:
 };
 #endif
 
+/**
+ * @brief Runtime for running the io_uring event loop.
+ * @details This class provides a single-threaded runtime for executing
+ * asynchronous tasks using io_uring. It manages the event loop, scheduling,
+ * and execution of tasks, as well as inter-runtime notifications.
+ */
 class Runtime {
 public:
+    /**
+     * @brief Construct a new Runtime object
+     * @param options Options for configuring the runtime.
+     */
     Runtime(const RuntimeOptions &options = {}) {
         io_uring_params params;
         std::memset(&params, 0, sizeof(params));
@@ -164,6 +174,12 @@ public:
     Runtime &operator=(Runtime &&) = delete;
 
 public:
+    /**
+     * @brief Allow the runtime to exit when there are no pending works.
+     * @details By default, the runtime will keep running even if there are no
+     * pending works. Calling this function will allow the runtime to exit
+     * once all pending works are completed.
+     */
     void allow_exit() {
         pending_works_--;
         notify();
@@ -212,6 +228,13 @@ public:
 
     void resume_work() { pending_works_--; }
 
+    /**
+     * @brief Run the runtime event loop in the current thread.
+     * @details This function starts the event loop of the runtime in the
+     * current thread. It will process events, schedule tasks, and handle
+     * notifications until there are no pending works left.
+     * @note Once exit, the runtime cannot be restarted.
+     */
     void run() {
         State expected = State::Idle;
         if (!state_.compare_exchange_strong(expected, State::Running)) {
@@ -259,10 +282,19 @@ public:
         }
     }
 
+    /**
+     * @brief Get the file descriptor table of the runtime.
+     */
     auto &fd_table() { return ring_.fd_table(); }
 
+    /**
+     * @brief Get the buffer table of the runtime.
+     */
     auto &buffer_table() { return ring_.buffer_table(); }
 
+    /**
+     * @brief Get the ring settings of the runtime.
+     */
     auto &settings() { return ring_.settings(); }
 
 private:
@@ -374,8 +406,18 @@ private:
     bool disable_register_ring_fd_ = false;
 };
 
+/**
+ * @brief Get the current runtime.
+ * @return Runtime& Reference to the current running runtime.
+ * @note This function assumes that there is a current runtime. Calling this
+ * function outside of a coroutine will lead to undefined behavior.
+ */
 inline auto &current_runtime() { return *Context::current().runtime(); }
 
+/**
+ * @brief Set the current cred id object
+ * @param id The cred id to set.
+ */
 inline void set_current_cred_id(uint16_t id) {
     Context::current().set_cred_id(id);
 }

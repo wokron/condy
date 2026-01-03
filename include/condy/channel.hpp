@@ -18,8 +18,25 @@
 
 namespace condy {
 
+/**
+ * @brief Thread-safe bounded channel for communication across Runtimes.
+ * @tparam T Type of the items transmitted through the channel.
+ * @tparam N When the capacity is less than or equal to N, the channel uses
+ * stack storage for buffering; otherwise, it uses heap storage.
+ * @details This class provides a thread-safe channel for communication and
+ * synchronization for both intra-Runtime and inter-Runtime scenarios. It
+ * supports both buffered and unbuffered modes, as well as push and pop
+ * operations that can be awaited in coroutines. The internal implementation
+ * utilizes msg_ring operations of io_uring for efficient cross-runtime
+ * notifications.
+ */
 template <typename T, size_t N = 2> class Channel {
 public:
+    /**
+     * @brief Construct a new Channel object
+     * @param capacity Capacity of the channel. If capacity is zero, the channel
+     * operates in unbuffered mode.
+     */
     Channel(size_t capacity)
         : buffer_(capacity ? std::bit_ceil(capacity) : 0) {}
     ~Channel() {
@@ -34,11 +51,24 @@ public:
     Channel &operator=(Channel &&) = delete;
 
 public:
+    /**
+     * @brief Try to push an item into the channel.
+     * @tparam U Type of the item to be pushed.
+     * @param item The item to be pushed into the channel.
+     * @return true If the item was successfully pushed.
+     * @return false If the channel is full.
+     * @throws std::logic_error If the channel is closed.
+     */
     template <typename U> bool try_push(U &&item) {
         std::lock_guard<std::mutex> lock(mutex_);
         return try_push_inner_(std::forward<U>(item));
     }
 
+    /**
+     * @brief Try to pop an item from the channel.
+     * @return std::optional<T> The popped item if successful; std::nullopt if
+     * the channel is empty or closed.
+     */
     std::optional<T> try_pop() {
         std::lock_guard<std::mutex> lock(mutex_);
         return try_pop_inner_();
@@ -55,30 +85,78 @@ public:
     }
 
     struct [[nodiscard]] PushAwaiter;
+    /**
+     * @brief Push an item into the channel, awaiting if necessary.
+     * @tparam U Type of the item to be pushed.
+     * @param item The item to be pushed into the channel.
+     * @return PushAwaiter Awaiter object for the push operation.
+     * @details This function attempts to push the given item into the channel.
+     * If the channel is full, the coroutine will be suspended until space
+     * becomes available. If the channel is closed, a std::logic_error will be
+     * thrown.
+     * @warning The item will be moved during the push operation. If the push
+     * operation is cancelled, the moved item will be destroyed immediately and
+     * will not be pushed into the channel.
+     */
     template <typename U> PushAwaiter push(U &&item) {
         return {*this, std::forward<U>(item)};
     }
 
     struct [[nodiscard]] PopAwaiter;
+    /**
+     * @brief Pop an item from the channel, awaiting if necessary.
+     * @return PopAwaiter Awaiter object for the pop operation.
+     * @details This function attempts to pop an item from the channel. If the
+     * channel is empty, the coroutine will be suspended until an item becomes
+     * available. If the channel is closed, a default-constructed T will be
+     * returned.
+     */
     PopAwaiter pop() { return {*this}; }
 
+    /**
+     * @brief Get the capacity of the channel.
+     * @return size_t Capacity of the channel.
+     */
     size_t capacity() const noexcept { return buffer_.capacity(); }
 
+    /**
+     * @brief Get the current size of the channel.
+     * @return size_t Current number of items in the channel.
+     * @warning This function may not be accurate in multithreaded scenarios.
+     */
     size_t size() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_;
     }
 
+    /**
+     * @brief Check if the channel is empty.
+     * @return true If the channel is empty.
+     * @warning This function may not be accurate in multithreaded scenarios.
+     */
     bool empty() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_ == 0;
     }
 
+    /**
+     * @brief Check if the channel is closed.
+     * @return true If the channel is closed.
+     * @warning This function may not be accurate in multithreaded scenarios.
+     */
     bool is_closed() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return closed_;
     }
 
+    /**
+     * @brief Close the channel.
+     * @details This function closes the channel. After the channel is closed,
+     * no more items can be pushed into the channel. All pending and future pop
+     * operations will return default-constructed T values. All pending push
+     * operations will throw std::logic_error.
+     * @note This function is idempotent.
+     */
     void push_close() {
         std::lock_guard<std::mutex> lock(mutex_);
         push_close_inner_();
@@ -358,6 +436,12 @@ private:
     bool need_resume_ = false;
 };
 
+/**
+ * @brief Awaiter for pushing an item into the channel.
+ * @return True if the push operation was successful after awaiting; false if
+ * the operation was cancelled.
+ * @throws std::logic_error If the channel is closed.
+ */
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {
 public:
     using HandleType = PushFinishHandle;
@@ -404,6 +488,11 @@ private:
     PushFinishHandle finish_handle_;
 };
 
+/**
+ * @brief Awaiter for popping an item from the channel.
+ * @return The popped item after awaiting. If the channel is closed, a
+ * default-constructed T will be returned.
+ */
 template <typename T, size_t N> struct Channel<T, N>::PopAwaiter {
 public:
     using HandleType = PopFinishHandle;
