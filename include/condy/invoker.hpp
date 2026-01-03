@@ -1,3 +1,9 @@
+/**
+ * @file invoker.hpp
+ * @brief Polymorphic invocation utilities.
+ * @details This file provides utilities for simulating polymorphic invocation.
+ */
+
 #pragma once
 
 #include "condy/intrusive.hpp"

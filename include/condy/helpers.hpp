@@ -1,3 +1,11 @@
+/**
+ * @file helpers.hpp
+ * @brief Helper functions for asynchronous operations.
+ * @details This file defines a set of helper functions primarily used in
+ * conjunction with asynchronous operations to enhance their expressiveness and
+ * usability.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"

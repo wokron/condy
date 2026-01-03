@@ -1,3 +1,7 @@
+/**
+ * @file version.hpp
+ */
+
 #pragma once
 
 // TODO: Set version before first release

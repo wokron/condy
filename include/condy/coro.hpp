@@ -1,3 +1,8 @@
+/**
+ * @file coro.hpp
+ * @brief Coroutine definitions.
+ */
+
 #pragma once
 
 #include <coroutine>

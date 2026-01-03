@@ -1,3 +1,11 @@
+/**
+ * @file async_operations.hpp
+ * @brief Definitions of asynchronous operations.
+ * @details This file defines a series of asynchronous operations, which are
+ * wrappers around liburing operations. Generally, each async_* function
+ * corresponds to a io_uring_prep_* function in liburing
+ */
+
 #pragma once
 
 #include "condy/awaiter_operations.hpp"

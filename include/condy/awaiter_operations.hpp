@@ -1,3 +1,12 @@
+/**
+ * @file awaiter_operations.hpp
+ * @brief Helper functions for composing asynchronous operations.
+ * @details This file provides a set of interfaces for constructing asynchronous
+ * operations. It includes utilities for wrapping liburing interfaces as
+ * awaitable asynchronous operations, as well as for composing and combining
+ * these operations to enable collective execution.
+ */
+
 #pragma once
 
 #include "condy/awaiters.hpp"

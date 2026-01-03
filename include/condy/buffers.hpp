@@ -1,3 +1,10 @@
+/**
+ * @file buffers.hpp
+ * @brief Basic buffer types and conversion utilities.
+ * @details This file defines basic buffer types and conversion functions.
+ * Buffer types are primarily used in asynchronous operations.
+ */
+
 #pragma once
 
 #include <cassert>

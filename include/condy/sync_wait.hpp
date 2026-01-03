@@ -1,3 +1,8 @@
+/**
+ * @file sync_wait.hpp
+ * @brief Helper functions for running a Runtime.
+ */
+
 #pragma once
 
 #include "condy/coro.hpp"

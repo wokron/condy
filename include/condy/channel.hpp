@@ -1,3 +1,10 @@
+/**
+ * @file channel.hpp
+ * @brief Thread-safe channel type for communication and synchronization.
+ * @details This file defines a thread-safe channel type, which can be used for
+ * communication and synchronization across different Runtimes.
+ */
+
 #pragma once
 
 #include "condy/context.hpp"

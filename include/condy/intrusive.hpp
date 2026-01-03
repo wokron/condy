@@ -1,3 +1,8 @@
+/**
+ * @file intrusive.hpp
+ * @brief Intrusive single-linked and double-linked list implementations.
+ */
+
 #pragma once
 
 #include "condy/utils.hpp"

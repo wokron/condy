@@ -1,3 +1,10 @@
+/**
+ * @file task.hpp
+ * @brief Interfaces for coroutine task management.
+ * @details This file defines interfaces for running and managing concurrent
+ * coroutine tasks in Condy.
+ */
+
 #pragma once
 
 #include "condy/context.hpp"

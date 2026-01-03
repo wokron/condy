@@ -1,3 +1,10 @@
+/**
+ * @file provided_buffers.hpp
+ * @brief Support for io_uring provided buffers.
+ * @details This file provides support for io_uring provided buffers, which can
+ * be used as an alternative to regular buffers in asynchronous operations.
+ */
+
 #pragma once
 
 #include "condy/buffers.hpp"

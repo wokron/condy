@@ -1,3 +1,11 @@
+/**
+ * @file finish_handles.hpp
+ * @brief Definitions of finish handle types for asynchronous operations.
+ * @details This file defines various FinishHandle types for managing the
+ * completion of asynchronous operations. Typically, the address of a
+ * FinishHandle is set as the user_data of an async operation.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"

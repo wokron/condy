@@ -1,3 +1,7 @@
+/**
+ * @file work_type.hpp
+ */
+
 #pragma once
 
 #include <cassert>

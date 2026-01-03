@@ -1,3 +1,7 @@
+/**
+ * @file singleton.hpp
+ */
+
 #pragma once
 
 namespace condy {

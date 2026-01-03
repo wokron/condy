@@ -1,3 +1,8 @@
+/**
+ * @file runtime.hpp
+ * @brief Runtime type for running the io_uring event loop.
+ */
+
 #pragma once
 
 #include "condy/condy_uring.hpp"

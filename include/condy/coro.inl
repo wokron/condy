@@ -1,3 +1,8 @@
+/**
+ * @file coro.inl
+ * @brief Coroutine implementation details.
+ */
+
 #pragma once
 
 #include "condy/coro.hpp"

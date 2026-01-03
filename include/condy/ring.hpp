@@ -1,3 +1,10 @@
+/**
+ * @file ring.hpp
+ * @brief Wrapper classes for liburing interfaces.
+ * @details This file defines wrapper classes around liburing, providing support
+ * for most synchronous operations.
+ */
+
 #pragma once
 
 #include "condy/condy_uring.hpp"

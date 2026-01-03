@@ -1,3 +1,12 @@
+/**
+ * @file awaiters.hpp
+ * @brief Definitions of awaiter types for asynchronous operations.
+ * @details This file defines a set of awaiter types used to represent and
+ * manage asynchronous operations. These awaiters encapsulate the logic for
+ * preparing, submitting, and resuming asynchronous tasks, and provide the
+ * building blocks for composing complex asynchronous workflows.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"
