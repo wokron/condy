@@ -57,3 +57,4 @@ build/
 .cache/
 .vscode/
 .clangd
+docs/html/
