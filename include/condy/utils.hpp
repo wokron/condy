@@ -32,7 +32,7 @@
 
 namespace condy {
 
-class Defer {
+class [[nodiscard]] Defer {
 public:
     template <typename Func>
     Defer(Func &&func) : func_(std::forward<Func>(func)) {}
@@ -47,6 +47,12 @@ private:
     std::function<void()> func_;
 };
 
+/**
+ * @brief Defer the execution of a function until the current scope ends.
+ * @param func The function to be executed upon scope exit.
+ * @return Defer object that will execute the function when it goes out of
+ * scope.
+ */
 template <typename Func> Defer defer(Func &&func) {
     return Defer(std::forward<Func>(func));
 }

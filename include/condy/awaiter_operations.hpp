@@ -14,6 +14,11 @@
 
 namespace condy {
 
+/**
+ * @brief This function creates a variant of OpAwaiter. OpAwaiter represents an
+ * asynchronous operation that can be awaited. It is basically a wrapper around
+ * an io_uring sqe preparation function.
+ */
 template <typename Func, typename... Args>
 auto make_op_awaiter(Func &&func, Args &&...args) {
     auto prep_func = [func = std::forward<Func>(func),
@@ -23,6 +28,9 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
     return OpAwaiter<decltype(prep_func)>(std::move(prep_func));
 }
 
+/**
+ * @copydoc make_op_awaiter
+ */
 template <typename MultiShotFunc, typename Func, typename... Args>
 auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                                Args &&...args) {
@@ -34,6 +42,9 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
         std::forward<MultiShotFunc>(multishot_func), std::move(prep_func));
 }
 
+/**
+ * @copydoc make_op_awaiter
+ */
 template <BufferRingLike Br, typename Func, typename... Args>
 auto make_select_buffer_op_awaiter(Br *buffers, Func &&func, Args &&...args) {
     auto prep_func = [bgid = buffers->bgid(), func = std::forward<Func>(func),
@@ -47,6 +58,9 @@ auto make_select_buffer_op_awaiter(Br *buffers, Func &&func, Args &&...args) {
     return op;
 }
 
+/**
+ * @copydoc make_op_awaiter
+ */
 template <typename MultiShotFunc, BufferRingLike Br, typename Func,
           typename... Args>
 auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
@@ -66,6 +80,9 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
 }
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+/**
+ * @copydoc make_op_awaiter
+ */
 template <BufferRingLike Br, typename Func, typename... Args>
 auto make_bundle_select_buffer_op_awaiter(Br *buffers, Func &&func,
                                           Args &&...args) {
@@ -83,6 +100,9 @@ auto make_bundle_select_buffer_op_awaiter(Br *buffers, Func &&func,
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+/**
+ * @copydoc make_op_awaiter
+ */
 template <typename MultiShotFunc, BufferRingLike Br, typename Func,
           typename... Args>
 auto make_multishot_bundle_select_buffer_op_awaiter(
@@ -102,6 +122,9 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
 }
 #endif
 
+/**
+ * @copydoc make_op_awaiter
+ */
 template <typename FreeFunc, typename Func, typename... Args>
 auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                                Args &&...args) {

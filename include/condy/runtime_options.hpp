@@ -13,27 +13,53 @@ namespace condy {
 
 class Runtime;
 
-// TODO: Check versions for each option
+/**
+ * @brief Runtime options
+ * @details Options for configuring the behavior of a Runtime instance. Most of
+ * them are io_uring setup options. These options should be set before creating
+ * the Runtime instance.
+ */
 struct RuntimeOptions {
 public:
     using Self = RuntimeOptions;
 
+    /**
+     * @brief Set event interval
+     * @details The event interval determines how often the runtime checks for
+     * completed events.
+     * @param v The event interval value
+     */
     Self &event_interval(size_t v) {
         event_interval_ = v;
         return *this;
     }
 
+    /**
+     * @brief Disable register ring fd
+     * @details By default, the runtime registers the ring file descriptor with
+     * the kernel for performance optimization. This option disables that
+     * behavior.
+     */
     Self &disable_register_ring_fd() {
         disable_register_ring_fd_ = true;
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_IOPOLL
+     * @param hybrid See IORING_SETUP_HYBRID_IOPOLL
+     */
     Self &enable_iopoll(bool hybrid = false) {
         enable_iopoll_ = true;
         enable_hybrid_iopoll_ = hybrid;
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_SQPOLL
+     * @param idle_time_ms Idle time in milliseconds for the sqpoll thread
+     * @param cpu CPU affinity for the sqpoll thread
+     */
     Self &enable_sqpoll(size_t idle_time_ms = 1000,
                         std::optional<uint32_t> cpu = std::nullopt) {
         if (enable_defer_taskrun_ || enable_coop_taskrun_) {
@@ -46,6 +72,9 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_DEFER_TASKRUN
+     */
     Self &enable_defer_taskrun() {
         if (enable_sqpoll_ || enable_coop_taskrun_) {
             throw std::logic_error(
@@ -55,21 +84,40 @@ public:
         return *this;
     }
 
+    /**
+     * @brief Set SQ size
+     * @param v SQ size
+     */
     Self &sq_size(size_t v) {
         sq_size_ = v;
         return *this;
     }
 
+    /**
+     * @brief Set CQ size
+     * @param v CQ size
+     */
     Self &cq_size(size_t v) {
         cq_size_ = v;
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_ATTACH_WQ
+     * @details This option allows the current runtime to share the async
+     * worker thread backend with another runtime.
+     * @param other The other runtime to attach to.
+     */
     Self &enable_attach_wq(Runtime &other) {
         attach_wq_target_ = &other;
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_COOP_TASKRUN
+     * @param taskrun_flag See IORING_SETUP_TASKRUN_FLAG
+     * @return Self&
+     */
     Self &enable_coop_taskrun(bool taskrun_flag = false) {
         if (enable_sqpoll_ || enable_defer_taskrun_) {
             throw std::logic_error(
@@ -80,6 +128,9 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_SQE128
+     */
     Self &enable_sqe128() {
         if (enable_sqe_mixed_) {
             throw std::logic_error("sqe128 cannot be enabled with sqe_mixed");
@@ -88,6 +139,9 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_CQE32
+     */
     Self &enable_cqe32() {
         if (enable_cqe_mixed_) {
             throw std::logic_error("cqe32 cannot be enabled with cqe_mixed");
@@ -96,6 +150,9 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_SQE_MIXED
+     */
     Self &enable_sqe_mixed() {
         if (enable_sqe128_) {
             throw std::logic_error("sqe_mixed cannot be enabled with sqe128");
@@ -104,6 +161,9 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_CQE_MIXED
+     */
     Self &enable_cqe_mixed() {
         if (enable_cqe32_) {
             throw std::logic_error("cqe_mixed cannot be enabled with cqe32");
@@ -112,6 +172,11 @@ public:
         return *this;
     }
 
+    /**
+     * @brief See IORING_SETUP_NO_MMAP
+     * @param buf Buffer pointer
+     * @param buf_size Buffer size
+     */
     Self &enable_no_mmap(void *buf = nullptr, size_t buf_size = 0) {
         enable_no_mmap_ = true;
         no_mmap_buf_ = buf;

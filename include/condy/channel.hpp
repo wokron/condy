@@ -19,7 +19,7 @@
 namespace condy {
 
 /**
- * @brief Thread-safe bounded channel for communication across Runtimes.
+ * @brief Thread-safe bounded channel for communication and synchronization.
  * @tparam T Type of the items transmitted through the channel.
  * @tparam N When the capacity is less than or equal to N, the channel uses
  * stack storage for buffering; otherwise, it uses heap storage.
@@ -115,13 +115,11 @@ public:
 
     /**
      * @brief Get the capacity of the channel.
-     * @return size_t Capacity of the channel.
      */
     size_t capacity() const noexcept { return buffer_.capacity(); }
 
     /**
      * @brief Get the current size of the channel.
-     * @return size_t Current number of items in the channel.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
     size_t size() const noexcept {
@@ -131,7 +129,6 @@ public:
 
     /**
      * @brief Check if the channel is empty.
-     * @return true If the channel is empty.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
     bool empty() const noexcept {
@@ -141,7 +138,6 @@ public:
 
     /**
      * @brief Check if the channel is closed.
-     * @return true If the channel is closed.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
     bool is_closed() const noexcept {

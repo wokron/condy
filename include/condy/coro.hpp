@@ -21,7 +21,7 @@ template <typename T, typename Allocator> class Promise;
  * @details User can define a coroutine function by specifying this type as the
  * return type. The coroutine function will return an instance of this type.
  * The coroutine can be awaited using the `co_await` operator, or can be
- * spawned as a task using `co_spawn`.
+ * spawned as a task using @ref co_spawn().
  */
 template <typename T = void, typename Allocator = void>
 class [[nodiscard]] Coro {
@@ -64,7 +64,7 @@ namespace pmr {
 /**
  * @brief Coroutine type using polymorphic allocator.
  * @tparam T Return type of the coroutine.
- * @details This is a type alias for `condy::Coro` that uses
+ * @details This is a type alias for @ref condy::Coro that uses
  * `std::pmr::polymorphic_allocator<std::byte>` as the allocator type.
  */
 template <typename T = void>

@@ -91,14 +91,14 @@ void TaskBase<T, Allocator>::wait_inner_(
 }
 
 /**
- * @brief Task represent a coroutine task that runs concurrently in the runtime.
+ * @brief Coroutine task that runs concurrently in the runtime.
  * @tparam T Return type of the coroutine.
  * @tparam Allocator Allocator type used for memory management, default is
  * `void`, which means use the default allocator.
- * @details Task is a handle to a coroutine that can be awaited or detached. The
- * coroutine will be scheduled and executed in the associated runtime. User can
- * await the task to get the result of the coroutine, or detach the task to let
- * it run independently.
+ * @details Task is a handle to a coroutine task that can be awaited or
+ * detached. The coroutine will be scheduled and executed in the associated
+ * runtime. User can await the task to get the result of the coroutine, or
+ * detach the task to let it run independently.
  * @warning Destroying a Task without awaiting or detaching it will cause a
  * panic.
  * @warning Unhandled exceptions in a detached task will also cause a panic.

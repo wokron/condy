@@ -230,18 +230,49 @@ protected:
     std::vector<Awaiter> awaiters_;
 };
 
+/**
+ * @brief Awaiter to wait for all operations in a range to complete.
+ * @details An awaiter that waits for all operations in a range to complete.
+ * Unlike @ref RangedWhenAllAwaiter, this awaiter will also return the order of
+ * completion.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::pair<std::vector<size_t>, std::vector<...>> A pair containing a
+ * vector of completion orders and a vector of results from each awaiter.
+ */
 template <typename Awaiter>
 using RangedParallelAllAwaiter = RangedParallelAwaiterBase<
     RangedParallelAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
+/**
+ * @brief Awaiter to wait for any operation in a range to complete.
+ * @details An awaiter that waits for any operation in a range to complete.
+ * Unlike @ref RangedWhenAnyAwaiter, this awaiter will return the order of completion
+ * of all operations and the result of each awaiter.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::pair<std::vector<size_t>, std::vector<...>> A pair containing a
+ * vector of completion orders and a vector of results from each awaiter.
+ */
 template <typename Awaiter>
 using RangedParallelAnyAwaiter = RangedParallelAwaiterBase<
     RangedParallelAnyFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
+/**
+ * @brief Awaiter to wait for all operations in a range to complete.
+ * @details An awaiter that waits for all operations in a range to complete.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::vector<...> A vector of results from each awaiter.
+ */
 template <typename Awaiter>
 using RangedWhenAllAwaiter = RangedParallelAwaiterBase<
     RangedWhenAllFinishHandle<typename Awaiter::HandleType>, Awaiter>;
 
+/**
+ * @brief Awaiter to wait for any operation in a range to complete.
+ * @details An awaiter that waits for any operation in a range to complete.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::pair<size_t, ...> A pair containing the index of the completed
+ * awaiter and its result.
+ */
 template <typename Awaiter>
 using RangedWhenAnyAwaiter = RangedParallelAwaiterBase<
     RangedWhenAnyFinishHandle<typename Awaiter::HandleType>, Awaiter>;
@@ -270,9 +301,22 @@ public:
     }
 };
 
+/**
+ * @brief Awaiter that links multiple operations in a range using IO_LINK.
+ * @details An awaiter that links multiple operations in a range using IO_LINK.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::vector<...> A vector of results from each awaiter.
+ */
 template <typename Awaiter>
 using RangedLinkAwaiter = RangedLinkAwaiterBase<IOSQE_IO_LINK, Awaiter>;
 
+/**
+ * @brief Awaiter that links multiple operations in a range using IO_HARDLINK.
+ * @details An awaiter that links multiple operations in a range using
+ * IO_HARDLINK.
+ * @tparam Awaiter The type of the awaiters in the range.
+ * @return std::vector<...> A vector of results from each awaiter.
+ */
 template <typename Awaiter>
 using RangedHardLinkAwaiter = RangedLinkAwaiterBase<IOSQE_IO_HARDLINK, Awaiter>;
 
@@ -354,19 +398,49 @@ protected:
     template <HandleLike, AwaiterLike...> friend class ParallelAwaiterBase;
 };
 
+/**
+ * @brief Awaiter to wait for all operations to complete in parallel.
+ * @details An awaiter that waits for all operations to complete in parallel.
+ * Unlike @ref WhenAllAwaiter, this awaiter will also return the order of completion.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::pair<std::array<size_t, N>, std::tuple<...>> A pair containing
+ * an array of completion orders and a tuple of results from each awaiter.
+ */
 template <typename... Awaiter>
 using ParallelAllAwaiter = ParallelAwaiterBase<
     ParallelAllFinishHandle<typename Awaiter::HandleType...>, Awaiter...>;
 
+/**
+ * @brief Awaiter to wait for any operation to complete in parallel.
+ * @details An awaiter that waits for any operation to complete in parallel.
+ * Unlike @ref WhenAnyAwaiter, this awaiter will return the order of completion of
+ * all operations and the result of each awaiter.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::pair<std::array<size_t, N>, std::tuple<...>> A pair containing
+ * an array of completion orders and a tuple of results from each awaiter.
+ */
 template <typename... Awaiter>
 using ParallelAnyAwaiter = ParallelAwaiterBase<
     ParallelAnyFinishHandle<typename Awaiter::HandleType...>, Awaiter...>;
 
+/**
+ * @brief Awaiter that waits for all operations to complete in parallel.
+ * @details An awaiter that waits for all operations to complete in parallel.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::tuple<...> A tuple of results from each awaiter.
+ */
 template <typename... Awaiter>
 using WhenAllAwaiter =
     ParallelAwaiterBase<WhenAllFinishHandle<typename Awaiter::HandleType...>,
                         Awaiter...>;
 
+/**
+ * @brief Awaiter that waits for any operation to complete in parallel.
+ * @details An awaiter that waits for any operation to complete in parallel.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::variant<...> A variant containing the result of the completed
+ * awaiter.
+ */
 template <typename... Awaiter>
 using WhenAnyAwaiter =
     ParallelAwaiterBase<WhenAnyFinishHandle<typename Awaiter::HandleType...>,
@@ -403,9 +477,21 @@ private:
     }
 };
 
+/**
+ * @brief Awaiter that links multiple operations using IO_LINK.
+ * @details An awaiter that links multiple operations using IO_LINK.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::tuple<...> A tuple of results from each awaiter.
+ */
 template <typename... Awaiter>
 using LinkAwaiter = LinkAwaiterBase<IOSQE_IO_LINK, Awaiter...>;
 
+/**
+ * @brief Awaiter that links multiple operations using IO_HARDLINK.
+ * @details An awaiter that links multiple operations using IO_HARDLINK.
+ * @tparam Awaiter The types of the awaiters.
+ * @return std::tuple<...> A tuple of results from each awaiter.
+ */
 template <typename... Awaiter>
 using HardLinkAwaiter = LinkAwaiterBase<IOSQE_IO_HARDLINK, Awaiter...>;
 

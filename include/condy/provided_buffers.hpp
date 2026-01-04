@@ -21,8 +21,23 @@
 
 namespace condy {
 
+/**
+ * @brief Information about buffers consumed from a provided buffer queue.
+ * @details This structure contains information about the buffers that have been
+ * consumed from a provided buffer queue, including the buffer ID and the number
+ * of buffers consumed. If the buffer is partial comsumption, num_buffers will
+ * be zero. If multiple buffers are consumed, num_buffers will indicate how many
+ * buffers were used, and the buffer ID will correspond to the first buffer
+ * used.
+ */
 struct BufferInfo {
+    /**
+     * @brief Buffer ID of the first buffer consumed.
+     */
     uint16_t bid;
+    /**
+     * @brief Number of buffers consumed.
+     */
     uint16_t num_buffers;
 };
 
@@ -74,10 +89,26 @@ public:
     operator=(BundledProvidedBufferQueue &&) = delete;
 
 public:
+    /**
+     * @brief Get the current size of the buffer queue
+     */
     size_t size() const { return size_; }
 
+    /**
+     * @brief Get the capacity of the buffer queue
+     */
     size_t capacity() const { return capacity_; }
 
+    /**
+     * @brief Push a buffer into the provided buffer queue
+     * @tparam Buffer Type of the buffer
+     * @param buffer The buffer to be pushed
+     * @return uint16_t The buffer ID assigned to the pushed buffer.
+     * @throws std::logic_error if the capacity of the queue is exceeded
+     * @note The returned buffer ID is always sequentially ordered, starting
+     * from 0 and incrementing by 1 for each buffer pushed into the queue,
+     * wrapping around when reaching the queue's capacity.
+     */
     template <typename Buffer> uint16_t push(Buffer &&buffer) {
         if (size_ >= capacity_) [[unlikely]] {
             throw std::logic_error("Capacity exceeded");
@@ -135,13 +166,34 @@ private:
     uint16_t bgid_;
 };
 
+/**
+ * @brief Provided buffer queue.
+ * @details A provided buffer queue manages a queue of buffers that can be used
+ * in asynchronous operations. User is responsible for pushing buffers into the
+ * queue.
+ * @returns std::pair<int, BufferInfo> When pass to async operations, the return
+ * type will be a pair of the operation result and the @ref BufferInfo.
+ */
 class ProvidedBufferQueue : public BundledProvidedBufferQueue {
 public:
-    using BundledProvidedBufferQueue::BundledProvidedBufferQueue;
+    /**
+     * @brief Construct a new ProvidedBufferQueue object.
+     * @param capacity Number of buffers the queue can hold.
+     * @param flags Optional flags for io_uring buffer ring registration
+     * (default: 0).
+     */
+    ProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
+        : BundledProvidedBufferQueue(capacity, flags) {}
 };
 
 class BundledProvidedBufferPool;
 
+/**
+ * @brief Provided buffer.
+ * @details A provided buffer represents a buffer obtained from a provided
+ * buffer pool. It automatically returns the buffer to the pool when it goes
+ * out of scope.
+ */
 struct ProvidedBuffer : public BufferBase {
 public:
     ProvidedBuffer() = default;
@@ -166,12 +218,24 @@ public:
     ProvidedBuffer &operator=(const ProvidedBuffer &) = delete;
 
 public:
+    /**
+     * @brief Get the data pointer of the provided buffer
+     */
     void *data() const { return data_; }
 
+    /** *
+     * @brief Get the size of the provided buffer
+     */
     size_t size() const { return size_; }
 
+    /**
+     * @brief Reset the provided buffer, returning it to the pool if owned
+     */
     void reset();
 
+    /**
+     * @brief Check if the provided buffer owns a buffer from a pool.
+     */
     bool owns_buffer() const { return pool_ != nullptr; }
 
 private:
@@ -238,8 +302,14 @@ public:
     BundledProvidedBufferPool &operator=(BundledProvidedBufferPool &&) = delete;
 
 public:
+    /**
+     * @brief Get the capacity of the buffer pool
+     */
     size_t capacity() const { return num_buffers_; }
 
+    /**
+     * @brief Get the size of each buffer in the pool
+     */
     size_t buffer_size() const { return buffer_size_; }
 
 public:
@@ -325,10 +395,26 @@ inline void ProvidedBuffer::reset() {
     pool_ = nullptr;
 }
 
+/**
+ * @brief Provided buffer pool.
+ * @details A provided buffer pool manages a pool of buffers that can be used in
+ * asynchronous operations. Only receiving operations can obtain buffers from
+ * the pool.
+ * @returns std::pair<int, ProvidedBuffer> When pass to async operations, the
+ * return type will be a pair of the operation result and the @ref
+ * ProvidedBuffer.
+ */
 class ProvidedBufferPool : public BundledProvidedBufferPool {
 public:
     using ReturnType = ProvidedBuffer;
 
+    /**
+     * @brief Construct a new ProvidedBufferPool object.
+     * @param num_buffers Number of buffers to allocate in the pool.
+     * @param buffer_size Size of each buffer in bytes.
+     * @param flags Optional flags for io_uring buffer registration (default:
+     * 0).
+     */
     ProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                        unsigned int flags = 0)
         : BundledProvidedBufferPool(num_buffers, buffer_size, flags) {}
