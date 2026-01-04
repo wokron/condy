@@ -287,6 +287,9 @@ template <AwaiterRange Range> auto hard_link(Range &&range) {
     return parallel<RangedHardLinkAwaiter>(std::forward<Range>(range));
 }
 
+/**
+ * @brief Operators for composing awaiters.
+ */
 namespace operators {
 
 /**

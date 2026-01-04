@@ -290,17 +290,4 @@ struct [[nodiscard]] SwitchAwaiter {
  */
 inline detail::SwitchAwaiter co_switch(Runtime &runtime) { return {&runtime}; }
 
-namespace pmr {
-
-/**
- * @brief Task type using polymorphic allocator.
- * @tparam T Return type of the coroutine.
- * @details This is a type alias for `condy::Task` that uses
- * `std::pmr::polymorphic_allocator<std::byte>` as the allocator type.
- */
-template <typename T>
-using Task = condy::Task<T, std::pmr::polymorphic_allocator<std::byte>>;
-
-} // namespace pmr
-
 } // namespace condy

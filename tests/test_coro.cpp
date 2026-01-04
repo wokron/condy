@@ -1,4 +1,5 @@
 #include <condy/coro.hpp>
+#include <condy/pmr.hpp>
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <memory>

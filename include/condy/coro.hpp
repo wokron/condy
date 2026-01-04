@@ -6,7 +6,6 @@
 #pragma once
 
 #include <coroutine>
-#include <memory_resource>
 #include <utility>
 
 namespace condy {
@@ -58,19 +57,6 @@ public:
 private:
     std::coroutine_handle<promise_type> handle_;
 };
-
-namespace pmr {
-
-/**
- * @brief Coroutine type using polymorphic allocator.
- * @tparam T Return type of the coroutine.
- * @details This is a type alias for @ref condy::Coro that uses
- * `std::pmr::polymorphic_allocator<std::byte>` as the allocator type.
- */
-template <typename T = void>
-using Coro = condy::Coro<T, std::pmr::polymorphic_allocator<std::byte>>;
-
-} // namespace pmr
 
 } // namespace condy
 

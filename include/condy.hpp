@@ -13,6 +13,7 @@
 #include "condy/buffers.hpp"            // IWYU pragma: export
 #include "condy/channel.hpp"            // IWYU pragma: export
 #include "condy/coro.hpp"               // IWYU pragma: export
+#include "condy/pmr.hpp"                // IWYU pragma: export
 #include "condy/runtime.hpp"            // IWYU pragma: export
 #include "condy/runtime_options.hpp"    // IWYU pragma: export
 #include "condy/sync_wait.hpp"          // IWYU pragma: export
@@ -25,13 +26,3 @@
  * are encapsulated within this namespace.
  */
 namespace condy {}
-
-/**
- * @brief Polymorphic memory resource (PMR) related types and utilities.
- */
-namespace condy::pmr {}
-
-/**
- * @brief Operators for composing awaiters.
- */
-namespace condy::operators {}
