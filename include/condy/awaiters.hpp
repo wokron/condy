@@ -246,8 +246,8 @@ using RangedParallelAllAwaiter = RangedParallelAwaiterBase<
 /**
  * @brief Awaiter to wait for any operation in a range to complete.
  * @details An awaiter that waits for any operation in a range to complete.
- * Unlike @ref RangedWhenAnyAwaiter, this awaiter will return the order of completion
- * of all operations and the result of each awaiter.
+ * Unlike @ref RangedWhenAnyAwaiter, this awaiter will return the order of
+ * completion of all operations and the result of each awaiter.
  * @tparam Awaiter The type of the awaiters in the range.
  * @return std::pair<std::vector<size_t>, std::vector<...>> A pair containing a
  * vector of completion orders and a vector of results from each awaiter.
@@ -401,7 +401,8 @@ protected:
 /**
  * @brief Awaiter to wait for all operations to complete in parallel.
  * @details An awaiter that waits for all operations to complete in parallel.
- * Unlike @ref WhenAllAwaiter, this awaiter will also return the order of completion.
+ * Unlike @ref WhenAllAwaiter, this awaiter will also return the order of
+ * completion.
  * @tparam Awaiter The types of the awaiters.
  * @return std::pair<std::array<size_t, N>, std::tuple<...>> A pair containing
  * an array of completion orders and a tuple of results from each awaiter.
@@ -413,8 +414,8 @@ using ParallelAllAwaiter = ParallelAwaiterBase<
 /**
  * @brief Awaiter to wait for any operation to complete in parallel.
  * @details An awaiter that waits for any operation to complete in parallel.
- * Unlike @ref WhenAnyAwaiter, this awaiter will return the order of completion of
- * all operations and the result of each awaiter.
+ * Unlike @ref WhenAnyAwaiter, this awaiter will return the order of completion
+ * of all operations and the result of each awaiter.
  * @tparam Awaiter The types of the awaiters.
  * @return std::pair<std::array<size_t, N>, std::tuple<...>> A pair containing
  * an array of completion orders and a tuple of results from each awaiter.

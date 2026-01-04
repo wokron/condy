@@ -76,10 +76,10 @@ private:
 /**
  * @brief Create a buffer object from various data sources.
  * @details These overloaded functions construct either @ref MutableBuffer or
- * @ref ConstBuffer from raw pointers, arrays, std::array, std::vector, std::string,
- * std::string_view, or iovec. They provide a unified way to convert different
- * types of memory regions into buffer objects for use in asynchronous
- * operations.
+ * @ref ConstBuffer from raw pointers, arrays, std::array, std::vector,
+ * std::string, std::string_view, or iovec. They provide a unified way to
+ * convert different types of memory regions into buffer objects for use in
+ * asynchronous operations.
  */
 inline MutableBuffer buffer(void *data, size_t size) {
     return MutableBuffer(data, size);
