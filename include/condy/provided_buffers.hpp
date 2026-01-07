@@ -127,11 +127,11 @@ public:
     uint16_t bgid() const { return bgid_; }
 
     ReturnType handle_finish(int32_t res, uint32_t flags) {
-        if (res < 0) {
+        if (!(flags & IORING_CQE_F_BUFFER)) {
             return ReturnType{0, 0};
         }
 
-        assert(flags & IORING_CQE_F_BUFFER);
+        assert(res >= 0);
 
         ReturnType result = {
             .bid = static_cast<uint16_t>(flags >> IORING_CQE_BUFFER_SHIFT),
@@ -317,11 +317,12 @@ public:
 
     ReturnType handle_finish(int32_t res, [[maybe_unused]] uint32_t flags) {
         std::vector<ProvidedBuffer> buffers;
-        if (res < 0) {
+
+        if (!(flags & IORING_CQE_F_BUFFER)) {
             return buffers;
         }
 
-        assert(flags & IORING_CQE_F_BUFFER);
+        assert(res >= 0);
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
         if (flags & IORING_CQE_F_BUF_MORE) {
