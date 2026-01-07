@@ -1,6 +1,6 @@
-# Condy
+# Condy🍬
 
-> *C++ Asynchronous System Call Layer, Powered by io_uring and C++20 Coroutines*
+***C++ Asynchronous System Call Layer for Linux, Powered by io_uring and C++20 Coroutines***
 
 Condy is designed to provide an intuitive, high-performance coroutine runtime on top of io_uring:
 
@@ -12,9 +12,6 @@ Condy is designed to provide an intuitive, high-performance coroutine runtime on
 
 - 💡 **Intuitive Programming Model**
   Write asynchronous code in a direct, readable style using C++20 coroutines—no callbacks. Friendly APIs, high-level combinators, and channels make complex async flows easy to express.
-
-> [!WARNING]
-> **Alpha Stage** - Condy is currently in early development. API is not stable and may change without notice.
 
 ## Quick Start
 
