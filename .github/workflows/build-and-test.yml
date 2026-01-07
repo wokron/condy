@@ -3,8 +3,14 @@ name: Build and Test Condy
 on:
   push:
     branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   pull_request:
     branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 jobs:
   build-and-test:
