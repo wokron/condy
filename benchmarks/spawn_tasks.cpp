@@ -28,7 +28,7 @@ condy::Coro<void> spawn_tasks(size_t task_count) {
 }
 
 int main() noexcept(false) {
-    const size_t task_count = 1'000'000;
+    const size_t task_count = 50'000'000;
 
     condy::sync_wait(spawn_tasks(task_count));
 

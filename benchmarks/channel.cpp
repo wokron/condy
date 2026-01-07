@@ -62,8 +62,8 @@ launch_consumers(std::vector<std::unique_ptr<condy::Channel<int>>> &channels,
 }
 
 int main() noexcept(false) {
-    const size_t num_pairs = 8;
-    const size_t num_messages = 1'600'000;
+    const size_t num_pairs = 64;
+    const size_t num_messages = 6'400'000;
     const size_t buffer_size = 1024;
 
     std::vector<std::unique_ptr<condy::Channel<int>>> channels;
