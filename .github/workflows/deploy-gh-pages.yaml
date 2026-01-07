@@ -1,0 +1,72 @@
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  DOXYGEN_VERSION: 1.15.0
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Cache Doxygen
+        id: cache-doxygen
+        uses: actions/cache@v4
+        with:
+          path: .cache/doxygen
+          key: doxygen-${{ env.DOXYGEN_VERSION }}-${{ runner.os }}
+
+      - name: Install Doxygen
+        if: steps.cache-doxygen.outputs.cache-hit != 'true'
+        timeout-minutes: 5
+        run: |
+          wget https://www.doxygen.nl/files/doxygen-${{ env.DOXYGEN_VERSION }}.linux.bin.tar.gz -O doxygen.tar.gz
+          tar -xzf doxygen.tar.gz
+          mkdir -p .cache/doxygen
+          mv doxygen-${{ env.DOXYGEN_VERSION }}/* .cache/doxygen/
+          rm -rf doxygen.tar.gz doxygen-${{ env.DOXYGEN_VERSION }}
+          ./.cache/doxygen/bin/doxygen --version
+
+      - name: Add Doxygen to PATH
+        run: echo "$(pwd)/.cache/doxygen/bin" >> $GITHUB_PATH
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build with Doxygen
+        run: |
+          doxygen Doxyfile
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
