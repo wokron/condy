@@ -45,7 +45,6 @@ private:
     Handle *handle_ptr_;
 };
 
-// TODO: Handle sqe128
 template <OpFinishHandleLike Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;

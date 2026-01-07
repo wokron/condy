@@ -126,7 +126,6 @@ These asynchronous operations accept the index of a file registered with the ker
 - `condy::async_ftruncate()`
 - `condy::async_bind()`
 - `condy::async_listen()`
-- `condy::async_cmd_discard()`
 
 ## Direct Operations
 

@@ -3454,8 +3454,6 @@ TEST_CASE("test async_operations - test epoll_wait") {
 }
 #endif
 
-// TODO: Unit tests for cmd_discard
-
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
 TEST_CASE("test async_operations - test pipe - basic") {
     int pipe_fds[2];

@@ -951,17 +951,6 @@ inline auto async_epoll_wait(int fd, struct epoll_event *events, int maxevents,
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
-/**
- * @brief See io_uring_prep_cmd_discard
- */
-template <FdLike Fd>
-inline auto async_cmd_discard(Fd fd, uint64_t offset, uint64_t nbytes) {
-    auto op = make_op_awaiter(io_uring_prep_cmd_discard, fd, offset, nbytes);
-    return detail::maybe_flag_fixed_fd(std::move(op), fd);
-}
-#endif
-
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
 /**
  * @brief See io_uring_prep_pipe

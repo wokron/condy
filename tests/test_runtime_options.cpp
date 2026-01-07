@@ -207,33 +207,6 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
     condy::sync_wait(func());
 }
 
-// TODO: Feature too new
-// TEST_CASE("test runtime_options - enable_sqe_mixed & enable_cqe_mixed") {
-//     condy::RuntimeOptions options;
-//     options.enable_sqe_mixed().enable_cqe_mixed();
-//     condy::Runtime runtime(options);
-
-//     auto task_func = [&]() -> condy::Coro<void> {
-//         for (int i = 0; i < 5; i++) {
-//             co_await condy::async_nop();
-//         }
-//     };
-
-//     auto func = [&]() -> condy::Coro<void> {
-//         std::vector<condy::Task<void>> tasks;
-//         tasks.reserve(1000);
-//         for (int i = 0; i < 1000; i++) {
-//             tasks.push_back(condy::co_spawn(task_func()));
-//         }
-
-//         for (auto &t : tasks) {
-//             co_await std::move(t);
-//         }
-//     };
-
-//     condy::sync_wait(func());
-// }
-
 TEST_CASE("test runtime_options - enable_no_mmap") {
     void *data = mmap(nullptr, 4096l * 2, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
