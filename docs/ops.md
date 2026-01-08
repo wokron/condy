@@ -67,6 +67,7 @@ These are fundamental asynchronous operations. Many of them are asynchronous ver
 - `condy::async_ftruncate()`
 - `condy::async_bind()`
 - `condy::async_listen()`
+- `condy::async_epoll_ctl()`
 - `condy::async_epoll_wait()`
 - `condy::async_pipe()`
 

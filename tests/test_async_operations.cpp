@@ -3410,6 +3410,28 @@ TEST_CASE("test async_operations - test listen - fixed fd") {
 }
 #endif
 
+TEST_CASE("test async_operations - test epoll_ctl") {
+    int epoll_fd = epoll_create1(0);
+    REQUIRE(epoll_fd >= 0);
+
+    int pipe_fds[2];
+    REQUIRE(pipe(pipe_fds) == 0);
+
+    auto func = [&]() -> condy::Coro<void> {
+        epoll_event ev;
+        ev.events = EPOLLIN;
+        ev.data.fd = pipe_fds[0];
+        int r = co_await condy::async_epoll_ctl(epoll_fd, pipe_fds[0],
+                                                EPOLL_CTL_ADD, &ev);
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(func());
+
+    close(epoll_fd);
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 TEST_CASE("test async_operations - test epoll_wait") {
     int epoll_fd = epoll_create1(0);
@@ -3418,13 +3440,6 @@ TEST_CASE("test async_operations - test epoll_wait") {
     int pipe_fds[2];
     REQUIRE(pipe(pipe_fds) == 0);
 
-    int r;
-    epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = pipe_fds[0];
-    r = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, pipe_fds[0], &ev);
-    REQUIRE(r == 0);
-
     auto msg = generate_data(128);
 
     auto writer = [&]() -> condy::Coro<void> {
@@ -3432,11 +3447,19 @@ TEST_CASE("test async_operations - test epoll_wait") {
     };
 
     auto func = [&]() -> condy::Coro<void> {
+        int r;
+        epoll_event ev;
+        ev.events = EPOLLIN;
+        ev.data.fd = pipe_fds[0];
+        r = co_await condy::async_epoll_ctl(epoll_fd, pipe_fds[0],
+                                            EPOLL_CTL_ADD, &ev);
+        REQUIRE(r == 0);
+
         epoll_event events[4];
 
         auto t = condy::co_spawn(writer());
 
-        int r = co_await condy::async_epoll_wait(epoll_fd, events, 4, 0);
+        r = co_await condy::async_epoll_wait(epoll_fd, events, 4, 0);
         REQUIRE(r == 1);
 
         co_await std::move(t);

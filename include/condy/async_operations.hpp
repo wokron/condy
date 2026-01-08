@@ -940,6 +940,13 @@ template <FdLike Fd> inline auto async_listen(Fd fd, int backlog) {
 }
 #endif
 
+/**
+ * @brief See io_uring_prep_epoll_ctl
+ */
+inline auto async_epoll_ctl(int epfd, int fd, int op, struct epoll_event *ev) {
+    return make_op_awaiter(io_uring_prep_epoll_ctl, epfd, fd, op, ev);
+}
+
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 /**
  * @brief See io_uring_prep_epoll_wait
