@@ -195,6 +195,7 @@ TEST_CASE("test fd_table - send fd - throw without accepter") {
 
     auto func2 = [&]() -> condy::Coro<void> {
         co_await chan.push(std::monostate{});
+        co_await chan.push(std::monostate{}); // Block here
         co_return;
     };
 
