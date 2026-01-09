@@ -833,6 +833,22 @@ inline auto async_socket_direct(int domain, int type, int protocol,
                            file_index, flags);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_uring_cmd
+ */
+template <FdLike Fd, typename CmdFunc>
+inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
+    auto prep_func = [cmd_func = std::forward<CmdFunc>(cmd_func)](
+                         io_uring_sqe *sqe, int cmd_op_inner, int fd_inner) {
+        io_uring_prep_uring_cmd(sqe, cmd_op_inner, fd_inner);
+        cmd_func(sqe);
+    };
+    auto op = make_op_awaiter(std::move(prep_func), cmd_op, fd);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 /**
  * @brief See io_uring_prep_cmd_sock
@@ -842,6 +858,19 @@ inline auto async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
                            void *optval, int optlen) {
     auto op = make_op_awaiter(io_uring_prep_cmd_sock, cmd_op, fd, level,
                               optname, optval, optlen);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_cmd_getsockname
+ */
+template <FdLike Fd>
+inline auto async_cmd_getsockname(Fd fd, struct sockaddr *sockaddr,
+                                  socklen_t *sockaddr_len, int peer) {
+    auto op = make_op_awaiter(io_uring_prep_cmd_getsockname, fd, sockaddr,
+                              sockaddr_len, peer);
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
