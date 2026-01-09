@@ -42,7 +42,7 @@ while getopts "hkqc:" opt; do
 done
 shift $((OPTIND -1))
 
-if [ $# -ne 2 ]; then
+if [ $# -lt 1 ]; then
     usage
 fi
 
