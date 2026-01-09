@@ -45,7 +45,8 @@ private:
     Handle *handle_ptr_;
 };
 
-template <OpFinishHandleLike Handle, typename Func> class OpAwaiterBase {
+template <OpFinishHandleLike Handle, typename Func, bool SQE128 = false>
+class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
@@ -67,7 +68,18 @@ public:
         auto *ring = context.ring();
 
         context.runtime()->pend_work();
-        io_uring_sqe *sqe = ring->get_sqe();
+        io_uring_sqe *sqe = nullptr;
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+        if constexpr (SQE128) {
+            sqe = ring->get_sqe128();
+        } else {
+            sqe = ring->get_sqe();
+        }
+#else
+        static_assert(!SQE128,
+                      "SQE128 is not supported in this io_uring version");
+        sqe = ring->get_sqe();
+#endif
         prep_op_(sqe, flags);
     }
 
@@ -102,6 +114,16 @@ public:
     using Base = OpAwaiterBase<OpFinishHandle, Func>;
     OpAwaiter(Func func) : Base(OpFinishHandle(), func) {}
 };
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+template <typename Func>
+class [[nodiscard]] OpAwaiter128
+    : public OpAwaiterBase<OpFinishHandle, Func, true> {
+public:
+    using Base = OpAwaiterBase<OpFinishHandle, Func, true>;
+    OpAwaiter128(Func func) : Base(OpFinishHandle(), func) {}
+};
+#endif
 
 template <typename MultiShotFunc, typename Func>
 class [[nodiscard]] MultiShotOpAwaiter

@@ -28,6 +28,20 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
     return OpAwaiter<decltype(prep_func)>(std::move(prep_func));
 }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @copydoc make_op_awaiter
+ */
+template <typename Func, typename... Args>
+auto make_op_awaiter128(Func &&func, Args &&...args) {
+    auto prep_func = [func = std::forward<Func>(func),
+                      ... args = std::forward<Args>(args)](auto sqe) {
+        func(sqe, args...);
+    };
+    return OpAwaiter128<decltype(prep_func)>(std::move(prep_func));
+}
+#endif
+
 /**
  * @copydoc make_op_awaiter
  */
