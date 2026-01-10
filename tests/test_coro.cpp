@@ -211,11 +211,6 @@ TEST_CASE("test coro - return no default constructible type") {
     REQUIRE(finished);
 }
 
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-
 namespace {
 
 struct CustomAllocator {
@@ -336,7 +331,3 @@ TEST_CASE("test coro - different allocators") {
     REQUIRE(allocatorA.allocated);
     REQUIRE(allocatorB.allocated);
 }
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif

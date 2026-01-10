@@ -3364,10 +3364,16 @@ public:
     ~BlkDevice() {
         if (!path_.empty()) {
             // detach loop device
-            system(("losetup -d " + path_).c_str());
+            int r = system(("losetup -d " + path_).c_str());
+            if (r != 0) {
+                MESSAGE("Warning: failed to detach loop device " << path_);
+            }
         }
         if (!file_path_.empty()) {
-            unlink(file_path_.c_str());
+            int r = unlink(file_path_.c_str());
+            if (r != 0) {
+                MESSAGE("Warning: failed to unlink file " << file_path_);
+            }
         }
     }
 

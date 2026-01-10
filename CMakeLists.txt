@@ -58,6 +58,11 @@ endif()
 
 # Warnings as errors
 add_compile_options(-Wall -Wextra -Werror)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # False positive with GCC
+    # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=109224
+    add_compile_options(-Wno-mismatched-new-delete)
+endif()
 
 if(BUILD_EXAMPLES)
     message(STATUS "Configuring examples in ${CMAKE_CURRENT_SOURCE_DIR}/examples")
