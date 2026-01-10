@@ -3,11 +3,6 @@
 #include <memory_resource>
 #include <vector>
 
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-
 condy::pmr::Coro<void> task_func(auto &) { co_return; }
 
 condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
@@ -32,10 +27,6 @@ condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
               << duration.count() << " seconds (" << tasks_per_second
               << " tasks/second)\n";
 }
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
 
 int main() noexcept(false) {
     const size_t task_count = 1'000'000;

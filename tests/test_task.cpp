@@ -312,11 +312,6 @@ TEST_CASE("test task - detach") {
     REQUIRE(finished);
 }
 
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-
 namespace {
 
 struct CustomAllocator {
@@ -363,10 +358,6 @@ TEST_CASE("test task - spawn task with custom allocator") {
     REQUIRE(finished);
     REQUIRE(allocator.allocated);
 }
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
 
 TEST_CASE("test task - co_switch") {
     condy::Runtime runtime1(options), runtime2(options);

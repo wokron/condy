@@ -52,11 +52,6 @@ TEST_CASE("test sync_wait - exception handling") {
     }
 }
 
-#if !__clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
-#endif
-
 namespace {
 
 condy::pmr::Coro<int> test_pmr_func(auto &, bool &finished) {
@@ -76,7 +71,3 @@ TEST_CASE("test sync_wait - with allocator") {
     REQUIRE(result == 42);
     REQUIRE(finished);
 }
-
-#if !__clang__
-#pragma GCC diagnostic pop
-#endif
