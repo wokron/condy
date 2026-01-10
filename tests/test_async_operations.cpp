@@ -3314,6 +3314,122 @@ TEST_CASE("test async_operations - test ftruncate - fixed fd") {
 }
 #endif
 
+namespace {
+
+class BlkDevice {
+public:
+    BlkDevice() {
+        char buf[] = "blkdevXXXXXX";
+        int fd = mkstemp(buf);
+        if (fd < 0) {
+            return;
+        }
+
+        file_path_ = buf;
+
+        // truncate to 1MB
+        if (ftruncate(fd, 1024l * 1024l) != 0) {
+            close(fd);
+            file_path_.clear();
+            return;
+        }
+
+        close(fd);
+
+        FILE *f = popen("losetup -f", "r");
+        if (!f) {
+            return;
+        }
+
+        char dev_path[256] = {0};
+        if (fgets(dev_path, sizeof(dev_path), f) == nullptr) {
+            pclose(f);
+            return;
+        }
+        pclose(f);
+
+        path_ = dev_path;
+        // remove trailing newline
+        if (!path_.empty() && path_.back() == '\n') {
+            path_.pop_back();
+        }
+
+        int r = system(("losetup " + path_ + " " + file_path_).c_str());
+        if (r != 0) {
+            path_.clear();
+            return;
+        }
+    }
+
+    ~BlkDevice() {
+        if (!path_.empty()) {
+            // detach loop device
+            system(("losetup -d " + path_).c_str());
+        }
+        if (!file_path_.empty()) {
+            unlink(file_path_.c_str());
+        }
+    }
+
+    BlkDevice(const BlkDevice &) = delete;
+    BlkDevice &operator=(const BlkDevice &) = delete;
+    BlkDevice(BlkDevice &&) = delete;
+    BlkDevice &operator=(BlkDevice &&) = delete;
+
+    const std::string &path() const { return path_; }
+
+private:
+    std::string file_path_;
+    std::string path_;
+};
+
+} // namespace
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - test cmd_discard - basic") {
+    BlkDevice blkdev;
+    if (blkdev.path().empty()) {
+        MESSAGE("Can't create loop device, skipping");
+        return;
+    }
+
+    int fd = open(blkdev.path().c_str(), O_RDWR);
+    REQUIRE(fd >= 0);
+
+    auto func = [&]() -> condy::Coro<void> {
+        int r = co_await condy::async_cmd_discard(fd, 0, 4096);
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(func());
+    close(fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - test cmd_discard - fixed fd") {
+    BlkDevice blkdev;
+    if (blkdev.path().empty()) {
+        MESSAGE("Can't create loop device, skipping");
+        return;
+    }
+
+    int fd = open(blkdev.path().c_str(), O_RDWR);
+    REQUIRE(fd >= 0);
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&fd, 1, 0);
+        REQUIRE(r == 1);
+
+        r = co_await condy::async_cmd_discard(condy::fixed(0), 0, 4096);
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(func());
+    close(fd);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 TEST_CASE("test async_operations - test bind - basic") {
     int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
