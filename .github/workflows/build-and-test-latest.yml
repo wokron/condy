@@ -13,7 +13,7 @@ on:
       - "**.md"
 
 env:
-  KERNEL_VERSION: 6.18.2
+  KERNEL_VERSION: 6.18.4
   LIBURING_VERSION: 2.13
 
 jobs:
