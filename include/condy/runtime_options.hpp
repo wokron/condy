@@ -143,6 +143,9 @@ public:
      * @brief See IORING_SETUP_SQE128
      */
     Self &enable_sqe128() {
+        if (enable_sqe_mixed_) {
+            throw std::logic_error("sqe128 cannot be enabled with sqe_mixed");
+        }
         enable_sqe128_ = true;
         return *this;
     }
@@ -151,7 +154,32 @@ public:
      * @brief See IORING_SETUP_CQE32
      */
     Self &enable_cqe32() {
+        if (enable_cqe_mixed_) {
+            throw std::logic_error("cqe32 cannot be enabled with cqe_mixed");
+        }
         enable_cqe32_ = true;
+        return *this;
+    }
+
+    /**
+     * @brief See IORING_SETUP_SQE_MIXED
+     */
+    Self &enable_sqe_mixed() {
+        if (enable_sqe128_) {
+            throw std::logic_error("sqe_mixed cannot be enabled with sqe128");
+        }
+        enable_sqe_mixed_ = true;
+        return *this;
+    }
+
+    /**
+     * @brief See IORING_SETUP_CQE_MIXED
+     */
+    Self &enable_cqe_mixed() {
+        if (enable_cqe32_) {
+            throw std::logic_error("cqe_mixed cannot be enabled with cqe32");
+        }
+        enable_cqe_mixed_ = true;
         return *this;
     }
 
@@ -182,6 +210,8 @@ protected:
     bool enable_coop_taskrun_ = false;
     bool enable_sqe128_ = false;
     bool enable_cqe32_ = false;
+    bool enable_sqe_mixed_ = false;
+    bool enable_cqe_mixed_ = false;
     bool enable_no_mmap_ = false;
     void *no_mmap_buf_ = nullptr;
     size_t no_mmap_buf_size_ = 0;

@@ -135,6 +135,18 @@ public:
             params.flags |= IORING_SETUP_CQE32;
         }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+        if (options.enable_sqe_mixed_) {
+            params.flags |= IORING_SETUP_SQE_MIXED;
+        }
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+        if (options.enable_cqe_mixed_) {
+            params.flags |= IORING_SETUP_CQE_MIXED;
+        }
+#endif
+
         void *buf = nullptr;
         size_t buf_size = 0;
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
