@@ -37,6 +37,7 @@ public:
     static void *operator new(size_t, Args &&...) {
         // If user didn't provide a signature like (Allocator&, ...), clang will
         // fall back to ::new, we don't want that.
+        // https://github.com/llvm/llvm-project/issues/54881
         static_assert(always_false<Args...>::value,
                       "Invalid arguments for allocator-bound coroutine");
     }
