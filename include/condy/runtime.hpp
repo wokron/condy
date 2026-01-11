@@ -22,8 +22,7 @@
 
 namespace condy {
 
-using WorkListQueue =
-    IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
+namespace detail {
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
 class AsyncWaiter {
@@ -65,6 +64,8 @@ private:
     eventfd_t dummy_;
 };
 #endif
+
+} // namespace detail
 
 /**
  * @brief The event loop runtime for executing asynchronous
@@ -387,9 +388,12 @@ private:
     };
     static_assert(std::atomic<State>::is_always_lock_free);
 
+    using WorkListQueue =
+        IntrusiveSingleList<WorkInvoker, &WorkInvoker::work_queue_entry_>;
+
     // Global state
     std::mutex mutex_;
-    AsyncWaiter async_waiter_;
+    detail::AsyncWaiter async_waiter_;
     WorkListQueue global_queue_;
     std::atomic_size_t pending_works_ = 1;
     std::atomic<State> state_ = State::Idle;
