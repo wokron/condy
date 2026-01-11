@@ -107,8 +107,7 @@ inline auto fixed(int fd) { return detail::FixedFd{fd}; }
  * @return auto A helper object representing the fixed buffer.
  */
 template <BufferLike Buffer> auto fixed(int buf_index, Buffer &&buf) {
-    return detail::FixedBuffer<std::decay_t<Buffer>>{std::forward<Buffer>(buf),
-                                                     buf_index};
+    return detail::FixedBuffer<Buffer>{std::forward<Buffer>(buf), buf_index};
 }
 
 /**
