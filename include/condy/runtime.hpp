@@ -268,7 +268,7 @@ public:
             if (pending_works_ == 0) {
                 break;
             }
-            flush_ring_(true);
+            flush_ring_wait_();
         }
     }
 
@@ -303,9 +303,14 @@ private:
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
-    size_t flush_ring_(bool submit_and_wait = false) {
+    size_t flush_ring_() {
         return ring_.reap_completions(
-            [this](io_uring_cqe *cqe) { process_cqe_(cqe); }, submit_and_wait);
+            [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
+    }
+
+    size_t flush_ring_wait_() {
+        return ring_.reap_completions_wait(
+            [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
     }
 
     void process_cqe_(io_uring_cqe *cqe) {
