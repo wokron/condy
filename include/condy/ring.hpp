@@ -361,31 +361,33 @@ public:
 
     void submit() { io_uring_submit(&ring_); }
 
-    template <typename Func>
-    size_t reap_completions(Func &&process_func, bool submit_and_wait = false) {
-        int r;
+    template <typename Func> size_t reap_completions_wait(Func &&process_func) {
         unsigned head;
         io_uring_cqe *cqe;
         size_t reaped = 0;
-        if (submit_and_wait) {
-            do {
-                r = io_uring_submit_and_wait(&ring_, 1);
-                if (r >= 0) [[likely]] {
-                    break;
-                } else if (r == -EINTR) {
-                    continue;
-                } else {
-                    throw make_system_error("io_uring_submit_and_wait", -r);
-                }
-            } while (true);
-
-            io_uring_for_each_cqe(&ring_, head, cqe) {
-                process_func(cqe);
-                reaped++;
+        do {
+            int r = io_uring_submit_and_wait(&ring_, 1);
+            if (r >= 0) [[likely]] {
+                break;
+            } else if (r == -EINTR) {
+                continue;
+            } else {
+                throw make_system_error("io_uring_submit_and_wait", -r);
             }
-            io_uring_cq_advance(&ring_, reaped);
-            return reaped;
+        } while (true);
+
+        io_uring_for_each_cqe(&ring_, head, cqe) {
+            process_func(cqe);
+            reaped++;
         }
+        io_uring_cq_advance(&ring_, reaped);
+        return reaped;
+    }
+
+    template <typename Func> size_t reap_completions(Func &&process_func) {
+        unsigned head;
+        io_uring_cqe *cqe;
+        size_t reaped = 0;
 
         if (io_uring_peek_cqe(&ring_, &cqe) == 0) {
             io_uring_for_each_cqe(&ring_, head, cqe) {
