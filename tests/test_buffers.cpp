@@ -1,5 +1,7 @@
+#include "condy/async_operations.hpp"
 #include "condy/buffers.hpp"
 #include "condy/coro.hpp"
+#include "condy/helpers.hpp"
 #include "condy/provided_buffers.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime.hpp"
@@ -192,4 +194,16 @@ TEST_CASE("test buffers - provided buffer pool usage") {
     REQUIRE(ret.size() == 16);
 
     REQUIRE(std::memcmp(ret.data(), "test", 4) == 0);
+}
+
+TEST_CASE("test buffers - provided buffer is also buffer") {
+    condy::ProvidedBuffer buf;
+    auto fixed_buf = condy::fixed(2, buf);
+
+    // ok
+    [[maybe_unused]] auto aw1 = condy::async_read(0, fixed_buf, 0);
+
+    // also ok
+    [[maybe_unused]]
+    auto aw2 = condy::async_read(0, buf, 0);
 }
