@@ -107,20 +107,13 @@ condy::Coro<void> co_main(const char *infile, const char *outfile) {
         exit(1);
     }
 
-#if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
-    int r_trunc = co_await condy::async_ftruncate(
-        outfd, static_cast<loff_t>(statx_buf.stx_size));
-    if (r_trunc < 0) {
-        std::fprintf(stderr, "Failed to truncate file: %d\n", r_trunc);
+    if (use_direct && (statx_buf.stx_size % 4096 != 0)) {
+        std::fprintf(
+            stderr,
+            "File size %lld is not multiple of 4096 bytes for O_DIRECT\n",
+            (long long)statx_buf.stx_size);
         exit(1);
     }
-#else
-    int r_trunc = ftruncate64(outfd, static_cast<loff_t>(statx_buf.stx_size));
-    if (r_trunc < 0) {
-        std::fprintf(stderr, "Failed to truncate file: %d\n", errno);
-        exit(1);
-    }
-#endif
 
     std::printf("Copy %lld bytes from %s to %s\n",
                 (long long)statx_buf.stx_size, infile, outfile);
