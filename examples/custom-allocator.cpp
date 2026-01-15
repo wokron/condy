@@ -29,9 +29,11 @@ condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
 }
 
 int main() noexcept(false) {
-    const size_t task_count = 1'000'000;
+    std::printf("This example is faster than benchmark spawn_tasks.cpp!!!\n");
 
-    std::pmr::monotonic_buffer_resource pool;
+    const size_t task_count = 50'000'000;
+
+    std::pmr::monotonic_buffer_resource pool(1024l * 1024 * 100); // 100 MB pool
     std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
 
     condy::sync_wait(spawn_tasks(allocator, task_count));
