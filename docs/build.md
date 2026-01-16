@@ -69,7 +69,7 @@ ctest --test-dir build
 - Run example programs:
 
 ```bash
-./build/examples/fast-cp from.bin to.bin
+./build/examples/link-cp from.bin to.bin
 ```
 
 ## Version Compatibility
