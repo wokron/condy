@@ -176,6 +176,13 @@ template <FdLike Fd> inline auto async_fsync(Fd fd, unsigned fsync_flags) {
  */
 inline auto async_nop() { return make_op_awaiter(io_uring_prep_nop); }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_nop128
+ */
+inline auto async_nop128() { return make_op_awaiter128(io_uring_prep_nop128); }
+#endif
+
 /**
  * @brief See io_uring_prep_timeout
  */
