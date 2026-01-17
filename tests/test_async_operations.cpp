@@ -4,6 +4,7 @@
 #include "condy/provided_buffers.hpp"
 #include "condy/runtime.hpp"
 #include "condy/sync_wait.hpp"
+#include "helpers.hpp"
 #include <cerrno>
 #include <condy/async_operations.hpp>
 #include <cstddef>
@@ -21,58 +22,6 @@
 #include <sys/xattr.h>
 #include <thread>
 #include <unistd.h>
-
-namespace {
-
-int create_accept_socket() {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    REQUIRE(sockfd >= 0);
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0; // Let the OS choose the port
-
-    int r = bind(sockfd, (sockaddr *)&addr, sizeof(addr));
-    REQUIRE(r == 0);
-
-    r = listen(sockfd, 1);
-    REQUIRE(r == 0);
-
-    return sockfd;
-}
-
-void create_tcp_socketpair(int sv[2]) {
-    int r;
-    int listener = create_accept_socket();
-
-    sockaddr_in addr{};
-    socklen_t addrlen = sizeof(addr);
-    r = getsockname(listener, (sockaddr *)&addr, &addrlen);
-    REQUIRE(r == 0);
-
-    sv[0] = socket(AF_INET, SOCK_STREAM, 0);
-    REQUIRE(sv[0] >= 0);
-
-    r = connect(sv[0], (sockaddr *)&addr, sizeof(addr));
-    REQUIRE(r == 0);
-
-    sv[1] = accept(listener, nullptr, nullptr);
-    REQUIRE(sv[1] >= 0);
-
-    close(listener);
-}
-
-std::string generate_data(size_t size) {
-    std::string data;
-    data.resize(size);
-    for (size_t i = 0; i < size; ++i) {
-        data[i] = static_cast<char>('A' + (i % 26));
-    }
-    return data;
-}
-
-} // namespace
 
 TEST_CASE("test async_operations - splice fixed fd") {
     int pipe_fds1[2], pipe_fds2[2];
@@ -127,7 +76,7 @@ TEST_CASE("test async_operations - recvmsg multishot") {
     };
 
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         msg_hdr.msg_iov = nullptr;
         msg_hdr.msg_iovlen = 0;
 
@@ -900,7 +849,7 @@ TEST_CASE("test async_operations - test recvmsg - basic") {
     ssize_t r = write(sv[1], msg.data(), msg.size());
     REQUIRE(r == msg.size());
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         char buf_storage[1024];
         iovec iov{
             .iov_base = buf_storage,
@@ -933,7 +882,7 @@ TEST_CASE("test async_operations - test recvmsg - multishot") {
     close(sv[1]);
 
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         size_t count = 0;
         std::string actual;
 
@@ -996,7 +945,7 @@ TEST_CASE("test async_operations - test sendmsg - basic") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         iovec iov{
             .iov_base = const_cast<char *>(msg.data()),
             .iov_len = msg.size(),
@@ -1024,7 +973,7 @@ TEST_CASE("test async_operations - test sendmsg - zero copy") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         iovec iov{
             .iov_base = const_cast<char *>(msg.data()),
             .iov_len = msg.size(),
@@ -1056,7 +1005,7 @@ TEST_CASE("test async_operations - test sendmsg - zero copy fixed buffer") {
 
     auto msg = generate_data(1024);
     auto func = [&]() -> condy::Coro<void> {
-        struct msghdr msg_hdr {};
+        struct msghdr msg_hdr{};
         iovec iov{
             .iov_base = msg.data(),
             .iov_len = msg.size(),
@@ -1165,7 +1114,7 @@ TEST_CASE("test async_operations - test accept - basic") {
     auto main = [&]() -> condy::Coro<void> {
         std::jthread client_thread(client);
 
-        struct sockaddr_in addr {};
+        struct sockaddr_in addr{};
         socklen_t addrlen = sizeof(addr);
         for (int i = 0; i < 4; i++) {
             int conn_fd = co_await condy::async_accept(
@@ -1203,7 +1152,7 @@ TEST_CASE("test async_operations - test accept - direct") {
 
         condy::current_runtime().fd_table().init(2);
 
-        struct sockaddr_in addr {};
+        struct sockaddr_in addr{};
         socklen_t addrlen = sizeof(addr);
         int fd1 = co_await condy::async_accept_direct(
             listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
@@ -1256,7 +1205,7 @@ TEST_CASE("test async_operations - test accept - multishot") {
         std::jthread client_thread(client);
 
         size_t count = 0;
-        struct sockaddr_in addr {};
+        struct sockaddr_in addr{};
         socklen_t addrlen = sizeof(addr);
 
         condy::Channel<std::monostate> done_channel(1);
@@ -1308,7 +1257,7 @@ TEST_CASE("test async_operations - test accept - multishot direct") {
         fd_table.init(4);
 
         size_t count = 0;
-        struct sockaddr_in addr {};
+        struct sockaddr_in addr{};
         socklen_t addrlen = sizeof(addr);
 
         condy::Channel<std::monostate> done_channel(1);
@@ -1493,7 +1442,7 @@ TEST_CASE("test async_operations - test fallocate - basic") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = fstat(fd, &st);
     REQUIRE(r == 0);
     REQUIRE(st.st_size == 1024 * 1024);
@@ -1520,7 +1469,7 @@ TEST_CASE("test async_operations - test fallocate - fixed fd") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = fstat(fd, &st);
     REQUIRE(r == 0);
     REQUIRE(st.st_size == 1024 * 1024);
@@ -1881,7 +1830,7 @@ TEST_CASE("test async_operations - test statx") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        struct statx stx {};
+        struct statx stx{};
         int r =
             co_await condy::async_statx(AT_FDCWD, name, 0, STATX_SIZE, &stx);
         REQUIRE(r == 0);
@@ -2677,7 +2626,7 @@ TEST_CASE("test async_operations - test openat2 - basic") {
     auto d = condy::defer([&] { unlink(name); });
 
     auto func = [&]() -> condy::Coro<void> {
-        struct open_how how {};
+        struct open_how how{};
         how.flags = O_RDONLY;
         how.mode = 0;
 
@@ -2699,7 +2648,7 @@ TEST_CASE("test async_operations - test openat2 - direct") {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
 
-        struct open_how how {};
+        struct open_how how{};
         how.flags = O_RDONLY;
         how.mode = 0;
 
@@ -2761,7 +2710,7 @@ TEST_CASE("test async_operations - test unlinkat") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == -1);
     REQUIRE(errno == ENOENT);
@@ -2779,7 +2728,7 @@ TEST_CASE("test async_operations - test unlink") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == -1);
     REQUIRE(errno == ENOENT);
@@ -2805,7 +2754,7 @@ TEST_CASE("test async_operations - test renameat") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(old_name, &st);
     REQUIRE(r == -1);
     REQUIRE(errno == ENOENT);
@@ -2833,7 +2782,7 @@ TEST_CASE("test async_operations - test rename") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(old_name, &st);
     REQUIRE(r == -1);
     REQUIRE(errno == ENOENT);
@@ -2872,7 +2821,7 @@ TEST_CASE("test async_operations - test mkdirat") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == 0);
     REQUIRE(S_ISDIR(st.st_mode));
@@ -2888,7 +2837,7 @@ TEST_CASE("test async_operations - test mkdir") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == 0);
     REQUIRE(S_ISDIR(st.st_mode));
@@ -2961,8 +2910,7 @@ TEST_CASE("test async_operations - test linkat") {
     };
     condy::sync_wait(func());
 
-    struct stat st1 {
-    }, st2{};
+    struct stat st1{}, st2{};
     int r = stat(target_name, &st1);
     REQUIRE(r == 0);
     r = stat(link_name, &st2);
@@ -2987,8 +2935,7 @@ TEST_CASE("test async_operations - test link") {
     };
     condy::sync_wait(func());
 
-    struct stat st1 {
-    }, st2{};
+    struct stat st1{}, st2{};
     int r = stat(target_name, &st1);
     REQUIRE(r == 0);
     r = stat(link_name, &st2);
@@ -3282,7 +3229,7 @@ TEST_CASE("test async_operations - test ftruncate - basic") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == 0);
     REQUIRE(st.st_size == 4096);
@@ -3307,89 +3254,13 @@ TEST_CASE("test async_operations - test ftruncate - fixed fd") {
     };
     condy::sync_wait(func());
 
-    struct stat st {};
+    struct stat st{};
     int r = stat(name, &st);
     REQUIRE(r == 0);
     REQUIRE(st.st_size == 4096);
 }
 #endif
 
-namespace {
-
-class BlkDevice {
-public:
-    BlkDevice() {
-        char buf[] = "blkdevXXXXXX";
-        int fd = mkstemp(buf);
-        if (fd < 0) {
-            return;
-        }
-
-        file_path_ = buf;
-
-        // truncate to 1MB
-        if (ftruncate(fd, 1024l * 1024l) != 0) {
-            close(fd);
-            file_path_.clear();
-            return;
-        }
-
-        close(fd);
-
-        FILE *f = popen("losetup -f", "r");
-        if (!f) {
-            return;
-        }
-
-        char dev_path[256] = {0};
-        if (fgets(dev_path, sizeof(dev_path), f) == nullptr) {
-            pclose(f);
-            return;
-        }
-        pclose(f);
-
-        path_ = dev_path;
-        // remove trailing newline
-        if (!path_.empty() && path_.back() == '\n') {
-            path_.pop_back();
-        }
-
-        int r = system(("losetup " + path_ + " " + file_path_).c_str());
-        if (r != 0) {
-            path_.clear();
-            return;
-        }
-    }
-
-    ~BlkDevice() {
-        if (!path_.empty()) {
-            // detach loop device
-            int r = system(("losetup -d " + path_).c_str());
-            if (r != 0) {
-                MESSAGE("Warning: failed to detach loop device " << path_);
-            }
-        }
-        if (!file_path_.empty()) {
-            int r = unlink(file_path_.c_str());
-            if (r != 0) {
-                MESSAGE("Warning: failed to unlink file " << file_path_);
-            }
-        }
-    }
-
-    BlkDevice(const BlkDevice &) = delete;
-    BlkDevice &operator=(const BlkDevice &) = delete;
-    BlkDevice(BlkDevice &&) = delete;
-    BlkDevice &operator=(BlkDevice &&) = delete;
-
-    const std::string &path() const { return path_; }
-
-private:
-    std::string file_path_;
-    std::string path_;
-};
-
-} // namespace
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
 TEST_CASE("test async_operations - test cmd_discard - basic") {
