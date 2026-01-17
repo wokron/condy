@@ -227,6 +227,12 @@ TEST_CASE("test async_operations - test accept - direct") {
             int r = connect(sockfd, (sockaddr *)&addr, sizeof(addr));
             REQUIRE(r == 0);
 
+            if (i == 2) {
+                char buf[32];
+                ssize_t n = read(sockfd, buf, sizeof(buf));
+                REQUIRE(n == 0); // EOF since no fd available
+            }
+
             close(sockfd);
         }
     };
@@ -248,10 +254,9 @@ TEST_CASE("test async_operations - test accept - direct") {
         REQUIRE(fd2 >= 0);
         REQUIRE(fd2 < 2);
 
-        // TODO: Where is the third connection?
         int fd3 = co_await condy::async_accept_direct(
             listen_fd, (sockaddr *)&addr, &addrlen, 0, CONDY_FILE_INDEX_ALLOC);
-        REQUIRE(fd3 < 0); // Should fail, no more fixed fds available
+        REQUIRE(fd3 == -ENFILE); // Should fail, no more fixed fds available
 
         int r = co_await condy::async_close(condy::fixed(fd1));
         REQUIRE(r == 0);
