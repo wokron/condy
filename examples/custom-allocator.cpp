@@ -1,3 +1,8 @@
+/**
+ * @file custom-allocator.cpp
+ * @brief Example using custom memory allocator for coroutines
+ */
+
 #include <condy.hpp>
 #include <iostream>
 #include <memory_resource>

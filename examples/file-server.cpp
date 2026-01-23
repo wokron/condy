@@ -1,3 +1,8 @@
+/**
+ * @file file-server.cpp
+ * @brief Simple HTTP file server using condy library
+ */
+
 #include "condy/buffers.hpp"
 #include <arpa/inet.h>
 #include <condy.hpp>
