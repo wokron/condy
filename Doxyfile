@@ -1029,6 +1029,7 @@ WARN_LOGFILE           =
 
 INPUT                  = ./include \
                          ./docs \
+                         ./examples \
                          README.md
 
 # This tag can be used to specify the character encoding of the source files
@@ -1275,7 +1276,7 @@ FORTRAN_COMMENT_AFTER  = 72
 # also VERBATIM_HEADERS is set to NO.
 # The default value is: NO.
 
-SOURCE_BROWSER         = NO
+SOURCE_BROWSER         = YES
 
 # Setting the INLINE_SOURCES tag to YES will include the body of functions,
 # multi-line macros, enums or list initialized variables directly into the

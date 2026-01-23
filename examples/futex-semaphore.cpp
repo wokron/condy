@@ -1,3 +1,8 @@
+/**
+ * @file futex-semaphore.cpp
+ * @brief Implementation of semaphore and mutex using futexes with Condy
+ */
+
 #include <atomic>
 #include <cassert>
 #include <condy.hpp>

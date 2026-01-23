@@ -1,3 +1,8 @@
+/**
+ * @file echo-server.cpp
+ * @brief Simple echo server using condy library
+ */
+
 #include <arpa/inet.h>
 #include <condy.hpp>
 #include <cstdint>
