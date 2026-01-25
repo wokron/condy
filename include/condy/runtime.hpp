@@ -178,7 +178,7 @@ public:
     void notify() { async_waiter_.notify(ring_); }
 
     void schedule(WorkInvoker *work) {
-        auto *runtime = Context::current().runtime();
+        auto *runtime = detail::Context::current().runtime();
         if (runtime == this) {
             local_queue_.push_back(work);
             return;
@@ -246,8 +246,8 @@ public:
             }
         }
 
-        Context::current().init(&ring_, this);
-        auto d2 = defer([]() { Context::current().reset(); });
+        detail::Context::current().init(&ring_, this);
+        auto d2 = defer([]() { detail::Context::current().reset(); });
 
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -414,7 +414,7 @@ private:
  * @note This function assumes that there is a current runtime. Calling this
  * function outside of a coroutine will lead to undefined behavior.
  */
-inline auto &current_runtime() { return *Context::current().runtime(); }
+inline auto &current_runtime() { return *detail::Context::current().runtime(); }
 
 /**
  * @brief Set the current cred id object
@@ -422,7 +422,7 @@ inline auto &current_runtime() { return *Context::current().runtime(); }
  * RingSettings::apply_personality().
  */
 inline void set_current_cred_id(uint16_t id) {
-    Context::current().set_cred_id(id);
+    detail::Context::current().set_cred_id(id);
 }
 
 } // namespace condy

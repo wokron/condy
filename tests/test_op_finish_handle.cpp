@@ -21,7 +21,7 @@ struct SetUnfinishedInvoker
 };
 
 void event_loop(size_t &unfinished) {
-    auto *ring = condy::Context::current().ring();
+    auto *ring = condy::detail::Context::current().ring();
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
@@ -46,7 +46,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
 
     context.init(&ring, &runtime);
 
@@ -80,7 +80,7 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     condy::OpFinishHandle handle1, handle2;
@@ -110,7 +110,7 @@ TEST_CASE("test op_finish_handle - cancel op") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     condy::OpFinishHandle handle1, handle2;

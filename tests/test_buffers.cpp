@@ -90,8 +90,8 @@ TEST_CASE("test buffers - provided buffer queue usage") {
     io_uring_params params = {};
     ring.init(8, &params);
 
-    condy::Context::current().init(&ring, &runtime);
-    auto d = condy::defer([]() { condy::Context::current().reset(); });
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
 
     condy::ProvidedBufferQueue queue(4);
     REQUIRE(queue.capacity() == (1 << 2));
@@ -153,9 +153,9 @@ TEST_CASE("test buffers - provided buffer pool usage") {
     condy::Ring ring;
     io_uring_params params = {};
     ring.init(8, &params);
-    auto d = condy::defer([]() { condy::Context::current().reset(); });
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
 
-    condy::Context::current().init(&ring, &runtime);
+    condy::detail::Context::current().init(&ring, &runtime);
 
     condy::ProvidedBufferPool pool(4, 16);
     REQUIRE(pool.capacity() == (1 << 2));
