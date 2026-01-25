@@ -63,7 +63,7 @@ public:
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int flags) {
-        auto &context = Context::current();
+        auto &context = detail::Context::current();
         auto *ring = context.ring();
 
         context.runtime()->pend_work();
@@ -89,7 +89,7 @@ private:
         sqe->flags |= static_cast<uint8_t>(flags);
         io_uring_sqe_set_data(
             sqe, encode_work(&finish_handle_.get(), Handle::work_type));
-        sqe->personality = Context::current().cred_id();
+        sqe->personality = detail::Context::current().cred_id();
     }
 
 protected:
@@ -157,7 +157,7 @@ public:
     void register_operation(unsigned int flags) {
 #if IO_URING_CHECK_VERSION(2, 12) // < 2.12
         if constexpr (Flags & IOSQE_IO_DRAIN) {
-            auto *runtime = Context::current().runtime();
+            auto *runtime = detail::Context::current().runtime();
             // Ensure every operation before drain will complete
             runtime->notify();
         }
@@ -284,7 +284,7 @@ public:
     using Base::Base;
 
     void register_operation(unsigned int flags) {
-        auto *ring = Context::current().ring();
+        auto *ring = detail::Context::current().ring();
         ring->reserve_space(Base::awaiters_.size());
         for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
             Base::awaiters_[i].register_operation(flags | Flags);
@@ -453,7 +453,7 @@ public:
     using Base::Base;
 
     void register_operation(unsigned int flags) {
-        auto *ring = Context::current().ring();
+        auto *ring = detail::Context::current().ring();
         ring->reserve_space(sizeof...(Awaiter));
         foreach_register_operation_(flags);
     }

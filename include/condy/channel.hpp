@@ -169,7 +169,7 @@ private:
         }
         assert(pop_awaiters_.empty());
         push_awaiters_.push_back(finish_handle);
-        Context::current().runtime()->pend_work();
+        detail::Context::current().runtime()->pend_work();
         return false;
     }
 
@@ -186,7 +186,7 @@ private:
         }
         assert(push_awaiters_.empty());
         pop_awaiters_.push_back(finish_handle);
-        Context::current().runtime()->pend_work();
+        detail::Context::current().runtime()->pend_work();
         return std::nullopt;
     }
 
@@ -456,7 +456,7 @@ public:
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
-        auto *runtime = Context::current().runtime();
+        auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         bool ok = channel_.request_push_(&finish_handle_);
         if (ok) {
@@ -471,7 +471,7 @@ public:
     bool await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
-        finish_handle_.init(&channel_, Context::current().runtime());
+        finish_handle_.init(&channel_, detail::Context::current().runtime());
         bool ok = channel_.request_push_(&finish_handle_);
         bool do_suspend = !ok;
         return do_suspend;
@@ -506,7 +506,7 @@ public:
     void init_finish_handle() { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
-        auto *runtime = Context::current().runtime();
+        auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
         if (item.has_value()) {
@@ -522,7 +522,7 @@ public:
     bool await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
-        finish_handle_.init(&channel_, Context::current().runtime());
+        finish_handle_.init(&channel_, detail::Context::current().runtime());
         auto item = channel_.request_pop_(&finish_handle_);
         if (item.has_value()) {
             finish_handle_.set_result(std::move(item.value()));

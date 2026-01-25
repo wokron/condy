@@ -70,7 +70,7 @@ protected:
 template <typename T, typename Allocator>
 void TaskBase<T, Allocator>::wait_inner_(
     std::coroutine_handle<PromiseType> handle) {
-    if (Context::current().runtime() != nullptr) [[unlikely]] {
+    if (detail::Context::current().runtime() != nullptr) [[unlikely]] {
         throw std::logic_error("Sync wait inside runtime");
     }
     std::promise<void> prom;
@@ -169,7 +169,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
     template <typename PromiseType>
     bool
     await_suspend(std::coroutine_handle<PromiseType> caller_handle) noexcept {
-        Context::current().runtime()->pend_work();
+        detail::Context::current().runtime()->pend_work();
         assert(runtime_ != nullptr);
         caller_promise_ = &caller_handle.promise();
         return task_handle_.promise().register_task_await(this);
@@ -192,7 +192,7 @@ struct TaskAwaiter : public TaskAwaiterBase<T, Allocator> {
     using Base::Base;
 
     T await_resume() {
-        Context::current().runtime()->resume_work();
+        detail::Context::current().runtime()->resume_work();
         auto exception = std::move(Base::task_handle_.promise()).exception();
         if (exception) [[unlikely]] {
             Base::task_handle_.destroy();
@@ -210,7 +210,7 @@ struct TaskAwaiter<void, Allocator> : public TaskAwaiterBase<void, Allocator> {
     using Base::Base;
 
     void await_resume() {
-        Context::current().runtime()->resume_work();
+        detail::Context::current().runtime()->resume_work();
         auto exception = std::move(Base::task_handle_.promise()).exception();
         Base::task_handle_.destroy();
         if (exception) [[unlikely]] {
@@ -222,7 +222,7 @@ struct TaskAwaiter<void, Allocator> : public TaskAwaiterBase<void, Allocator> {
 template <typename T, typename Allocator>
 inline auto TaskBase<T, Allocator>::operator co_await() noexcept {
     return TaskAwaiter<T, Allocator>(std::exchange(handle_, nullptr),
-                                     Context::current().runtime());
+                                     detail::Context::current().runtime());
 }
 
 /**
@@ -256,7 +256,7 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
  */
 template <typename T, typename Allocator>
 inline Task<T, Allocator> co_spawn(Coro<T, Allocator> coro) {
-    auto *runtime = Context::current().runtime();
+    auto *runtime = detail::Context::current().runtime();
     if (runtime == nullptr) [[unlikely]] {
         throw std::logic_error("No runtime to spawn coroutine task");
     }

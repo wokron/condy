@@ -9,7 +9,7 @@
 namespace {
 
 void event_loop(size_t &unfinished) {
-    auto *ring = condy::Context::current().ring();
+    auto *ring = condy::detail::Context::current().ring();
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
@@ -34,7 +34,7 @@ TEST_CASE("test op_awaiter - basic routine") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     size_t unfinished = 1;
@@ -60,7 +60,7 @@ TEST_CASE("test op_awaiter - multiple ops") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     size_t unfinished = 1;
@@ -87,7 +87,7 @@ TEST_CASE("test op_awaiter - concurrent op") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     size_t unfinished = 1;
@@ -119,7 +119,7 @@ TEST_CASE("test op_awaiter - cancel op") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     size_t unfinished = 1;
@@ -155,7 +155,7 @@ TEST_CASE("test op_awaiter - cancel op") {
 namespace {
 
 void mock_multishot_event_loop(size_t &unfinished) {
-    auto *ring = condy::Context::current().ring();
+    auto *ring = condy::detail::Context::current().ring();
     while (unfinished > 0) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
@@ -179,7 +179,7 @@ TEST_CASE("test op_awaiter - multishot op") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     bool handle_called = false;
@@ -218,7 +218,7 @@ TEST_CASE("test op_awaiter - select buffer op") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
-    auto &context = condy::Context::current();
+    auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
     {

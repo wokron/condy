@@ -14,6 +14,8 @@ class Ring;
 class Runtime;
 class WorkInvoker;
 
+namespace detail {
+
 class Context : public ThreadLocalSingleton<Context> {
 public:
     void init(Ring *ring, Runtime *runtime) {
@@ -44,5 +46,7 @@ private:
     uint16_t next_bgid_ = 0;
     uint16_t cred_id_ = 0;
 };
+
+} // namespace detail
 
 } // namespace condy

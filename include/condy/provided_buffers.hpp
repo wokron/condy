@@ -47,7 +47,7 @@ public:
 
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
         : capacity_(std::bit_ceil(capacity)) {
-        auto &context = Context::current();
+        auto &context = detail::Context::current();
         auto bgid = context.next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
@@ -77,7 +77,7 @@ public:
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         munmap(br_, data_size);
         [[maybe_unused]] int r = io_uring_unregister_buf_ring(
-            Context::current().ring()->ring(), bgid_);
+            detail::Context::current().ring()->ring(), bgid_);
         assert(r == 0);
     }
 
@@ -251,7 +251,7 @@ public:
     BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                               unsigned int flags = 0)
         : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
-        auto &context = Context::current();
+        auto &context = detail::Context::current();
         auto bgid = context.next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
@@ -291,7 +291,7 @@ public:
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
         munmap(br_, data_size);
         [[maybe_unused]] int r = io_uring_unregister_buf_ring(
-            Context::current().ring()->ring(), bgid_);
+            detail::Context::current().ring()->ring(), bgid_);
         assert(r == 0);
     }
 

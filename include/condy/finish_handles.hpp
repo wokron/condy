@@ -25,7 +25,7 @@
 // Cancel method for finish handles
 #define DEFINE_CANCEL_METHOD_()                                                \
     void cancel() {                                                            \
-        auto *ring = Context::current().ring();                                \
+        auto *ring = detail::Context::current().ring();                        \
         io_uring_sqe *sqe = ring->get_sqe();                                   \
         io_uring_prep_cancel(sqe, encode_work(this, work_type), 0);            \
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));    \
