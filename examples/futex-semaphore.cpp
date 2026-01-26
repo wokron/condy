@@ -14,6 +14,16 @@
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 
+long futex_wait(void *uaddr, unsigned long val, unsigned long mask,
+                unsigned int flags, const struct timespec *timeout,
+                int clockid) {
+    return syscall(SYS_futex_wait, uaddr, val, mask, flags, timeout, clockid);
+}
+
+long futex_wake(void *uaddr, unsigned long mask, int nr, unsigned int flags) {
+    return syscall(SYS_futex_wake, uaddr, mask, nr, flags);
+}
+
 class FutexSemaphore {
 public:
     FutexSemaphore(uint32_t initial_count = 0) : count(initial_count) {}
@@ -24,7 +34,7 @@ public:
     FutexSemaphore &operator=(FutexSemaphore &&) = delete;
 
 public:
-    condy::Coro<void> acquire() {
+    condy::Coro<void> async_acquire() {
         uint32_t c;
         while (true) {
             size_t retries = 0;
@@ -43,10 +53,35 @@ public:
         }
     }
 
-    condy::Coro<void> release(uint32_t n = 1) {
+    void acquire() {
+        uint32_t c;
+        while (true) {
+            size_t retries = 0;
+            while (retries++ < MAX_RETRIES) {
+                c = count.load(std::memory_order_relaxed);
+                if (c > 0 && count.compare_exchange_weak(
+                                 c, c - 1, std::memory_order_acquire,
+                                 std::memory_order_relaxed)) {
+                    return;
+                }
+            }
+            futex_wait(raw_count_ptr_(), c, FUTEX_BITSET_MATCH_ANY,
+                       FUTEX2_SIZE_U32, nullptr, 0);
+        }
+    }
+
+    condy::Coro<void> async_release(uint32_t n = 1) {
         count.fetch_add(n, std::memory_order_release);
         [[maybe_unused]] int r = co_await condy::async_futex_wake(
             raw_count_ptr_(), n, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        assert(r >= 0);
+    }
+
+    void release(uint32_t n = 1) {
+        count.fetch_add(n, std::memory_order_release);
+        [[maybe_unused]] long r =
+            futex_wake(raw_count_ptr_(), FUTEX_BITSET_MATCH_ANY,
+                       static_cast<int>(n), FUTEX2_SIZE_U32);
         assert(r >= 0);
     }
 
@@ -69,9 +104,13 @@ public:
     FutexMutex &operator=(FutexMutex &&) = delete;
 
 public:
-    auto lock() { return sem.acquire(); }
+    auto async_lock() { return sem.async_acquire(); }
 
-    auto unlock() { return sem.release(); }
+    auto async_unlock() { return sem.async_release(); }
+
+    void lock() { sem.acquire(); }
+
+    void unlock() { sem.release(); }
 
 private:
     FutexSemaphore sem{1};
@@ -85,30 +124,29 @@ struct State {
     FutexSemaphore empty, full;
 };
 
-condy::Coro<void> producer(State &share, [[maybe_unused]] int id,
-                           size_t produce_count) {
+void producer(State &share, [[maybe_unused]] int id, size_t produce_count) {
     for (size_t i = 0; i < produce_count; ++i) {
-        co_await share.empty.acquire();
+        share.empty.acquire();
         {
-            co_await share.queue_mutex.lock();
+            share.queue_mutex.lock();
             share.queue.push(static_cast<int>(i));
-            co_await share.queue_mutex.unlock();
+            share.queue_mutex.unlock();
         }
-        co_await share.full.release();
+        share.full.release();
     }
 }
 
-condy::Coro<void> consumer(State &share, int id, size_t consume_count) {
+condy::Coro<void> async_consumer(State &share, int id, size_t consume_count) {
     int item;
     for (size_t i = 0; i < consume_count; ++i) {
-        co_await share.full.acquire();
+        co_await share.full.async_acquire();
         {
-            co_await share.queue_mutex.lock();
+            co_await share.queue_mutex.async_lock();
             item = share.queue.front();
             share.queue.pop();
-            co_await share.queue_mutex.unlock();
+            co_await share.queue_mutex.async_unlock();
         }
-        co_await share.empty.release();
+        co_await share.empty.async_release();
 
         std::printf("Consumer %d consumed item %d\n", id, item);
     }
@@ -162,27 +200,27 @@ int main(int argc, char *argv[]) noexcept(false) {
 
     condy::Runtime rt1, rt2;
     State share(queue_size);
-    std::thread producer_thread([&]() {
-        for (size_t i = 0; i < num_producers; ++i) {
-            condy::co_spawn(
-                rt1, producer(share, static_cast<int>(i), items_per_producer))
-                .detach();
-        }
-        rt1.allow_exit();
-        rt1.run();
-    });
+
+    std::vector<std::thread> producers;
+    producers.reserve(num_producers);
+    for (size_t i = 0; i < num_producers; ++i) {
+        producers.emplace_back(producer, std::ref(share), static_cast<int>(i),
+                               items_per_producer);
+    }
 
     std::thread consumer_thread([&]() {
         for (size_t i = 0; i < num_consumers; ++i) {
-            condy::co_spawn(
-                rt2, consumer(share, static_cast<int>(i), items_per_consumer))
+            condy::co_spawn(rt2, async_consumer(share, static_cast<int>(i),
+                                                items_per_consumer))
                 .detach();
         }
         rt2.allow_exit();
         rt2.run();
     });
 
-    producer_thread.join();
+    for (auto &producer_thread : producers) {
+        producer_thread.join();
+    }
     consumer_thread.join();
 }
 
