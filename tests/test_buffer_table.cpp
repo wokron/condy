@@ -9,7 +9,8 @@ TEST_CASE("test buffer_table - init/destroy") {
     auto func = []() -> condy::Coro<void> {
         char buf[32];
         iovec vec{.iov_base = buf, .iov_len = sizeof(buf)};
-        auto &buffer_table = condy::Context::current().ring()->buffer_table();
+        auto &buffer_table =
+            condy::detail::Context::current().ring()->buffer_table();
 
         REQUIRE(buffer_table.update(0, &vec, 1) < 0);
 
@@ -28,7 +29,8 @@ TEST_CASE("test buffer_table - init/destroy") {
 
 TEST_CASE("test buffer_table - register/unregister buffer") {
     auto func = []() -> condy::Coro<void> {
-        auto &buffer_table = condy::Context::current().ring()->buffer_table();
+        auto &buffer_table =
+            condy::detail::Context::current().ring()->buffer_table();
         buffer_table.init(8);
 
         char buffer1[16];
@@ -54,7 +56,8 @@ TEST_CASE("test buffer_table - register/unregister buffer") {
 
 TEST_CASE("test buffer_table - use registered buffer") {
     auto func = []() -> condy::Coro<void> {
-        auto &buffer_table = condy::Context::current().ring()->buffer_table();
+        auto &buffer_table =
+            condy::detail::Context::current().ring()->buffer_table();
         buffer_table.init(8);
 
         int pipes[2];
