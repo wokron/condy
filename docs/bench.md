@@ -85,6 +85,6 @@ As shown in the figure, as the number of coroutines increases, the total time fo
 
 By repeatedly switching coroutines and measuring the total time taken, we compared the efficiency of Condy and Asio in coroutine switching.
 
-![](post_number_of_messages.png)
+![](post_switch_times.png)
 
 As shown in the figure, as the number of switches increases, the total time for both Condy and Asio increases linearly. In terms of execution time, Condy achieves a **15x** performance improvement over Asio.
