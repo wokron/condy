@@ -322,6 +322,11 @@ private:
             // No-op
             assert(cqe->res != -EINVAL); // If EINVAL, something is wrong
         } else if (type == WorkType::Notify) {
+            if (cqe->res == -EOPNOTSUPP) {
+                // Notification not supported, ignore. This may happen if we use
+                // eventfd for notification and iopoll is enabled.
+                return;
+            }
             std::lock_guard<std::mutex> lock(mutex_);
             flush_global_queue_();
         } else if (type == WorkType::SendFd) {

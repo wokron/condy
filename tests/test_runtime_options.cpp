@@ -4,6 +4,7 @@
 #include "condy/sync_wait.hpp"
 #include "condy/task.hpp"
 #include <doctest/doctest.h>
+#include <limits>
 
 TEST_CASE("test runtime_options - event_interval") {
     condy::RuntimeOptions options;
@@ -28,7 +29,7 @@ TEST_CASE("test runtime_options - event_interval") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_iopoll") {
@@ -56,6 +57,8 @@ TEST_CASE("test runtime_options - enable_iopoll") {
 #else
     options.enable_iopoll(/*hybrid=*/false);
 #endif
+    // Disable periodic event peeking to exposure hang caused by eventfd+iopoll
+    options.event_interval(std::numeric_limits<size_t>::max());
     condy::Runtime runtime(options);
 
     alignas(4096) char buffer[4096];
@@ -66,7 +69,7 @@ TEST_CASE("test runtime_options - enable_iopoll") {
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_sqpoll") {
@@ -92,7 +95,7 @@ TEST_CASE("test runtime_options - enable_sqpoll") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_defer_taskrun") {
@@ -118,7 +121,7 @@ TEST_CASE("test runtime_options - enable_defer_taskrun") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_attach_wq") {
@@ -178,7 +181,7 @@ TEST_CASE("test runtime_options - enable_coop_taskrun") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
@@ -204,7 +207,7 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_no_mmap") {
@@ -235,5 +238,5 @@ TEST_CASE("test runtime_options - enable_no_mmap") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
