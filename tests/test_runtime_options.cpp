@@ -4,6 +4,7 @@
 #include "condy/sync_wait.hpp"
 #include "condy/task.hpp"
 #include <doctest/doctest.h>
+#include <limits>
 
 TEST_CASE("test runtime_options - event_interval") {
     condy::RuntimeOptions options;
@@ -56,6 +57,8 @@ TEST_CASE("test runtime_options - enable_iopoll") {
 #else
     options.enable_iopoll(/*hybrid=*/false);
 #endif
+    // Disable periodic event peeking to exposure hang caused by eventfd+iopoll
+    options.event_interval(std::numeric_limits<size_t>::max());
     condy::Runtime runtime(options);
 
     alignas(4096) char buffer[4096];
