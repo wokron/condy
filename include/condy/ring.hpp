@@ -175,8 +175,7 @@ private:
 /**
  * @brief Settings manager for io_uring.
  * @details This class provides an interface to manage various runtime settings
- * for an io_uring instance, including personalities, restrictions, and other
- * features.
+ * for an io_uring instance, including NAPI, clock, and other features.
  */
 class RingSettings {
 public:
