@@ -7,45 +7,6 @@
 #include <doctest/doctest.h>
 #include <fcntl.h>
 
-TEST_CASE("test ring_settings - restrictions") {
-    // Ring fd will be registered by default, disable it
-    condy::Runtime runtime(condy::RuntimeOptions().disable_register_ring_fd());
-    auto &settings = runtime.settings();
-    io_uring_restriction res[2] = {};
-    res[0].opcode = IORING_RESTRICTION_SQE_OP;
-    res[0].sqe_op = IORING_OP_NOP;
-    res[1].opcode = IORING_RESTRICTION_SQE_OP;
-    res[1].sqe_op = IORING_OP_WRITE;
-    REQUIRE(settings.set_restrictions(res, 2) == 0);
-
-    // Restrictions cannot be changed once set
-    io_uring_restriction res2 = {};
-    res2.opcode = IORING_RESTRICTION_SQE_OP;
-    res2.sqe_op = IORING_OP_READ;
-    REQUIRE(settings.set_restrictions(&res2, 1) == -EBUSY);
-
-    int pipefd[2];
-    REQUIRE(pipe(pipefd) == 0);
-
-    auto func = [&]() -> condy::Coro<void> {
-        int r;
-
-        r = co_await condy::async_nop();
-        REQUIRE(r == 0);
-
-        std::string msg = "Hello, world!";
-        r = co_await condy::async_write(pipefd[1], condy::buffer(msg), 0);
-        REQUIRE(r == msg.size());
-
-        // This should be rejected by the restrictions
-        char buffer[32];
-        r = co_await condy::async_read(pipefd[0], condy::buffer(buffer), 0);
-        REQUIRE(r == -EACCES);
-    };
-
-    condy::sync_wait(runtime, func());
-}
-
 TEST_CASE("test ring_settings - iowq_aff") {
     condy::Runtime runtime;
     auto &settings = runtime.settings();

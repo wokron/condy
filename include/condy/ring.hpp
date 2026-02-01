@@ -196,16 +196,6 @@ public:
 
 public:
     /**
-     * @brief Set restrictions for the io_uring instance.
-     * @details See io_uring_register_restrictions for more details.
-     * @param res  Pointer to an array of restrictions.
-     * @param nr_res Number of restrictions in the array.
-     */
-    int set_restrictions(io_uring_restriction *res, unsigned int nr_res) {
-        return io_uring_register_restrictions(&ring_, res, nr_res);
-    }
-
-    /**
      * @brief Apply I/O worker queue affinity settings.
      * @details See io_uring_register_iowq_aff for more details.
      * @param cpusz Number of CPUs in the affinity mask.
