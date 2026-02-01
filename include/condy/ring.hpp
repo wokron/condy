@@ -196,19 +196,6 @@ public:
 
 public:
     /**
-     * @brief Apply a personality to the io_uring instance.
-     * @details See io_uring_register_personality for more details.
-     */
-    int apply_personality() { return io_uring_register_personality(&ring_); }
-    /**
-     * @brief Remove a personality from the io_uring instance.
-     * @param id The ID of the personality to remove.
-     */
-    int remove_personality(int id) {
-        return io_uring_unregister_personality(&ring_, id);
-    }
-
-    /**
      * @brief Set restrictions for the io_uring instance.
      * @details See io_uring_register_restrictions for more details.
      * @param res  Pointer to an array of restrictions.

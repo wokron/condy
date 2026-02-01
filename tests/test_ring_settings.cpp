@@ -7,63 +7,6 @@
 #include <doctest/doctest.h>
 #include <fcntl.h>
 
-#define USE_UID 1234
-
-TEST_CASE("test ring_settings - personality") {
-    int r;
-    condy::Runtime runtime;
-    auto &settings = runtime.settings();
-    r = settings.apply_personality();
-    REQUIRE(r > 0);
-    int cred_id = r;
-
-    // Apply twice is ok
-    r = settings.apply_personality();
-    REQUIRE(r > 0);
-    REQUIRE(r != cred_id);
-    r = settings.remove_personality(r);
-    REQUIRE(r == 0);
-
-    char name[32] = "XXXXXX";
-    r = mkstemp(name);
-    REQUIRE(r >= 0);
-    close(r);
-    auto d = condy::defer([&]() { unlink(name); });
-
-    // Make temp file only accessible by current user
-    r = chmod(name, S_IRUSR | S_IWUSR);
-    REQUIRE(r == 0);
-
-    auto func = [&]() -> condy::Coro<void> {
-        // We can open the file as the original user
-        r = co_await condy::async_open(name, O_RDONLY, 0);
-        REQUIRE(r >= 0);
-        co_await condy::async_close(r);
-
-        uid_t orig_euid = geteuid();
-        REQUIRE(orig_euid != USE_UID);
-        if (seteuid(USE_UID) < 0) {
-            MESSAGE("Can't switch to UID " << USE_UID << ", skipping");
-            co_return;
-        }
-        auto d = condy::defer([&]() { REQUIRE(seteuid(orig_euid) == 0); });
-
-        // Now we should be denied to open the file
-        r = co_await condy::async_open(name, O_RDONLY, 0);
-        REQUIRE(r == -EACCES);
-
-        // We use the original user's credentials to open the file
-        condy::set_current_cred_id(cred_id);
-        r = co_await condy::async_open(name, O_RDONLY, 0);
-        REQUIRE(r >= 0);
-        co_await condy::async_close(r);
-    };
-
-    condy::sync_wait(runtime, func());
-
-    REQUIRE(settings.remove_personality(cred_id) == 0);
-}
-
 TEST_CASE("test ring_settings - restrictions") {
     // Ring fd will be registered by default, disable it
     condy::Runtime runtime(condy::RuntimeOptions().disable_register_ring_fd());
