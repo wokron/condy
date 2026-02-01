@@ -175,8 +175,7 @@ private:
 /**
  * @brief Settings manager for io_uring.
  * @details This class provides an interface to manage various runtime settings
- * for an io_uring instance, including personalities, restrictions, and other
- * features.
+ * for an io_uring instance, including NAPI, clock, and other features.
  */
 class RingSettings {
 public:
@@ -195,29 +194,6 @@ public:
     RingSettings &operator=(RingSettings &&) = delete;
 
 public:
-    /**
-     * @brief Apply a personality to the io_uring instance.
-     * @details See io_uring_register_personality for more details.
-     */
-    int apply_personality() { return io_uring_register_personality(&ring_); }
-    /**
-     * @brief Remove a personality from the io_uring instance.
-     * @param id The ID of the personality to remove.
-     */
-    int remove_personality(int id) {
-        return io_uring_unregister_personality(&ring_, id);
-    }
-
-    /**
-     * @brief Set restrictions for the io_uring instance.
-     * @details See io_uring_register_restrictions for more details.
-     * @param res  Pointer to an array of restrictions.
-     * @param nr_res Number of restrictions in the array.
-     */
-    int set_restrictions(io_uring_restriction *res, unsigned int nr_res) {
-        return io_uring_register_restrictions(&ring_, res, nr_res);
-    }
-
     /**
      * @brief Apply I/O worker queue affinity settings.
      * @details See io_uring_register_iowq_aff for more details.

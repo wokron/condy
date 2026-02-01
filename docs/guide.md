@@ -789,7 +789,7 @@ condy::Runtime runtime(options);
 
 After creating a `condy::Runtime` object, you may need to adjust some settings dynamically. Condy associates each `condy::Runtime` with a `condy::RingSettings` object, accessible via `condy::Runtime::settings()`.
 
-The `condy::RingSettings` object wraps various io_uring configuration options, providing features such as Personality, Restrictions, NAPI, Clock, and more. For details, see the API documentation and liburing documentation.
+The `condy::RingSettings` object wraps various io_uring configuration options, providing features such as NAPI, Clock, and more. For details, see the API documentation and liburing documentation.
 
 ## Others
 
