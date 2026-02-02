@@ -73,7 +73,10 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 cat > "$TEMP_DIR/init.sh" <<EOF
 #!/bin/sh
+mkdir -p /mnt/ssd
+mount -t ext4 /dev/nvme0n1 /mnt/ssd
 $COMMAND
+umount /mnt/ssd
 EOF
 chmod +x "$TEMP_DIR/init.sh"
 
@@ -81,12 +84,20 @@ echo "Building initrd image..."
 bash "$LIGHT_INITRD_SCRIPT" -o "$TEMP_DIR/$INITRD_OUTPUT" -s "/root/init.sh" $FILES "$TEMP_DIR/init.sh"
 echo "Initrd image created at $TEMP_DIR/$INITRD_OUTPUT"
 
+# Simulate NVMe SSD with a tmpfs-backed disk image
+SSD_IMG="/dev/shm/vm-ssd.img.$$"
+truncate -s 1G "$SSD_IMG"
+mkfs.ext4 -q "$SSD_IMG"
+trap "rm -f '$SSD_IMG'; rm -rf $TEMP_DIR" EXIT
+SSD_DRIVE="-drive file=$SSD_IMG,if=none,id=ssd0,format=raw,cache=none,aio=io_uring"
+SSD_DEVICE="-device nvme,drive=ssd0,serial=ssd0"
+
 KVM_FLAG=""
 if [ "$KVM_ENABLED" = true ]; then
     KVM_FLAG="-enable-kvm"
 fi
 
-KERNEL_ARGS="console=ttyS0"
+KERNEL_ARGS="console=ttyS0 nvme.poll_queues=2"
 if [ "$QUIET_MODE" = true ]; then
     KERNEL_ARGS="$KERNEL_ARGS quiet"
 fi
@@ -94,8 +105,11 @@ fi
 # Run the VM,
 qemu-system-x86_64 \
     $KVM_FLAG \
+    -smp 4 \
     -m 512M \
     -kernel "$KERNEL_IMAGE" \
     -initrd "$TEMP_DIR/$INITRD_OUTPUT" \
     -append "$KERNEL_ARGS" \
-    -nographic
+    -nographic \
+    $SSD_DRIVE \
+    $SSD_DEVICE

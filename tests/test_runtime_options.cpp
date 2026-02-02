@@ -33,7 +33,15 @@ TEST_CASE("test runtime_options - event_interval") {
 }
 
 TEST_CASE("test runtime_options - enable_iopoll") {
-    char name[32] = "XXXXXX";
+    const char *ssd_base_dir = std::getenv("CONDY_TEST_SSD_BASE_DIR");
+    if (ssd_base_dir == nullptr) {
+        MESSAGE("CONDY_TEST_SSD_BASE_DIR not set, skipping");
+        return;
+    }
+    std::string template_path = std::string(ssd_base_dir) + "/XXXXXX";
+    char name[32];
+    strncpy(name, template_path.c_str(), sizeof(name));
+    name[sizeof(name) - 1] = '\0';
     int fd = mkstemp(name);
     REQUIRE(fd >= 0);
 
