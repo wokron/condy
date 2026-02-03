@@ -56,6 +56,12 @@ cd "$SOURCE_DIR"
 make defconfig
 # Configure kvm guest support
 make kvm_guest.config
+# Configure NVMe support
+./scripts/config --enable CONFIG_NVME_CORE
+./scripts/config --enable CONFIG_BLK_DEV_NVME
+./scripts/config --enable CONFIG_NVME_MULTIPATH
+# Use olddefconfig to set new options to default values
+make olddefconfig
 
 # Build the kernel
 make -j"$(nproc)" bzImage
