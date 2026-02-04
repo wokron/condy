@@ -1,3 +1,5 @@
+option(TESTS_STATIC_LINK "Use static linking for tests" OFF)
+
 file(GLOB SRC CONFIGURE_DEPENDS "*.cpp")
 add_executable(tests ${SRC})
 target_link_libraries(tests PRIVATE doctest condy uring)

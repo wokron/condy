@@ -60,6 +60,19 @@ make kvm_guest.config
 ./scripts/config --enable CONFIG_NVME_CORE
 ./scripts/config --enable CONFIG_BLK_DEV_NVME
 ./scripts/config --enable CONFIG_NVME_MULTIPATH
+# Configure eBPF support
+./scripts/config --enable CONFIG_BPF
+./scripts/config --enable CONFIG_BPF_SYSCALL
+./scripts/config --enable CONFIG_HAVE_EBPF_JIT
+./scripts/config --enable CONFIG_BPF_JIT
+./scripts/config --enable CONFIG_DEBUG_INFO_BTF
+./scripts/config --enable CONFIG_DEBUG_INFO_DWARF5
+./scripts/config --enable CONFIG_BPF_EVENTS
+./scripts/config --enable CONFIG_BPF_UNPRIV_DEFAULT_OFF
+./scripts/config --enable CONFIG_USERFAULTFD
+./scripts/config --enable CONFIG_TRACEPOINTS
+./scripts/config --enable CONFIG_PERF_EVENTS
+./scripts/config --enable CONFIG_FTRACE_SYSCALLS
 # Use olddefconfig to set new options to default values
 make olddefconfig
 
