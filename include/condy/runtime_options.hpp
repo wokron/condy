@@ -74,6 +74,8 @@ public:
 
     /**
      * @brief See IORING_SETUP_DEFER_TASKRUN
+     * @param taskrun_flag See IORING_SETUP_TASKRUN_FLAG
+     * @return Self&
      */
     Self &enable_defer_taskrun(bool taskrun_flag = false) {
         if (enable_sqpoll_ || enable_coop_taskrun_) {
