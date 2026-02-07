@@ -108,7 +108,7 @@ TEST_CASE("test runtime_options - enable_sqpoll") {
 
 TEST_CASE("test runtime_options - enable_defer_taskrun") {
     condy::RuntimeOptions options;
-    options.enable_defer_taskrun().sq_size(8).cq_size(16);
+    options.enable_defer_taskrun(true).sq_size(8).cq_size(16);
     condy::Runtime runtime(options);
 
     auto task_func = [&]() -> condy::Coro<void> {

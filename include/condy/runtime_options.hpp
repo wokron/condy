@@ -75,12 +75,13 @@ public:
     /**
      * @brief See IORING_SETUP_DEFER_TASKRUN
      */
-    Self &enable_defer_taskrun() {
+    Self &enable_defer_taskrun(bool taskrun_flag = false) {
         if (enable_sqpoll_ || enable_coop_taskrun_) {
             throw std::logic_error(
                 "defer_taskrun cannot be enabled with sqpoll or coop_taskrun");
         }
         enable_defer_taskrun_ = true;
+        enable_taskrun_flag_ = taskrun_flag;
         return *this;
     }
 
@@ -124,7 +125,7 @@ public:
                 "coop_taskrun cannot be enabled with sqpoll or defer_taskrun");
         }
         enable_coop_taskrun_ = true;
-        enable_coop_taskrun_flag_ = taskrun_flag;
+        enable_taskrun_flag_ = taskrun_flag;
         return *this;
     }
 
@@ -169,7 +170,7 @@ protected:
     size_t cq_size_ = 0; // 0 means default
     Runtime *attach_wq_target_ = nullptr;
     bool enable_coop_taskrun_ = false;
-    bool enable_coop_taskrun_flag_ = false;
+    bool enable_taskrun_flag_ = false;
     bool enable_sqe128_ = false;
     bool enable_cqe32_ = false;
     bool enable_no_mmap_ = false;

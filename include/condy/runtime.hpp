@@ -119,11 +119,14 @@ public:
 
         if (options.enable_defer_taskrun_) {
             params.flags |= IORING_SETUP_DEFER_TASKRUN;
+            if (options.enable_taskrun_flag_) {
+                params.flags |= IORING_SETUP_TASKRUN_FLAG;
+            }
         }
 
         if (options.enable_coop_taskrun_) {
             params.flags |= IORING_SETUP_COOP_TASKRUN;
-            if (options.enable_coop_taskrun_flag_) {
+            if (options.enable_taskrun_flag_) {
                 params.flags |= IORING_SETUP_TASKRUN_FLAG;
             }
         }
