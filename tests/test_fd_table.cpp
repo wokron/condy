@@ -106,9 +106,11 @@ TEST_CASE("test fd_table - send fd - basic") {
                                                         i, 0);
             REQUIRE(r == 0);
         }
+        co_await chan.pop();
     };
 
     auto func2 = [&]() -> condy::Coro<void> {
+        co_await chan.push(std::monostate{});
         co_await chan.push(std::monostate{});
         co_return;
     };
@@ -153,9 +155,11 @@ TEST_CASE("test fd_table - send fd - auto allocate") {
                 runtime2.fd_table(), i, CONDY_FILE_INDEX_ALLOC, 0);
             REQUIRE(r == i);
         }
+        co_await chan.pop();
     };
 
     auto func2 = [&]() -> condy::Coro<void> {
+        co_await chan.push(std::monostate{});
         co_await chan.push(std::monostate{});
         co_return;
     };
