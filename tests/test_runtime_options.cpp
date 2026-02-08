@@ -168,7 +168,7 @@ TEST_CASE("test runtime_options - enable_attach_wq") {
 
 TEST_CASE("test runtime_options - enable_coop_taskrun") {
     condy::RuntimeOptions options;
-    options.enable_coop_taskrun(true).sq_size(8).cq_size(16);
+    options.enable_coop_taskrun().sq_size(8).cq_size(16);
     condy::Runtime runtime(options);
 
     auto task_func = [&]() -> condy::Coro<void> {
