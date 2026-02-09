@@ -73,7 +73,7 @@ public:
     }
 
     /**
-     * @brief See IORING_SETUP_DEFER_TASKRUN
+     * @brief See IORING_SETUP_DEFER_TASKRUN and IORING_SETUP_TASKRUN_FLAG
      * @return Self&
      */
     Self &enable_defer_taskrun() {
@@ -115,7 +115,7 @@ public:
     }
 
     /**
-     * @brief See IORING_SETUP_COOP_TASKRUN
+     * @brief See IORING_SETUP_COOP_TASKRUN and IORING_SETUP_TASKRUN_FLAG
      * @return Self&
      */
     Self &enable_coop_taskrun() {
@@ -124,6 +124,18 @@ public:
                 "coop_taskrun cannot be enabled with sqpoll or defer_taskrun");
         }
         enable_coop_taskrun_ = true;
+        return *this;
+    }
+
+    /**
+     * @brief See IORING_SETUP_COOP_TASKRUN
+     * @param taskrun_flag See IORING_SETUP_TASKRUN_FLAG
+     * @return Self&
+     * @deprecated Use enable_coop_taskrun() without parameters instead
+     */
+    [[deprecated("Use enable_coop_taskrun() without parameters instead")]]
+    Self &enable_coop_taskrun([[maybe_unused]] bool taskrun_flag) {
+        enable_coop_taskrun();
         return *this;
     }
 
