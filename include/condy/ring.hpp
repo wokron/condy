@@ -398,7 +398,14 @@ public:
     io_uring_sqe *get_sqe() { return get_sqe_<io_uring_get_sqe>(); }
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-    io_uring_sqe *get_sqe128() { return get_sqe_<io_uring_get_sqe128>(); }
+    io_uring_sqe *get_sqe128() {
+        if (ring_.flags & (IORING_SETUP_SQE128 | IORING_SETUP_SQE_MIXED))
+            [[likely]] {
+            return get_sqe_<io_uring_get_sqe128>();
+        } else {
+            panic_on("SQE128 is not enabled for this io_uring ring");
+        }
+    }
 #endif
 
 private:
