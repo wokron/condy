@@ -395,11 +395,26 @@ public:
 
     RingSettings &settings() { return settings_; }
 
-    io_uring_sqe *get_sqe() {
+    io_uring_sqe *get_sqe() { return get_sqe_<io_uring_get_sqe>(); }
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+    io_uring_sqe *get_sqe128() {
+        if (ring_.flags & (IORING_SETUP_SQE128 | IORING_SETUP_SQE_MIXED))
+            [[likely]] {
+            return get_sqe_<io_uring_get_sqe128>();
+        } else {
+            panic_on("SQE128 is not enabled for this io_uring ring");
+        }
+    }
+#endif
+
+private:
+    template <io_uring_sqe *(*get_sqe)(struct io_uring *)>
+    io_uring_sqe *get_sqe_() {
         [[maybe_unused]] int r;
         io_uring_sqe *sqe;
         do {
-            sqe = io_uring_get_sqe(&ring_);
+            sqe = get_sqe(&ring_);
             if (sqe) {
                 break;
             }
