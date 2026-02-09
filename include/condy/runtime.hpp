@@ -157,6 +157,12 @@ public:
         }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 14) // >= 2.14
+        if (options.enable_sq_rewind_) {
+            params.flags |= IORING_SETUP_SQ_REWIND;
+        }
+#endif
+
         int r = ring_.init(ring_entries, &params, buf, buf_size);
         if (r < 0) {
             throw make_system_error("io_uring_queue_init_params", -r);
