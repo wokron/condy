@@ -145,8 +145,19 @@ TEST_CASE("test async_operations - test nop") {
 }
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-TEST_CASE("test async_operations - test nop128") {
+TEST_CASE("test async_operations - test nop128 - sqe 128") {
     condy::Runtime runtime(condy::RuntimeOptions().enable_sqe128());
+    auto func = [&]() -> condy::Coro<void> {
+        int r = co_await condy::async_nop128();
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(runtime, func());
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test nop128 - sqe mixed") {
+    condy::Runtime runtime(condy::RuntimeOptions().enable_sqe_mixed());
     auto func = [&]() -> condy::Coro<void> {
         int r = co_await condy::async_nop128();
         REQUIRE(r == 0);

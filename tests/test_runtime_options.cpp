@@ -241,7 +241,7 @@ TEST_CASE("test runtime_options - enable_sqe_mixed & enable_cqe_mixed") {
         }
     };
 
-    condy::sync_wait(func());
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test runtime_options - enable_no_mmap") {
