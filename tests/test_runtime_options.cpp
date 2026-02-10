@@ -201,6 +201,11 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
         for (int i = 0; i < 5; i++) {
             co_await condy::async_nop();
         }
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+        for (int i = 0; i < 5; i++) {
+            co_await condy::async_nop128();
+        }
+#endif
     };
 
     auto func = [&]() -> condy::Coro<void> {
@@ -227,6 +232,9 @@ TEST_CASE("test runtime_options - enable_sqe_mixed & enable_cqe_mixed") {
     auto task_func = [&]() -> condy::Coro<void> {
         for (int i = 0; i < 5; i++) {
             co_await condy::async_nop();
+        }
+        for (int i = 0; i < 5; i++) {
+            co_await condy::async_nop128();
         }
     };
 
