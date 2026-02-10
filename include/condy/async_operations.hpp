@@ -839,12 +839,12 @@ inline auto async_socket_direct(int domain, int type, int protocol,
  */
 template <FdLike Fd, typename CmdFunc>
 inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
-    auto prep_func = [cmd_func = std::forward<CmdFunc>(cmd_func)](
-                         io_uring_sqe *sqe, int cmd_op_inner, int fd_inner) {
-        io_uring_prep_uring_cmd(sqe, cmd_op_inner, fd_inner);
+    auto prep_func = [cmd_op, fd, cmd_func = std::forward<CmdFunc>(cmd_func)](
+                         io_uring_sqe *sqe) {
+        io_uring_prep_uring_cmd(sqe, cmd_op, fd);
         cmd_func(sqe);
     };
-    auto op = make_op_awaiter(std::move(prep_func), cmd_op, fd);
+    auto op = make_op_awaiter(std::move(prep_func));
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 #endif
