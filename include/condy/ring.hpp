@@ -354,7 +354,11 @@ public:
 
         io_uring_for_each_cqe(&ring_, head, cqe) {
             process_func(cqe);
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+            reaped += io_uring_cqe_nr(cqe);
+#else
             reaped++;
+#endif
         }
         io_uring_cq_advance(&ring_, reaped);
         return reaped;
@@ -368,7 +372,11 @@ public:
         if (io_uring_peek_cqe(&ring_, &cqe) == 0) {
             io_uring_for_each_cqe(&ring_, head, cqe) {
                 process_func(cqe);
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+                reaped += io_uring_cqe_nr(cqe);
+#else
                 reaped++;
+#endif
             }
             io_uring_cq_advance(&ring_, reaped);
         }
