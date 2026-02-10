@@ -218,6 +218,7 @@ TEST_CASE("test runtime_options - enable_sqe128 & enable_cqe32") {
     condy::sync_wait(runtime, func());
 }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 TEST_CASE("test runtime_options - enable_sqe_mixed & enable_cqe_mixed") {
     condy::RuntimeOptions options;
     options.enable_sqe_mixed().enable_cqe_mixed();
@@ -243,7 +244,9 @@ TEST_CASE("test runtime_options - enable_sqe_mixed & enable_cqe_mixed") {
 
     condy::sync_wait(runtime, func());
 }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 TEST_CASE("test runtime_options - enable_no_mmap") {
     void *data = mmap(nullptr, 4096l * 2, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
@@ -274,3 +277,4 @@ TEST_CASE("test runtime_options - enable_no_mmap") {
 
     condy::sync_wait(runtime, func());
 }
+#endif

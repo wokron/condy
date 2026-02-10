@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "condy/condy_uring.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -161,6 +162,7 @@ public:
         return *this;
     }
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
     /**
      * @brief See IORING_SETUP_SQE_MIXED
      */
@@ -171,7 +173,9 @@ public:
         enable_sqe_mixed_ = true;
         return *this;
     }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
     /**
      * @brief See IORING_SETUP_CQE_MIXED
      */
@@ -182,7 +186,9 @@ public:
         enable_cqe_mixed_ = true;
         return *this;
     }
+#endif
 
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
     /**
      * @brief See IORING_SETUP_NO_MMAP
      * @param buf Buffer pointer
@@ -194,6 +200,7 @@ public:
         no_mmap_buf_size_ = buf_size;
         return *this;
     }
+#endif
 
 protected:
     size_t event_interval_ = 61;
