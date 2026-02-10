@@ -19,6 +19,7 @@ These are fundamental asynchronous operations. Many of them are asynchronous ver
 - `condy::async_sendmsg()`
 - `condy::async_fsync()`
 - `condy::async_nop()`
+- `condy::async_nop128()`
 - `condy::async_timeout()`
 - `condy::async_accept()`
 - `condy::async_cancel_fd()`
@@ -58,6 +59,7 @@ These are fundamental asynchronous operations. Many of them are asynchronous ver
 - `condy::async_fsetxattr()`
 - `condy::async_socket()`
 - `condy::async_cmd_sock()`
+- `condy::async_cmd_getsockname()`
 - `condy::async_waitid()`
 - `condy::async_futex_wake()`
 - `condy::async_futex_wait()`
@@ -125,6 +127,7 @@ These asynchronous operations accept the index of a file registered with the ker
 - `condy::async_shutdown()`
 - `condy::async_sync_file_range()`
 - `condy::async_cmd_sock()`
+- `condy::async_cmd_getsockname()`
 - `condy::async_ftruncate()`
 - `condy::async_cmd_discard()`
 - `condy::async_bind()`
