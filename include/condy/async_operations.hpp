@@ -846,6 +846,19 @@ inline auto async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_cmd_getsockname
+ */
+template <FdLike Fd>
+inline auto async_cmd_getsockname(Fd fd, struct sockaddr *sockaddr,
+                                  socklen_t *sockaddr_len, int peer) {
+    auto op = make_op_awaiter(io_uring_prep_cmd_getsockname, fd, sockaddr,
+                              sockaddr_len, peer);
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 /**
  * @brief See io_uring_prep_waitid

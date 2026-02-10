@@ -273,7 +273,7 @@ TEST_CASE("test async_operations - test cmd_sock - basic") {
     REQUIRE(listen_fd >= 0);
 
     auto func = [&]() -> condy::Coro<void> {
-        int val;
+        int val = 1;
         int r = co_await condy::async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
                                                listen_fd, SOL_SOCKET,
                                                SO_REUSEADDR, &val, sizeof(val));
@@ -295,7 +295,7 @@ TEST_CASE("test async_operations - test cmd_sock - fixed fd") {
         int r = co_await condy::async_files_update(&listen_fd, 1, 0);
         REQUIRE(r == 1);
 
-        int val;
+        int val = 1;
         r = co_await condy::async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
                                            condy::fixed(0), SOL_SOCKET,
                                            SO_REUSEADDR, &val, sizeof(val));
@@ -303,6 +303,49 @@ TEST_CASE("test async_operations - test cmd_sock - fixed fd") {
     };
 
     condy::sync_wait(func());
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test cmd_getsockname - basic") {
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        struct sockaddr_in addr {};
+        socklen_t addrlen = sizeof(addr);
+        int r = co_await condy::async_cmd_getsockname(
+            listen_fd, (struct sockaddr *)&addr, &addrlen, 0);
+        REQUIRE(r == 0);
+        REQUIRE(addrlen == sizeof(addr));
+        REQUIRE(addr.sin_family == AF_INET);
+    };
+    condy::sync_wait(func());
+
+    close(listen_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test cmd_getsockname - fixed fd") {
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        REQUIRE(r == 1);
+
+        struct sockaddr_in addr {};
+        socklen_t addrlen = sizeof(addr);
+        r = co_await condy::async_cmd_getsockname(
+            condy::fixed(0), (struct sockaddr *)&addr, &addrlen, 0);
+        REQUIRE(r == 0);
+        REQUIRE(addrlen == sizeof(addr));
+        REQUIRE(addr.sin_family == AF_INET);
+    };
+    condy::sync_wait(func());
+
+    close(listen_fd);
 }
 #endif
 
