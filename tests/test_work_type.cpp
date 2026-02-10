@@ -26,7 +26,6 @@ TEST_CASE("test work_type - encode and decode") {
     test_type(condy::WorkType::Common);
     test_type(condy::WorkType::Ignore);
     test_type(condy::WorkType::Notify);
+    test_type(condy::WorkType::SendFd);
     test_type(condy::WorkType::Schedule);
-    test_type(condy::WorkType::MultiShot);
-    test_type(condy::WorkType::ZeroCopy);
 }

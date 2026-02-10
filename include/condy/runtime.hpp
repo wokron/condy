@@ -361,35 +361,15 @@ private:
                 tsan_acquire(data);
                 local_queue_.push_back(work);
             }
-        } else if (type == WorkType::MultiShot) {
-            auto *handle = static_cast<ExtendOpFinishHandle *>(data);
-            handle->set_result(cqe->res, cqe->flags);
-            if (cqe->flags & IORING_CQE_F_MORE) {
-                handle->invoke_extend(0); // res not used here
-            } else {
-                pending_works_--;
-                local_queue_.push_back(handle);
-            }
-        } else if (type == WorkType::ZeroCopy) {
-            auto *handle = static_cast<ExtendOpFinishHandle *>(data);
-            if (cqe->flags & IORING_CQE_F_MORE) {
-                handle->set_result(cqe->res, cqe->flags);
-                local_queue_.push_back(handle);
-            } else {
-                pending_works_--;
-                if (cqe->flags & IORING_CQE_F_NOTIF) {
-                    handle->invoke_extend(cqe->res);
-                } else {
-                    handle->set_result(cqe->res, cqe->flags);
-                    local_queue_.push_back(handle);
-                    handle->invoke_extend(0);
-                }
-            }
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandle *>(data);
-            handle->set_result(cqe->res, cqe->flags);
-            pending_works_--;
-            local_queue_.push_back(handle);
+            auto action = handle->handle_cqe(cqe);
+            if (action.op_finish) {
+                pending_works_--;
+            }
+            if (action.queue_work) {
+                local_queue_.push_back(handle);
+            }
         } else {
             assert(false && "Invalid work type");
         }

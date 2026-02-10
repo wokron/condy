@@ -100,7 +100,7 @@ private:
         prep_func_(sqe);
         sqe->flags |= static_cast<uint8_t>(flags);
         io_uring_sqe_set_data(
-            sqe, encode_work(&finish_handle_.get(), Handle::work_type));
+            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
     }
 
 protected:

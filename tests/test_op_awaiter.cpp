@@ -1,3 +1,4 @@
+#include "condy/finish_handles.hpp"
 #include "condy/provided_buffers.hpp"
 #include <condy/awaiter_operations.hpp>
 #include <condy/awaiters.hpp>
@@ -18,7 +19,7 @@ void event_loop(size_t &unfinished) {
                 return;
             }
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
-            handle_ptr->set_result(cqe->res, cqe->flags);
+            handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
     }
@@ -163,10 +164,13 @@ void mock_multishot_event_loop(size_t &unfinished) {
             if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::ExtendOpFinishHandle *>(data);
-            handle_ptr->set_result(42, 0);
-            handle_ptr->invoke_extend(0); // Multishot
-            handle_ptr->set_result(cqe->res, cqe->flags);
+            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            // Mock Multishot
+            io_uring_cqe mock_cqe = *cqe;
+            mock_cqe.res = 42;
+            mock_cqe.flags |= IORING_CQE_F_MORE;
+            handle_ptr->handle_cqe(&mock_cqe);
+            handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
     }

@@ -23,9 +23,8 @@ TEST_CASE("test ring - register and complete ops") {
     ring.init(8, &params);
 
     constexpr size_t num_ops = 4;
-    OpFinishHandle handles[num_ops];
+    std::vector<OpFinishHandle> handles(num_ops);
     for (size_t i = 0; i < num_ops; i++) {
-        handles[i].set_result(-1, 0);
         auto *sqe = ring.get_sqe();
         io_uring_prep_nop(sqe);
         io_uring_sqe_set_data(sqe, &handles[i]);
@@ -40,7 +39,7 @@ TEST_CASE("test ring - register and complete ops") {
             OpFinishHandle *handle =
                 reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->set_result(cqe->res, 0);
+            handle->handle_cqe(cqe);
             count++;
         });
     }
@@ -66,9 +65,8 @@ TEST_CASE("test ring - cancel ops") {
         .tv_nsec = 0,
     };
     constexpr size_t num_ops = 8;
-    OpFinishHandle handles[num_ops];
+    std::vector<OpFinishHandle> handles(num_ops);
     for (size_t i = 0; i < num_ops; i++) {
-        handles[i].set_result(-1, 0);
         auto *sqe = ring.get_sqe();
         if (i % 2 == 0) {
             io_uring_prep_nop(sqe);
@@ -101,7 +99,7 @@ TEST_CASE("test ring - cancel ops") {
             OpFinishHandle *handle =
                 reinterpret_cast<OpFinishHandle *>(io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->set_result(cqe->res, 0);
+            handle->handle_cqe(cqe);
             if (cqe->res == -ECANCELED) {
                 canceled_count++;
             }
