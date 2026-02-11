@@ -120,10 +120,10 @@ public:
         assert(this->invoker_ != nullptr);
         (*this->invoker_)();
         resumed_ = true;
-        if (notified_) {
-            free_func_(notify_res_);
-            delete this;
-        }
+        // Invocation of free_func_ should be delayed until the operation is
+        // finished since user may adjust the behavior of free_func_ based on
+        // the result of the operation.
+        maybe_free_();
     }
 
     OpFinishHandle::Action
@@ -136,6 +136,10 @@ public:
                 notify_(cqe->res);
                 return {.queue_work = false, .op_finish = true};
             } else {
+                // Only one cqe means the operation is finished without
+                // notification. This is rare but possible.
+                // https://github.com/axboe/liburing/issues/1462
+                notify_(0);
                 HandleBase::handle_cqe_impl(cqe);
                 return {.queue_work = true, .op_finish = true};
             }
@@ -143,13 +147,18 @@ public:
     }
 
 private:
-    void notify_(int32_t res) {
-        notify_res_ = res;
-        notified_ = true;
-        if (resumed_) {
+    void maybe_free_() {
+        if (resumed_ && notified_) {
             free_func_(notify_res_);
             delete this;
         }
+    }
+
+    void notify_(int32_t res) {
+        assert(res != -ENOTRECOVERABLE);
+        notify_res_ = res;
+        notified_ = true;
+        maybe_free_();
     }
 
     static void invoke_static_(void *data) {
