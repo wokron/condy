@@ -264,6 +264,7 @@ TEST_CASE("test async_operations - test send - zero copy") {
     auto func = [&]() -> condy::Coro<void> {
         size_t n = co_await condy::async_send_zc(
             sv[1], condy::buffer(msg), 0, 0, [&](auto) { called = true; });
+        REQUIRE(!called); // Callback should not be called
         REQUIRE(n == msg.size());
     };
     condy::sync_wait(func());
@@ -276,6 +277,22 @@ TEST_CASE("test async_operations - test send - zero copy") {
 
     close(sv[0]);
     close(sv[1]);
+}
+
+TEST_CASE("test async_operations - test send - zero copy failed") {
+    auto msg = generate_data(1024);
+    bool called = false;
+    auto func = [&]() -> condy::Coro<void> {
+        int r = co_await condy::async_send_zc(-1, condy::buffer(msg), 0, 0,
+                                              [&](auto r) {
+                                                  REQUIRE(r == 0);
+                                                  called = true;
+                                              });
+        REQUIRE(!called); // Callback should not be called
+        REQUIRE(r == -EBADF);
+    };
+    condy::sync_wait(func());
+    REQUIRE(called);
 }
 
 TEST_CASE("test async_operations - test send - zero copy fixed buffer") {
@@ -296,6 +313,7 @@ TEST_CASE("test async_operations - test send - zero copy fixed buffer") {
         size_t n = co_await condy::async_send_zc(
             sv[1], condy::fixed(0, condy::buffer(msg)), 0, 0,
             [&](auto) { called = true; });
+        REQUIRE(!called); // Callback should not be called
         REQUIRE(n == msg.size());
     };
     condy::sync_wait(func());
@@ -505,6 +523,7 @@ TEST_CASE("test async_operations - test sendto - zero copy") {
         size_t n = co_await condy::async_sendto_zc(
             sender_fd, condy::buffer(msg), 0, (sockaddr *)&recv_addr,
             sizeof(recv_addr), 0, [&](auto) { called = true; });
+        REQUIRE(!called); // Callback should not be called
         REQUIRE(n == msg.size());
     };
     condy::sync_wait(func());
@@ -550,6 +569,7 @@ TEST_CASE("test async_operations - test sendto - zero copy fixed buffer") {
             sender_fd, condy::fixed(0, condy::buffer(msg)), 0,
             (sockaddr *)&recv_addr, sizeof(recv_addr), 0,
             [&](auto) { called = true; });
+        REQUIRE(!called); // Callback should not be called
         REQUIRE(n == msg.size());
     };
     condy::sync_wait(func());
