@@ -45,7 +45,7 @@ private:
     Handle *handle_ptr_;
 };
 
-template <OpFinishHandleLike Handle, typename Func> class OpAwaiterBase {
+template <OpFinishHandleLike Handle, PrepFuncLike Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
@@ -91,7 +91,7 @@ protected:
     HandleBox<Handle> finish_handle_;
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler>
 class [[nodiscard]] OpAwaiter
     : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc> {
 public:
@@ -103,7 +103,8 @@ public:
                func) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename MultiShotFunc>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
+          typename MultiShotFunc>
 class [[nodiscard]] MultiShotOpAwaiter
     : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
                            PrepFunc> {
@@ -119,7 +120,7 @@ public:
                func) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
 class [[nodiscard]] ZeroCopyOpAwaiter
     : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
                            PrepFunc> {
