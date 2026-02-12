@@ -90,7 +90,7 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
         sqe->buf_group = bgid;
     };
     return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
-                              MultiShotFunc>(
+                              std::decay_t<MultiShotFunc>>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
         buffers);
 }
@@ -130,7 +130,7 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
     return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
-                              MultiShotFunc>(
+                              std::decay_t<MultiShotFunc>>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
         buffers);
 }
