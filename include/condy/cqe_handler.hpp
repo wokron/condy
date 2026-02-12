@@ -1,3 +1,12 @@
+/**
+ * @file cqe_handler.hpp
+ * @brief Definitions of CQE handlers
+ * @details This file defines a series of CQE handlers, which are responsible
+ * for processing the completion of asynchronous operations. Each handler
+ * defines a `handle_cqe` method to process the CQE and an `extract_result`
+ * method to retrieve the result of the operation.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"
