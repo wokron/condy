@@ -26,7 +26,7 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter<false, decltype(prep_func), DefaultCQEHandler>(
+    return OpAwaiter<decltype(prep_func), DefaultCQEHandler>(
         std::move(prep_func));
 }
 
@@ -40,7 +40,7 @@ auto make_op_awaiter128(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter<true, decltype(prep_func), DefaultCQEHandler>(
+    return OpAwaiter<decltype(prep_func), DefaultCQEHandler, true>(
         std::move(prep_func));
 }
 #endif
@@ -55,7 +55,7 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return MultiShotOpAwaiter<false, decltype(prep_func), DefaultCQEHandler,
+    return MultiShotOpAwaiter<decltype(prep_func), DefaultCQEHandler,
                               std::decay_t<MultiShotFunc>>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func));
 }
@@ -71,7 +71,7 @@ auto make_select_buffer_op_awaiter(Br *buffers, Func &&func, Args &&...args) {
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    return OpAwaiter<false, decltype(prep_func), SelectBufferCQEHandler<Br>>(
+    return OpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>>(
         std::move(prep_func), buffers);
 }
 
@@ -89,8 +89,8 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    return MultiShotOpAwaiter<false, decltype(prep_func),
-                              SelectBufferCQEHandler<Br>, MultiShotFunc>(
+    return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
+                              MultiShotFunc>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
         buffers);
 }
@@ -109,7 +109,7 @@ auto make_bundle_select_buffer_op_awaiter(Br *buffers, Func &&func,
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    return OpAwaiter<false, decltype(prep_func), SelectBufferCQEHandler<Br>>(
+    return OpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>>(
         std::move(prep_func), buffers);
 }
 #endif
@@ -129,8 +129,8 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    return MultiShotOpAwaiter<false, decltype(prep_func),
-                              SelectBufferCQEHandler<Br>, MultiShotFunc>(
+    return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
+                              MultiShotFunc>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
         buffers);
 }
@@ -146,7 +146,7 @@ auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return ZeroCopyOpAwaiter<false, decltype(prep_func), DefaultCQEHandler,
+    return ZeroCopyOpAwaiter<decltype(prep_func), DefaultCQEHandler,
                              std::decay_t<FreeFunc>>(
         std::move(prep_func), std::forward<FreeFunc>(free_func));
 }

@@ -108,7 +108,7 @@ protected:
     HandleBox<Handle> finish_handle_;
 };
 
-template <bool SQE128, typename PrepFunc, typename CQEHandler>
+template <typename PrepFunc, typename CQEHandler, bool SQE128 = false>
 class [[nodiscard]] OpAwaiter
     : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128> {
 public:
@@ -120,8 +120,8 @@ public:
                func) {}
 };
 
-template <bool SQE128, typename PrepFunc, typename CQEHandler,
-          typename MultiShotFunc>
+template <typename PrepFunc, typename CQEHandler, typename MultiShotFunc,
+          bool SQE128 = false>
 class [[nodiscard]] MultiShotOpAwaiter
     : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
                            PrepFunc, SQE128> {
@@ -137,8 +137,8 @@ public:
                func) {}
 };
 
-template <bool SQE128, typename PrepFunc, typename CQEHandler,
-          typename FreeFunc>
+template <typename PrepFunc, typename CQEHandler, typename FreeFunc,
+          bool SQE128 = false>
 class [[nodiscard]] ZeroCopyOpAwaiter
     : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
                            PrepFunc, SQE128> {
