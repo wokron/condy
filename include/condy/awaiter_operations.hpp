@@ -45,7 +45,7 @@ auto make_op_awaiter128(Func &&func, Args &&...args) {
         func(sqe, args...);
         return sqe;
     };
-    return OpAwaiter<decltype(prep_func), SimpleCQEHandler, true>(
+    return OpAwaiter<decltype(prep_func), SimpleCQEHandler>(
         std::move(prep_func));
 }
 #endif

@@ -45,8 +45,7 @@ private:
     Handle *handle_ptr_;
 };
 
-template <OpFinishHandleLike Handle, typename Func, bool SQE128 = false>
-class OpAwaiterBase {
+template <OpFinishHandleLike Handle, typename Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
@@ -92,11 +91,11 @@ protected:
     HandleBox<Handle> finish_handle_;
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, bool SQE128 = false>
+template <typename PrepFunc, CQEHandlerLike CQEHandler>
 class [[nodiscard]] OpAwaiter
-    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128> {
+    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc> {
 public:
-    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128>;
+    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc>;
     template <typename... Args>
     OpAwaiter(PrepFunc func, Args &&...args)
         : Base(HandleBox(
@@ -104,15 +103,14 @@ public:
                func) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename MultiShotFunc,
-          bool SQE128 = false>
+template <typename PrepFunc, CQEHandlerLike CQEHandler, typename MultiShotFunc>
 class [[nodiscard]] MultiShotOpAwaiter
     : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                           PrepFunc, SQE128> {
+                           PrepFunc> {
 public:
     using Base =
         OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                      PrepFunc, SQE128>;
+                      PrepFunc>;
     template <typename... Args>
     MultiShotOpAwaiter(PrepFunc func, MultiShotFunc multishot_func,
                        Args &&...args)
@@ -121,14 +119,13 @@ public:
                func) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
-          bool SQE128 = false>
+template <typename PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
 class [[nodiscard]] ZeroCopyOpAwaiter
     : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
-                           PrepFunc, SQE128> {
+                           PrepFunc> {
 public:
-    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
-                               PrepFunc, SQE128>;
+    using Base =
+        OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc>;
     template <typename... Args>
     ZeroCopyOpAwaiter(PrepFunc func, FreeFunc free_func, Args &&...args)
         : Base(HandleBox(ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>(
