@@ -30,7 +30,7 @@ void event_loop(size_t &unfinished) {
                 return;
             }
             auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
-            handle_ptr->set_result(cqe->res, cqe->flags);
+            handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
     }
@@ -62,7 +62,9 @@ TEST_CASE("test op_finish_handle - basic usage") {
     ring.reap_completions([](io_uring_cqe *cqe) {
         auto handle_ptr =
             static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
-        handle_ptr->set_result(42, 0);
+        io_uring_cqe mock_cqe = *cqe;
+        mock_cqe.res = 42;
+        handle_ptr->handle_cqe(&mock_cqe);
         (*handle_ptr)();
     });
 
@@ -164,13 +166,16 @@ TEST_CASE("test op_finish_handle - multishot op") {
         invoker();
     };
 
-    condy::MultiShotMixin<decltype(func), condy::ExtendOpFinishHandle> handle(
-        func);
+    condy::MultiShotMixin<decltype(func), condy::OpFinishHandle> handle(func);
     REQUIRE(!invoker.finished);
-    handle.set_result(1, 0);
-    handle.invoke_extend(0); // Multishot
+    io_uring_cqe cqe{};
+    cqe.res = 1;
+    cqe.flags |= IORING_CQE_F_MORE;     // Indicate more results to come
+    auto act = handle.handle_cqe(&cqe); // Multishot
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
+    REQUIRE(!act.op_finish);
+    REQUIRE(!act.queue_work);
 }
 
 TEST_CASE("test op_finish_handle - zero copy op") {
@@ -180,15 +185,24 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     auto func = [&](int r) { res = r; };
 
     auto *handle =
-        new condy::ZeroCopyMixin<decltype(func), condy::ExtendOpFinishHandle>(
-            func);
+        new condy::ZeroCopyMixin<decltype(func), condy::OpFinishHandle>(func);
     handle->set_invoker(&invoker);
     REQUIRE(!invoker.finished);
-    handle->set_result(1, 0);
+    io_uring_cqe cqe{};
+    cqe.res = 1;
+    cqe.flags |= IORING_CQE_F_MORE; // Indicate more results to come
+    auto act1 = handle->handle_cqe(&cqe);
+    REQUIRE(act1.queue_work);
+    REQUIRE(!act1.op_finish);
     (*handle)();
     REQUIRE(invoker.finished);
     REQUIRE(handle->extract_result() == 1);
     REQUIRE(res == -1);
-    handle->invoke_extend(2); // Notify
+    io_uring_cqe cqe2{};
+    cqe2.res = 2;
+    cqe2.flags |= IORING_CQE_F_NOTIF;
+    auto act2 = handle->handle_cqe(&cqe2);
+    REQUIRE(act2.op_finish);
+    REQUIRE(!act2.queue_work);
     REQUIRE(res == 2);
 }

@@ -16,8 +16,6 @@ enum class WorkType : uint8_t {
     Notify,
     SendFd,
     Schedule,
-    MultiShot,
-    ZeroCopy,
 };
 
 inline std::pair<void *, WorkType> decode_work(void *ptr) {
