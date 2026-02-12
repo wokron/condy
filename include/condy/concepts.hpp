@@ -11,6 +11,8 @@
 
 namespace condy {
 
+class Ring;
+
 namespace detail {
 
 struct FixedFd;
@@ -32,6 +34,11 @@ concept OpFinishHandleLike =
         { handle.invoke() } -> std::same_as<void>;
         { handle.handle_cqe(cqe) } -> std::same_as<detail::Action>;
     };
+
+template <typename T>
+concept PrepFuncLike = requires(T prep_func, Ring *ring) {
+    { prep_func(ring) } -> std::same_as<io_uring_sqe *>;
+};
 
 template <typename T>
 concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {

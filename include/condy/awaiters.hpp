@@ -45,8 +45,7 @@ private:
     Handle *handle_ptr_;
 };
 
-template <OpFinishHandleLike Handle, typename Func, bool SQE128 = false>
-class OpAwaiterBase {
+template <OpFinishHandleLike Handle, PrepFuncLike Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
@@ -68,19 +67,12 @@ public:
         auto *ring = context.ring();
 
         context.runtime()->pend_work();
-        io_uring_sqe *sqe = nullptr;
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-        if constexpr (SQE128) {
-            sqe = ring->get_sqe128();
-        } else {
-            sqe = ring->get_sqe();
-        }
-#else
-        static_assert(!SQE128,
-                      "SQE128 is not supported in this io_uring version");
-        sqe = ring->get_sqe();
-#endif
-        prep_op_(sqe, flags);
+
+        io_uring_sqe *sqe = prep_func_(ring);
+        assert(sqe && "prep_func must return a valid sqe");
+        sqe->flags |= static_cast<uint8_t>(flags);
+        io_uring_sqe_set_data(
+            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
     }
 
 public:
@@ -95,61 +87,52 @@ public:
 
     auto await_resume() { return finish_handle_.get().extract_result(); }
 
-private:
-    void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
-        prep_func_(sqe);
-        sqe->flags |= static_cast<uint8_t>(flags);
-        io_uring_sqe_set_data(
-            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
-    }
-
 protected:
     Func prep_func_;
     HandleBox<Handle> finish_handle_;
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, bool SQE128 = false>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler>
 class [[nodiscard]] OpAwaiter
-    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128> {
+    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc> {
 public:
-    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128>;
+    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc>;
     template <typename... Args>
     OpAwaiter(PrepFunc func, Args &&...args)
         : Base(HandleBox(
                    OpFinishHandle<CQEHandler>(std::forward<Args>(args)...)),
-               func) {}
+               std::move(func)) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename MultiShotFunc,
-          bool SQE128 = false>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
+          typename MultiShotFunc>
 class [[nodiscard]] MultiShotOpAwaiter
     : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                           PrepFunc, SQE128> {
+                           PrepFunc> {
 public:
     using Base =
         OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                      PrepFunc, SQE128>;
+                      PrepFunc>;
     template <typename... Args>
     MultiShotOpAwaiter(PrepFunc func, MultiShotFunc multishot_func,
                        Args &&...args)
         : Base(HandleBox(MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>(
                    std::move(multishot_func), std::forward<Args>(args)...)),
-               func) {}
+               std::move(func)) {}
 };
 
-template <typename PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
-          bool SQE128 = false>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
 class [[nodiscard]] ZeroCopyOpAwaiter
     : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
-                           PrepFunc, SQE128> {
+                           PrepFunc> {
 public:
-    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
-                               PrepFunc, SQE128>;
+    using Base =
+        OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc>;
     template <typename... Args>
     ZeroCopyOpAwaiter(PrepFunc func, FreeFunc free_func, Args &&...args)
         : Base(HandleBox(ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>(
                    std::move(free_func), std::forward<Args>(args)...)),
-               func) {}
+               std::move(func)) {}
 };
 
 template <unsigned int Flags, AwaiterLike Awaiter>
