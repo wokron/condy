@@ -18,7 +18,7 @@ void event_loop(size_t &unfinished) {
             if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
             handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
@@ -164,7 +164,7 @@ void mock_multishot_event_loop(size_t &unfinished) {
             if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
             // Mock Multishot
             io_uring_cqe mock_cqe = *cqe;
             mock_cqe.res = 42;

@@ -21,7 +21,7 @@ void event_loop(size_t &unfinished) {
             if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
             handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
