@@ -34,6 +34,13 @@ concept OpFinishHandleLike =
     };
 
 template <typename T>
+concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
+    typename T::ReturnType;
+    { handler.handle_cqe(cqe) } -> std::same_as<void>;
+    { handler.extract_result() } -> std::same_as<typename T::ReturnType>;
+};
+
+template <typename T>
 concept AwaiterLike = requires(T awaiter) {
     typename T::HandleType;
     { awaiter.get_handle() } -> std::same_as<typename T::HandleType *>;

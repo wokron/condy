@@ -68,7 +68,7 @@ protected:
     Invoker *invoker_ = nullptr;
 };
 
-template <typename CQEHandler>
+template <CQEHandlerLike CQEHandler>
 class OpFinishHandle : public OpFinishHandleBase {
 public:
     using ReturnType = typename CQEHandler::ReturnType;
@@ -125,7 +125,7 @@ protected:
     Func func_;
 };
 
-template <typename CQEHandler, typename MultiShotFunc>
+template <CQEHandlerLike CQEHandler, typename MultiShotFunc>
 using MultiShotOpFinishHandle =
     MultiShotMixin<MultiShotFunc, OpFinishHandle<CQEHandler>>;
 
@@ -201,7 +201,7 @@ protected:
     bool notified_ = false;
 };
 
-template <typename CQEHandler, typename FreeFunc>
+template <CQEHandlerLike CQEHandler, typename FreeFunc>
 using ZeroCopyOpFinishHandle =
     ZeroCopyMixin<FreeFunc, OpFinishHandle<CQEHandler>>;
 
