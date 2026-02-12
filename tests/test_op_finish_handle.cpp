@@ -52,7 +52,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
     context.init(&ring, &runtime);
 
     SetFinishInvoker invoker;
-    condy::OpFinishHandle<condy::DefaultCQEHandler> handle;
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle;
     handle.set_invoker(&invoker);
 
     auto *sqe = ring.get_sqe();
@@ -86,7 +86,7 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
-    condy::OpFinishHandle<condy::DefaultCQEHandler> handle1, handle2;
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
     handle1.set_invoker(&invoker);
     handle2.set_invoker(&invoker);
 
@@ -116,10 +116,10 @@ TEST_CASE("test op_finish_handle - cancel op") {
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
-    condy::OpFinishHandle<condy::DefaultCQEHandler> handle1, handle2;
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
     condy::ParallelFinishHandle<true,
-                                condy::OpFinishHandle<condy::DefaultCQEHandler>,
-                                condy::OpFinishHandle<condy::DefaultCQEHandler>>
+                                condy::OpFinishHandle<condy::SimpleCQEHandler>,
+                                condy::OpFinishHandle<condy::SimpleCQEHandler>>
         finish_handle;
     finish_handle.init(&handle1, &handle2);
     finish_handle.set_invoker(&invoker);
@@ -169,7 +169,7 @@ TEST_CASE("test op_finish_handle - multishot op") {
     };
 
     condy::MultiShotMixin<decltype(func),
-                          condy::OpFinishHandle<condy::DefaultCQEHandler>>
+                          condy::OpFinishHandle<condy::SimpleCQEHandler>>
         handle(func);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};
@@ -189,7 +189,7 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     auto func = [&](int r) { res = r; };
 
     auto *handle = new condy::ZeroCopyMixin<
-        decltype(func), condy::OpFinishHandle<condy::DefaultCQEHandler>>(func);
+        decltype(func), condy::OpFinishHandle<condy::SimpleCQEHandler>>(func);
     handle->set_invoker(&invoker);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};

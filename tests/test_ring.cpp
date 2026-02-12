@@ -24,7 +24,7 @@ TEST_CASE("test ring - register and complete ops") {
     ring.init(8, &params);
 
     constexpr size_t num_ops = 4;
-    std::vector<OpFinishHandle<DefaultCQEHandler>> handles(num_ops);
+    std::vector<OpFinishHandle<SimpleCQEHandler>> handles(num_ops);
     for (size_t i = 0; i < num_ops; i++) {
         auto *sqe = ring.get_sqe();
         io_uring_prep_nop(sqe);
@@ -66,7 +66,7 @@ TEST_CASE("test ring - cancel ops") {
         .tv_nsec = 0,
     };
     constexpr size_t num_ops = 8;
-    std::vector<OpFinishHandle<DefaultCQEHandler>> handles(num_ops);
+    std::vector<OpFinishHandle<SimpleCQEHandler>> handles(num_ops);
     for (size_t i = 0; i < num_ops; i++) {
         auto *sqe = ring.get_sqe();
         if (i % 2 == 0) {

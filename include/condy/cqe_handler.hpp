@@ -7,7 +7,7 @@
 
 namespace condy {
 
-class DefaultCQEHandler {
+class SimpleCQEHandler {
 public:
     using ReturnType = int32_t;
 

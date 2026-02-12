@@ -26,7 +26,7 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter<decltype(prep_func), DefaultCQEHandler>(
+    return OpAwaiter<decltype(prep_func), SimpleCQEHandler>(
         std::move(prep_func));
 }
 
@@ -40,7 +40,7 @@ auto make_op_awaiter128(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter<decltype(prep_func), DefaultCQEHandler, true>(
+    return OpAwaiter<decltype(prep_func), SimpleCQEHandler, true>(
         std::move(prep_func));
 }
 #endif
@@ -55,7 +55,7 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return MultiShotOpAwaiter<decltype(prep_func), DefaultCQEHandler,
+    return MultiShotOpAwaiter<decltype(prep_func), SimpleCQEHandler,
                               std::decay_t<MultiShotFunc>>(
         std::move(prep_func), std::forward<MultiShotFunc>(multishot_func));
 }
@@ -146,7 +146,7 @@ auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return ZeroCopyOpAwaiter<decltype(prep_func), DefaultCQEHandler,
+    return ZeroCopyOpAwaiter<decltype(prep_func), SimpleCQEHandler,
                              std::decay_t<FreeFunc>>(
         std::move(prep_func), std::forward<FreeFunc>(free_func));
 }
