@@ -11,6 +11,7 @@
 
 #include "condy/awaiters.hpp"
 #include "condy/concepts.hpp"
+#include "condy/cqe_handler.hpp"
 
 namespace condy {
 
@@ -25,7 +26,8 @@ auto make_op_awaiter(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter<decltype(prep_func)>(std::move(prep_func));
+    return OpAwaiter<decltype(prep_func), SimpleCQEHandler>(
+        std::move(prep_func));
 }
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
@@ -38,7 +40,8 @@ auto make_op_awaiter128(Func &&func, Args &&...args) {
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return OpAwaiter128<decltype(prep_func)>(std::move(prep_func));
+    return OpAwaiter<decltype(prep_func), SimpleCQEHandler, true>(
+        std::move(prep_func));
 }
 #endif
 
@@ -52,8 +55,9 @@ auto make_multishot_op_awaiter(MultiShotFunc &&multishot_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return MultiShotOpAwaiter<std::decay_t<MultiShotFunc>, decltype(prep_func)>(
-        std::forward<MultiShotFunc>(multishot_func), std::move(prep_func));
+    return MultiShotOpAwaiter<decltype(prep_func), SimpleCQEHandler,
+                              std::decay_t<MultiShotFunc>>(
+        std::move(prep_func), std::forward<MultiShotFunc>(multishot_func));
 }
 
 /**
@@ -67,9 +71,8 @@ auto make_select_buffer_op_awaiter(Br *buffers, Func &&func, Args &&...args) {
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    auto op = SelectBufferOpAwaiter<Br, decltype(prep_func)>(
-        buffers, std::move(prep_func));
-    return op;
+    return OpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>>(
+        std::move(prep_func), buffers);
 }
 
 /**
@@ -86,11 +89,10 @@ auto make_multishot_select_buffer_op_awaiter(MultiShotFunc &&multishot_func,
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = bgid;
     };
-    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>, Br,
-                                             decltype(prep_func)>(
-        std::forward<MultiShotFunc>(multishot_func), buffers,
-        std::move(prep_func));
-    return op;
+    return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
+                              std::decay_t<MultiShotFunc>>(
+        std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
+        buffers);
 }
 
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
@@ -107,9 +109,8 @@ auto make_bundle_select_buffer_op_awaiter(Br *buffers, Func &&func,
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    auto op = SelectBufferOpAwaiter<Br, decltype(prep_func)>(
-        buffers, std::move(prep_func));
-    return op;
+    return OpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>>(
+        std::move(prep_func), buffers);
 }
 #endif
 
@@ -128,11 +129,10 @@ auto make_multishot_bundle_select_buffer_op_awaiter(
         sqe->buf_group = bgid;
         sqe->ioprio |= IORING_RECVSEND_BUNDLE;
     };
-    auto op = MultiShotSelectBufferOpAwaiter<std::decay_t<MultiShotFunc>, Br,
-                                             decltype(prep_func)>(
-        std::forward<MultiShotFunc>(multishot_func), buffers,
-        std::move(prep_func));
-    return op;
+    return MultiShotOpAwaiter<decltype(prep_func), SelectBufferCQEHandler<Br>,
+                              std::decay_t<MultiShotFunc>>(
+        std::move(prep_func), std::forward<MultiShotFunc>(multishot_func),
+        buffers);
 }
 #endif
 
@@ -146,8 +146,9 @@ auto make_zero_copy_op_awaiter(FreeFunc &&free_func, Func &&func,
                       ... args = std::forward<Args>(args)](auto sqe) {
         func(sqe, args...);
     };
-    return ZeroCopyOpAwaiter<std::decay_t<FreeFunc>, decltype(prep_func)>(
-        std::forward<FreeFunc>(free_func), std::move(prep_func));
+    return ZeroCopyOpAwaiter<decltype(prep_func), SimpleCQEHandler,
+                             std::decay_t<FreeFunc>>(
+        std::move(prep_func), std::forward<FreeFunc>(free_func));
 }
 
 /**

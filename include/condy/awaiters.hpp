@@ -108,64 +108,47 @@ protected:
     HandleBox<Handle> finish_handle_;
 };
 
-template <typename Func>
-class [[nodiscard]] OpAwaiter : public OpAwaiterBase<OpFinishHandle, Func> {
+template <typename PrepFunc, CQEHandlerLike CQEHandler, bool SQE128 = false>
+class [[nodiscard]] OpAwaiter
+    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128> {
 public:
-    using Base = OpAwaiterBase<OpFinishHandle, Func>;
-    OpAwaiter(Func func) : Base(OpFinishHandle(), func) {}
+    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc, SQE128>;
+    template <typename... Args>
+    OpAwaiter(PrepFunc func, Args &&...args)
+        : Base(HandleBox(
+                   OpFinishHandle<CQEHandler>(std::forward<Args>(args)...)),
+               func) {}
 };
 
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-template <typename Func>
-class [[nodiscard]] OpAwaiter128
-    : public OpAwaiterBase<OpFinishHandle, Func, true> {
-public:
-    using Base = OpAwaiterBase<OpFinishHandle, Func, true>;
-    OpAwaiter128(Func func) : Base(OpFinishHandle(), func) {}
-};
-#endif
-
-template <typename MultiShotFunc, typename Func>
+template <typename PrepFunc, CQEHandlerLike CQEHandler, typename MultiShotFunc,
+          bool SQE128 = false>
 class [[nodiscard]] MultiShotOpAwaiter
-    : public OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func> {
-public:
-    using Base = OpAwaiterBase<MultiShotOpFinishHandle<MultiShotFunc>, Func>;
-    MultiShotOpAwaiter(MultiShotFunc multishot_func, Func func)
-        : Base(
-              MultiShotOpFinishHandle<MultiShotFunc>(std::move(multishot_func)),
-              func) {}
-};
-
-template <typename FreeFunc, typename Func>
-class [[nodiscard]] ZeroCopyOpAwaiter
-    : public OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func> {
-public:
-    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<FreeFunc>, Func>;
-    ZeroCopyOpAwaiter(FreeFunc free_func, Func func)
-        : Base(ZeroCopyOpFinishHandle<FreeFunc>(std::move(free_func)), func) {}
-};
-
-template <BufferRingLike Br, typename Func>
-class [[nodiscard]] SelectBufferOpAwaiter
-    : public OpAwaiterBase<SelectBufferOpFinishHandle<Br>, Func> {
-public:
-    using Base = OpAwaiterBase<SelectBufferOpFinishHandle<Br>, Func>;
-    SelectBufferOpAwaiter(Br *buffers, Func func)
-        : Base(SelectBufferOpFinishHandle<Br>(buffers), func) {}
-};
-
-template <typename MultiShotFunc, BufferRingLike Br, typename Func>
-class [[nodiscard]] MultiShotSelectBufferOpAwaiter
-    : public OpAwaiterBase<
-          MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>, Func> {
+    : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
+                           PrepFunc, SQE128> {
 public:
     using Base =
-        OpAwaiterBase<MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>,
-                      Func>;
-    MultiShotSelectBufferOpAwaiter(MultiShotFunc multishot_func, Br *buffers,
-                                   Func func)
-        : Base(MultiShotSelectBufferOpFinishHandle<MultiShotFunc, Br>(
-                   std::move(multishot_func), buffers),
+        OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
+                      PrepFunc, SQE128>;
+    template <typename... Args>
+    MultiShotOpAwaiter(PrepFunc func, MultiShotFunc multishot_func,
+                       Args &&...args)
+        : Base(HandleBox(MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>(
+                   std::move(multishot_func), std::forward<Args>(args)...)),
+               func) {}
+};
+
+template <typename PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
+          bool SQE128 = false>
+class [[nodiscard]] ZeroCopyOpAwaiter
+    : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
+                           PrepFunc, SQE128> {
+public:
+    using Base = OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
+                               PrepFunc, SQE128>;
+    template <typename... Args>
+    ZeroCopyOpAwaiter(PrepFunc func, FreeFunc free_func, Args &&...args)
+        : Base(HandleBox(ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>(
+                   std::move(free_func), std::forward<Args>(args)...)),
                func) {}
 };
 

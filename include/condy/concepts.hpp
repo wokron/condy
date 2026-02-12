@@ -14,8 +14,9 @@ namespace condy {
 namespace detail {
 
 struct FixedFd;
+struct Action;
 
-}
+} // namespace detail
 
 template <typename T>
 concept HandleLike = requires(T handle, Invoker *invoker) {
@@ -29,8 +30,15 @@ template <typename T>
 concept OpFinishHandleLike =
     HandleLike<T> && requires(T handle, io_uring_cqe *cqe) {
         { handle.invoke() } -> std::same_as<void>;
-        { handle.handle_cqe(cqe) } -> std::same_as<typename T::Action>;
+        { handle.handle_cqe(cqe) } -> std::same_as<detail::Action>;
     };
+
+template <typename T>
+concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
+    typename T::ReturnType;
+    { handler.handle_cqe(cqe) } -> std::same_as<void>;
+    { handler.extract_result() } -> std::same_as<typename T::ReturnType>;
+};
 
 template <typename T>
 concept AwaiterLike = requires(T awaiter) {

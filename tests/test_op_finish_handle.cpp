@@ -1,4 +1,5 @@
 #include "condy/context.hpp"
+#include "condy/cqe_handler.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
@@ -29,7 +30,7 @@ void event_loop(size_t &unfinished) {
             if (type == condy::WorkType::Ignore) {
                 return;
             }
-            auto handle_ptr = static_cast<condy::OpFinishHandle *>(data);
+            auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
             handle_ptr->handle_cqe(cqe);
             (*handle_ptr)();
         });
@@ -51,7 +52,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
     context.init(&ring, &runtime);
 
     SetFinishInvoker invoker;
-    condy::OpFinishHandle handle;
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle;
     handle.set_invoker(&invoker);
 
     auto *sqe = ring.get_sqe();
@@ -60,8 +61,8 @@ TEST_CASE("test op_finish_handle - basic usage") {
     ring.submit();
 
     ring.reap_completions([](io_uring_cqe *cqe) {
-        auto handle_ptr =
-            static_cast<condy::OpFinishHandle *>(io_uring_cqe_get_data(cqe));
+        auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(
+            io_uring_cqe_get_data(cqe));
         io_uring_cqe mock_cqe = *cqe;
         mock_cqe.res = 42;
         handle_ptr->handle_cqe(&mock_cqe);
@@ -85,7 +86,7 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
-    condy::OpFinishHandle handle1, handle2;
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
     handle1.set_invoker(&invoker);
     handle2.set_invoker(&invoker);
 
@@ -115,9 +116,10 @@ TEST_CASE("test op_finish_handle - cancel op") {
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
-    condy::OpFinishHandle handle1, handle2;
-    condy::ParallelFinishHandle<true, condy::OpFinishHandle,
-                                condy::OpFinishHandle>
+    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
+    condy::ParallelFinishHandle<true,
+                                condy::OpFinishHandle<condy::SimpleCQEHandler>,
+                                condy::OpFinishHandle<condy::SimpleCQEHandler>>
         finish_handle;
     finish_handle.init(&handle1, &handle2);
     finish_handle.set_invoker(&invoker);
@@ -166,7 +168,9 @@ TEST_CASE("test op_finish_handle - multishot op") {
         invoker();
     };
 
-    condy::MultiShotMixin<decltype(func), condy::OpFinishHandle> handle(func);
+    condy::MultiShotMixin<decltype(func),
+                          condy::OpFinishHandle<condy::SimpleCQEHandler>>
+        handle(func);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};
     cqe.res = 1;
@@ -184,8 +188,8 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     int res = -1;
     auto func = [&](int r) { res = r; };
 
-    auto *handle =
-        new condy::ZeroCopyMixin<decltype(func), condy::OpFinishHandle>(func);
+    auto *handle = new condy::ZeroCopyMixin<
+        decltype(func), condy::OpFinishHandle<condy::SimpleCQEHandler>>(func);
     handle->set_invoker(&invoker);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};

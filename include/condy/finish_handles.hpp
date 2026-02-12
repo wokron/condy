@@ -26,14 +26,19 @@ namespace condy {
 
 class Ring;
 
-class OpFinishHandle : public InvokerAdapter<OpFinishHandle, WorkInvoker> {
+namespace detail {
+
+struct Action {
+    bool queue_work;
+    bool op_finish;
+};
+
+} // namespace detail
+
+class OpFinishHandleBase
+    : public InvokerAdapter<OpFinishHandleBase, WorkInvoker> {
 public:
-    using ReturnType = int32_t;
-    struct Action {
-        bool queue_work;
-        bool op_finish;
-    };
-    using HandleCQEFunc = Action (*)(void *, io_uring_cqe *);
+    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *);
 
     void cancel() {
         auto *ring = detail::Context::current().ring();
@@ -43,11 +48,9 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    Action handle_cqe(io_uring_cqe *cqe) { return handle_func_(this, cqe); }
-
-    Action handle_cqe_impl(io_uring_cqe *cqe) {
-        res_ = cqe->res;
-        return {.queue_work = true, .op_finish = true};
+    detail::Action handle_cqe(io_uring_cqe *cqe) {
+        assert(handle_func_ != nullptr);
+        return handle_func_(this, cqe);
     }
 
     void invoke() {
@@ -55,20 +58,41 @@ public:
         (*invoker_)();
     }
 
-    ReturnType extract_result() { return res_; }
-
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
+protected:
+    OpFinishHandleBase() = default;
+
+protected:
+    HandleCQEFunc handle_func_ = nullptr;
+    Invoker *invoker_ = nullptr;
+};
+
+template <CQEHandlerLike CQEHandler>
+class OpFinishHandle : public OpFinishHandleBase {
+public:
+    using ReturnType = typename CQEHandler::ReturnType;
+
+    template <typename... Args>
+    OpFinishHandle(Args &&...args) : cqe_handler_(std::forward<Args>(args)...) {
+        this->handle_func_ = handle_cqe_static_;
+    }
+
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) {
+        cqe_handler_.handle_cqe(cqe);
+        return {.queue_work = true, .op_finish = true};
+    }
+
+    ReturnType extract_result() { return cqe_handler_.extract_result(); }
+
 private:
-    static Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
         auto *self = static_cast<OpFinishHandle *>(data);
         return self->handle_cqe_impl(cqe);
     }
 
 protected:
-    HandleCQEFunc handle_func_ = handle_cqe_static_;
-    Invoker *invoker_ = nullptr;
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
+    CQEHandler cqe_handler_;
 };
 
 template <typename Func, OpFinishHandleLike HandleBase>
@@ -80,8 +104,7 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    OpFinishHandle::Action
-    handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             func_(HandleBase::extract_result());
@@ -93,8 +116,7 @@ public:
     }
 
 private:
-    static OpFinishHandle::Action handle_cqe_static_(void *data,
-                                                     io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
         auto *self = static_cast<MultiShotMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -103,8 +125,9 @@ protected:
     Func func_;
 };
 
-template <typename MultiShotFunc>
-using MultiShotOpFinishHandle = MultiShotMixin<MultiShotFunc, OpFinishHandle>;
+template <CQEHandlerLike CQEHandler, typename MultiShotFunc>
+using MultiShotOpFinishHandle =
+    MultiShotMixin<MultiShotFunc, OpFinishHandle<CQEHandler>>;
 
 template <typename Func, OpFinishHandleLike HandleBase>
 class ZeroCopyMixin : public HandleBase {
@@ -126,8 +149,7 @@ public:
         maybe_free_();
     }
 
-    OpFinishHandle::Action
-    handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             return {.queue_work = true, .op_finish = false};
@@ -166,8 +188,7 @@ private:
         self->invoke();
     }
 
-    static OpFinishHandle::Action handle_cqe_static_(void *data,
-                                                     io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -180,51 +201,9 @@ protected:
     bool notified_ = false;
 };
 
-template <typename FreeFunc>
-using ZeroCopyOpFinishHandle = ZeroCopyMixin<FreeFunc, OpFinishHandle>;
-
-template <BufferRingLike Br, OpFinishHandleLike HandleBase>
-class SelectBufferMixin : public HandleBase {
-public:
-    using ReturnType = std::pair<int, typename Br::ReturnType>;
-
-    template <typename... Args>
-    SelectBufferMixin(Br *buffers, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...), buffers_(buffers) {
-        this->handle_func_ = handle_cqe_static_;
-    }
-
-    OpFinishHandle::Action
-    handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
-        HandleBase::handle_cqe_impl(cqe);
-        this->flags_ = cqe->flags;
-        return {.queue_work = true, .op_finish = true};
-    }
-
-    ReturnType extract_result() {
-        int res = this->res_;
-        return std::make_pair(
-            res, buffers_->handle_finish(this->res_, this->flags_));
-    }
-
-private:
-    static OpFinishHandle::Action handle_cqe_static_(void *data,
-                                                     io_uring_cqe *cqe) {
-        auto *self = static_cast<SelectBufferMixin *>(data);
-        return self->handle_cqe_impl(cqe);
-    }
-
-protected:
-    uint32_t flags_ = 0;
-    Br *buffers_;
-};
-
-template <BufferRingLike Br>
-using SelectBufferOpFinishHandle = SelectBufferMixin<Br, OpFinishHandle>;
-
-template <typename MultiShotFunc, BufferRingLike Br>
-using MultiShotSelectBufferOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, SelectBufferMixin<Br, OpFinishHandle>>;
+template <CQEHandlerLike CQEHandler, typename FreeFunc>
+using ZeroCopyOpFinishHandle =
+    ZeroCopyMixin<FreeFunc, OpFinishHandle<CQEHandler>>;
 
 template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
 public:
