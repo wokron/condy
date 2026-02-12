@@ -102,7 +102,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
     condy::Runtime runtime(options);
 
     auto func = [](int &flag) -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         flag = 1;
     };
 
@@ -133,8 +133,8 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
     condy::Runtime runtime(options);
 
     auto func = [](int &flag) -> condy::Coro<void> {
-        co_await (condy::make_op_awaiter(io_uring_prep_nop) >>
-                  condy::make_op_awaiter(io_uring_prep_nop));
+        co_await (condy::detail::make_op_awaiter(io_uring_prep_nop) >>
+                  condy::detail::make_op_awaiter(io_uring_prep_nop));
         flag = 1;
     };
 
@@ -171,8 +171,8 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
             .tv_nsec = 0,
         };
         auto r = co_await (
-            condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0) ||
-            condy::make_op_awaiter(io_uring_prep_nop));
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0) ||
+            condy::detail::make_op_awaiter(io_uring_prep_nop));
         REQUIRE(r.index() == 1); // nop path
         finished = true;
         co_return;

@@ -76,14 +76,14 @@ TEST_CASE("test buffer_table - use registered buffer") {
         buffer_table.update(0, iovs, 2);
 
         auto write_op =
-            condy::make_op_awaiter(io_uring_prep_write_fixed, pipes[1],
-                                   write_buf, sizeof(write_buf), 0, 1);
+            condy::detail::make_op_awaiter(io_uring_prep_write_fixed, pipes[1],
+                                           write_buf, sizeof(write_buf), 0, 1);
         int write_res = co_await write_op;
         REQUIRE(write_res == sizeof(write_buf));
 
         auto read_op =
-            condy::make_op_awaiter(io_uring_prep_read_fixed, pipes[0], read_buf,
-                                   sizeof(read_buf), 0, 0);
+            condy::detail::make_op_awaiter(io_uring_prep_read_fixed, pipes[0],
+                                           read_buf, sizeof(read_buf), 0, 0);
         int read_res = co_await read_op;
         REQUIRE(read_res == sizeof(read_buf));
         REQUIRE(std::memcmp(write_buf, read_buf, sizeof(write_buf)) == 0);

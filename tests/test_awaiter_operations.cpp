@@ -43,7 +43,7 @@ TEST_CASE("test awaiter_operations - test make_op_awaiter") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -69,9 +69,9 @@ TEST_CASE("test awaiter_operations - test when_all") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] = co_await condy::when_all(
             std::move(aw1), std::move(aw2), std::move(aw3));
         REQUIRE(r1 == 0);
@@ -106,9 +106,11 @@ TEST_CASE("test awaiter_operations - test when_any") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw1 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto r = co_await condy::when_any(std::move(aw1), std::move(aw2),
                                           std::move(aw3));
         REQUIRE(r.index() == 1);
@@ -137,9 +139,9 @@ TEST_CASE("test awaiter_operations - test ranged when_all") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         std::vector<decltype(aw1)> awaiters;
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
@@ -180,9 +182,12 @@ TEST_CASE("test awaiter_operations - test ranged when_any") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts2, 0, 0);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
+        auto aw1 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
+        auto aw2 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts2, 0, 0);
+        auto aw3 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts1, 0, 0);
         std::vector<decltype(aw1)> awaiters;
         awaiters.emplace_back(std::move(aw1));
         awaiters.emplace_back(std::move(aw2));
@@ -214,9 +219,9 @@ TEST_CASE("test awaiter_operations - test &&") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] =
             co_await (std::move(aw1) && std::move(aw2) && std::move(aw3));
         REQUIRE(r1 == 0);
@@ -251,9 +256,11 @@ TEST_CASE("test awaiter_operations - test ||") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw1 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto r = co_await (std::move(aw1) || std::move(aw2) || std::move(aw3));
         REQUIRE(r.index() == 1);
         --unfinished;
@@ -285,10 +292,12 @@ TEST_CASE("test awaiter_operations - mixed && and ||") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw4 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw1 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw4 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto [r1, r2] = co_await ((std::move(aw1) || std::move(aw2)) &&
                                   (std::move(aw3) || std::move(aw4)));
         REQUIRE(r1.index() == 1);
@@ -318,9 +327,9 @@ TEST_CASE("test awaiter_operations - ranged awaiter push") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto awaiter = condy::when_all(std::vector<decltype(aw1)>{});
         awaiter.push(std::move(aw1));
         awaiter.push(std::move(aw2));
@@ -357,9 +366,10 @@ TEST_CASE("test awaiter_operations - test link") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] = co_await condy::link(std::move(aw1), std::move(aw2),
                                                  std::move(aw3));
         REQUIRE(r1 == 0);
@@ -394,9 +404,10 @@ TEST_CASE("test awaiter_operations - test >>") {
             .tv_sec = 0,
             .tv_nsec = 100,
         };
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2, r3] =
             co_await (std::move(aw1) >> std::move(aw2) >> std::move(aw3));
         REQUIRE(r1 == 0);
@@ -427,7 +438,7 @@ TEST_CASE("test awaiter_operations - test drain") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw = condy::detail::make_op_awaiter(io_uring_prep_nop);
         co_await condy::drain(std::move(aw));
         --unfinished;
     };
@@ -454,9 +465,9 @@ TEST_CASE("test awaiter_operations - test drain with when_all") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         co_await (std::move(aw1) && std::move(aw2) &&
                   condy::drain(std::move(aw3)));
         --unfinished;
@@ -484,9 +495,9 @@ TEST_CASE("test awaiter_operations - test parallel all") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto aw1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw2 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto aw3 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [order, results] =
             co_await condy::parallel<condy::ParallelAllAwaiter>(
                 std::move(aw1), std::move(aw2), std::move(aw3));

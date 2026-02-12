@@ -109,7 +109,7 @@ TEST_CASE("test task - launch multiple tasks") {
     bool finished = false;
 
     auto sub_func = [&](int v, int &r) -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         r = v;
     };
 
@@ -141,7 +141,7 @@ TEST_CASE("test task - return value") {
     bool finished = false;
 
     auto sub_func = [](int v) -> condy::Coro<int> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         co_return v;
     };
 
@@ -176,7 +176,8 @@ TEST_CASE("test task - return value with wait") {
             .tv_sec = 0,
             .tv_nsec = 1000000, // 1ms
         };
-        co_await condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0,
+                                                0);
         finished = true;
         co_return 42;
     };
@@ -196,7 +197,7 @@ TEST_CASE("test task - exception propagation") {
     condy::Runtime runtime(options);
 
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         throw std::runtime_error("Test exception");
     };
 
@@ -262,7 +263,7 @@ TEST_CASE("test task - run in different thread") {
 TEST_CASE("test task - spawn from no runtime") {
     size_t count = 0;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         count++;
         co_return;
     };
@@ -293,7 +294,7 @@ TEST_CASE("test task - detach") {
     bool finished = false;
 
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         finished = true;
         co_return;
     };
