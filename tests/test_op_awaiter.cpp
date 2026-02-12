@@ -40,7 +40,7 @@ TEST_CASE("test op_awaiter - basic routine") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -66,8 +66,8 @@ TEST_CASE("test op_awaiter - multiple ops") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
-        co_await condy::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
+        co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         --unfinished;
     };
 
@@ -93,8 +93,8 @@ TEST_CASE("test op_awaiter - concurrent op") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        auto awaiter1 = condy::make_op_awaiter(io_uring_prep_nop);
-        auto awaiter2 = condy::make_op_awaiter(io_uring_prep_nop);
+        auto awaiter1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
+        auto awaiter2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2] = co_await condy::WhenAllAwaiter<decltype(awaiter1),
                                                        decltype(awaiter2)>(
             std::move(awaiter1), std::move(awaiter2));
@@ -130,8 +130,8 @@ TEST_CASE("test op_awaiter - cancel op") {
             .tv_nsec = 0,
         };
         auto awaiter1 =
-            condy::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        auto awaiter2 = condy::make_op_awaiter(io_uring_prep_nop);
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto awaiter2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto awaiter =
             condy::WhenAnyAwaiter<decltype(awaiter1), decltype(awaiter2)>(
                 std::move(awaiter1), std::move(awaiter2));
@@ -195,7 +195,7 @@ TEST_CASE("test op_awaiter - multishot op") {
 
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
-        co_await condy::make_multishot_op_awaiter(
+        co_await condy::detail::make_multishot_op_awaiter(
             [&](int res) {
                 auto coro = handle_multishot(res);
                 coro.release().resume();
@@ -236,8 +236,9 @@ TEST_CASE("test op_awaiter - select buffer op") {
 
         size_t unfinished = 1;
         auto func = [&]() -> condy::Coro<void> {
-            auto [res, buf] = co_await condy::make_select_buffer_op_awaiter(
-                &pool, io_uring_prep_read, pipefd[0], nullptr, 0, 0);
+            auto [res, buf] =
+                co_await condy::detail::make_select_buffer_op_awaiter(
+                    &pool, io_uring_prep_read, pipefd[0], nullptr, 0, 0);
             REQUIRE(res >= 0);
             REQUIRE(buf.size() == 32);
             REQUIRE(std::memcmp(buf.data(), "test", 4) == 0);

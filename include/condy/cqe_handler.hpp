@@ -16,6 +16,10 @@
 
 namespace condy {
 
+/**
+ * @brief A simple CQE handler that extracts the result from the CQE without any
+ * additional processing.
+ */
 class SimpleCQEHandler {
 public:
     using ReturnType = int32_t;
@@ -28,6 +32,11 @@ private:
     int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
 };
 
+/**
+ * @brief A CQE handler that returns the selected buffers based on the result of
+ * the CQE.
+ * @tparam Br The buffer ring type
+ */
 template <BufferRingLike Br> class SelectBufferCQEHandler {
 public:
     using ReturnType = std::pair<int, typename Br::ReturnType>;
