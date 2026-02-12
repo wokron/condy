@@ -68,19 +68,11 @@ public:
         auto *ring = context.ring();
 
         context.runtime()->pend_work();
-        io_uring_sqe *sqe = nullptr;
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-        if constexpr (SQE128) {
-            sqe = ring->get_sqe128();
-        } else {
-            sqe = ring->get_sqe();
-        }
-#else
-        static_assert(!SQE128,
-                      "SQE128 is not supported in this io_uring version");
-        sqe = ring->get_sqe();
-#endif
-        prep_op_(sqe, flags);
+
+        io_uring_sqe *sqe = prep_func_(ring);
+        sqe->flags |= static_cast<uint8_t>(flags);
+        io_uring_sqe_set_data(
+            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
     }
 
 public:
@@ -94,14 +86,6 @@ public:
     }
 
     auto await_resume() { return finish_handle_.get().extract_result(); }
-
-private:
-    void prep_op_(io_uring_sqe *sqe, unsigned int flags) {
-        prep_func_(sqe);
-        sqe->flags |= static_cast<uint8_t>(flags);
-        io_uring_sqe_set_data(
-            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
-    }
 
 protected:
     Func prep_func_;
