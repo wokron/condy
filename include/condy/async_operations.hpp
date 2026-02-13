@@ -851,7 +851,6 @@ inline auto async_socket_direct(int domain, int type, int protocol,
                                    protocol, file_index, flags);
 }
 
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 /**
  * @brief See io_uring_prep_uring_cmd
  * @tparam CQEHandler Custom CQE handler for specific result processing.
@@ -871,7 +870,6 @@ inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
     auto op = build_op_awaiter<CQEHandler>(std::move(prep_func));
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
-#endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 /**
