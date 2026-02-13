@@ -854,6 +854,9 @@ inline auto async_socket_direct(int domain, int type, int protocol,
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 /**
  * @brief See io_uring_prep_uring_cmd
+ * @tparam CQEHandler Custom CQE handler for specific result processing.
+ * @param cmd_func Function to configure sqe for specific command. Signature:
+ * void(io_uring_sqe *sqe).
  */
 template <CQEHandlerLike CQEHandler = SimpleCQEHandler, FdLike Fd,
           typename CmdFunc>
@@ -873,6 +876,9 @@ inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 /**
  * @brief See io_uring_prep_uring_cmd128
+ * @tparam CQEHandler Custom CQE handler for specific result processing.
+ * @param cmd_func Function to configure sqe for specific command. Signature:
+ * void(io_uring_sqe *sqe).
  */
 template <CQEHandlerLike CQEHandler = SimpleCQEHandler, FdLike Fd,
           typename CmdFunc>
