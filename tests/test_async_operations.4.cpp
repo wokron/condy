@@ -268,8 +268,9 @@ TEST_CASE("test async_operations - test socket - direct") {
     condy::sync_wait(func());
 }
 
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 TEST_CASE("test async_operations - test uring_cmd - basic") {
+    // NOTE: cmd_sock available since 2.5
     auto my_async_cmd_sock = [](int cmd_op, int fd, int level, int optname,
                                 void *optval, int optlen) {
         return condy::async_uring_cmd(cmd_op, fd, [=](io_uring_sqe *sqe) {
@@ -296,8 +297,9 @@ TEST_CASE("test async_operations - test uring_cmd - basic") {
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
+    // NOTE: cmd_sock available since 2.5
     auto my_async_cmd_sock_fixed = [](int cmd_op, int fixed_fd, int level,
                                       int optname, void *optval, int optlen) {
         return condy::async_uring_cmd(
@@ -329,6 +331,8 @@ TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
     close(listen_fd);
 }
 #endif
+
+// TODO: uring_cmd test case with sqe128 + cqe128 + nvme cmd
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 TEST_CASE("test async_operations - test uring_cmd128 - basic") {
