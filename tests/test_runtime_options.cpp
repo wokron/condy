@@ -286,3 +286,34 @@ TEST_CASE("test runtime_options - enable_no_mmap") {
     condy::sync_wait(runtime, func());
 }
 #endif
+
+#if !IO_URING_CHECK_VERSION(2, 14) // >= 2.14
+TEST_CASE("test runtime_options - enable_sq_rewind") {
+    condy::RuntimeOptions options;
+    options.enable_sq_rewind().sq_size(8).cq_size(16);
+    condy::Runtime runtime(options);
+
+    bool finished = false;
+    auto task_func = [&]() -> condy::Coro<void> {
+        for (int i = 0; i < 5; i++) {
+            co_await condy::async_nop();
+        }
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        std::vector<condy::Task<void>> tasks;
+        tasks.reserve(1000);
+        for (int i = 0; i < 1000; i++) {
+            tasks.push_back(condy::co_spawn(task_func()));
+        }
+
+        for (auto &t : tasks) {
+            co_await std::move(t);
+        }
+        finished = true;
+    };
+
+    condy::sync_wait(runtime, func());
+    REQUIRE(finished);
+}
+#endif
