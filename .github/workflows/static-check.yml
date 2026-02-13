@@ -25,9 +25,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Formatting Check
-        uses: jidicula/clang-format-action@v4.16.0
-        with:
-          clang-format-version: "18"
+        run: |
+          bash ./scripts/format-all.sh
 
       - name: Checkout Liburing to Latest Version
         run: |
