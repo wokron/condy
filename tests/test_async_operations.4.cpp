@@ -1,5 +1,6 @@
 #include "condy/buffers.hpp"
 #include "condy/runtime.hpp"
+#include "condy/runtime_options.hpp"
 #include "condy/sync_wait.hpp"
 #include "helpers.hpp"
 #include <cerrno>
@@ -266,6 +267,136 @@ TEST_CASE("test async_operations - test socket - direct") {
     };
     condy::sync_wait(func());
 }
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test uring_cmd - basic") {
+    auto my_async_cmd_sock = [](int cmd_op, int fd, int level, int optname,
+                                void *optval, int optlen) {
+        return condy::async_uring_cmd(cmd_op, fd, [=](io_uring_sqe *sqe) {
+            sqe->optval = (unsigned long)(uintptr_t)optval;
+            sqe->optname = optname;
+            sqe->optlen = optlen;
+            sqe->level = level;
+        });
+    };
+
+    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(listen_fd >= 0);
+
+    auto func = [&]() -> condy::Coro<void> {
+        int val = 1;
+        int r = co_await my_async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
+                                           listen_fd, SOL_SOCKET, SO_REUSEADDR,
+                                           &val, sizeof(val));
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(func());
+
+    close(listen_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
+    auto my_async_cmd_sock_fixed = [](int cmd_op, int fixed_fd, int level,
+                                      int optname, void *optval, int optlen) {
+        return condy::async_uring_cmd(
+            cmd_op, condy::fixed(fixed_fd), [=](io_uring_sqe *sqe) {
+                sqe->optval = (unsigned long)(uintptr_t)optval;
+                sqe->optname = optname;
+                sqe->optlen = optlen;
+                sqe->level = level;
+            });
+    };
+
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        REQUIRE(r == 1);
+
+        int val = 1;
+        r = co_await my_async_cmd_sock_fixed(SOCKET_URING_OP_SETSOCKOPT, 0,
+                                             SOL_SOCKET, SO_REUSEADDR, &val,
+                                             sizeof(val));
+        REQUIRE(r == 0);
+    };
+
+    condy::sync_wait(func());
+
+    close(listen_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test uring_cmd128 - basic") {
+    // TODO: Use nvme cmd instead of socket cmd
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
+    auto my_async_cmd_sock = [](int cmd_op, int fd, int level, int optname,
+                                void *optval, int optlen) {
+        return condy::async_uring_cmd128(cmd_op, fd, [=](io_uring_sqe *sqe) {
+            sqe->optval = (unsigned long)(uintptr_t)optval;
+            sqe->optname = optname;
+            sqe->optlen = optlen;
+            sqe->level = level;
+        });
+    };
+
+    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(listen_fd >= 0);
+
+    auto func = [&]() -> condy::Coro<void> {
+        int val = 1;
+        int r = co_await my_async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
+                                           listen_fd, SOL_SOCKET, SO_REUSEADDR,
+                                           &val, sizeof(val));
+        REQUIRE(r == 0);
+    };
+    condy::sync_wait(runtime, func());
+
+    close(listen_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test uring_cmd128 - fixed fd") {
+    // TODO: Use nvme cmd instead of socket cmd
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
+    auto my_async_cmd_sock_fixed = [](int cmd_op, int fixed_fd, int level,
+                                      int optname, void *optval, int optlen) {
+        return condy::async_uring_cmd128(
+            cmd_op, condy::fixed(fixed_fd), [=](io_uring_sqe *sqe) {
+                sqe->optval = (unsigned long)(uintptr_t)optval;
+                sqe->optname = optname;
+                sqe->optlen = optlen;
+                sqe->level = level;
+            });
+    };
+
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        REQUIRE(r == 1);
+
+        int val = 1;
+        r = co_await my_async_cmd_sock_fixed(SOCKET_URING_OP_SETSOCKOPT, 0,
+                                             SOL_SOCKET, SO_REUSEADDR, &val,
+                                             sizeof(val));
+        REQUIRE(r == 0);
+    };
+
+    condy::sync_wait(runtime, func());
+
+    close(listen_fd);
+}
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 TEST_CASE("test async_operations - test cmd_sock - basic") {

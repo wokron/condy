@@ -11,6 +11,7 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
+#include "condy/cqe_handler.hpp"
 #include "condy/helpers.hpp"
 #include "condy/provided_buffers.hpp"
 
@@ -849,6 +850,50 @@ inline auto async_socket_direct(int domain, int type, int protocol,
     return detail::make_op_awaiter(io_uring_prep_socket_direct, domain, type,
                                    protocol, file_index, flags);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_uring_cmd
+ * @tparam CQEHandler Custom CQE handler for specific result processing.
+ * @param cmd_func Function to configure sqe for specific command. Signature:
+ * void(io_uring_sqe *sqe).
+ */
+template <CQEHandlerLike CQEHandler = SimpleCQEHandler, FdLike Fd,
+          typename CmdFunc>
+inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
+    auto prep_func = [cmd_op, fd,
+                      cmd_func = std::forward<CmdFunc>(cmd_func)](Ring *ring) {
+        auto *sqe = ring->get_sqe();
+        io_uring_prep_uring_cmd(sqe, cmd_op, fd);
+        cmd_func(sqe);
+        return sqe;
+    };
+    auto op = build_op_awaiter<CQEHandler>(std::move(prep_func));
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+/**
+ * @brief See io_uring_prep_uring_cmd128
+ * @tparam CQEHandler Custom CQE handler for specific result processing.
+ * @param cmd_func Function to configure sqe for specific command. Signature:
+ * void(io_uring_sqe *sqe).
+ */
+template <CQEHandlerLike CQEHandler = SimpleCQEHandler, FdLike Fd,
+          typename CmdFunc>
+inline auto async_uring_cmd128(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
+    auto prep_func = [cmd_op, fd,
+                      cmd_func = std::forward<CmdFunc>(cmd_func)](Ring *ring) {
+        auto *sqe = ring->get_sqe128();
+        io_uring_prep_uring_cmd128(sqe, cmd_op, fd);
+        cmd_func(sqe);
+        return sqe;
+    };
+    auto op = build_op_awaiter<CQEHandler>(std::move(prep_func));
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 /**
