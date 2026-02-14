@@ -342,6 +342,8 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough - basic") {
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
+
+    close(fd);
 }
 
 TEST_CASE(
@@ -379,6 +381,8 @@ TEST_CASE(
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
+
+    close(fd);
 }
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
@@ -459,6 +463,8 @@ TEST_CASE(
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
+
+    close(fd);
 }
 #endif
 
@@ -498,6 +504,8 @@ TEST_CASE(
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
+
+    close(fd);
 }
 #endif
 
