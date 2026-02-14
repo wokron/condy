@@ -327,33 +327,12 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe128().enable_cqe32());
 
-    constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
-    constexpr int nsid = 1;           // Assuming nsid is 1
-
-    auto my_cmd_nvme_read = [](int fd, void *buf, size_t buf_size,
-                               uint64_t offset) {
-        uint64_t slba = offset >> lba_shift;
-        uint32_t nlb = (buf_size >> lba_shift) - 1;
-        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
-            NVME_URING_CMD_IO, fd, [=](io_uring_sqe *sqe) {
-                struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
-                memset(cmd, 0, sizeof(struct nvme_uring_cmd));
-                cmd->opcode = 0x02; // nvme_cmd_read
-                cmd->cdw10 = slba & 0xffffffff;
-                cmd->cdw11 = slba >> 32;
-                cmd->cdw12 = nlb;
-                cmd->addr = (__u64)(uintptr_t)buf;
-                cmd->data_len = buf_size;
-                cmd->nsid = nsid;
-            });
-    };
-
     alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
         condy::NVMeResult r =
             co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
-        bool ok = (r.status == 0 && r.result == 0);
-        REQUIRE(ok);
+        REQUIRE(r.status == 0);
+        REQUIRE(r.result == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
