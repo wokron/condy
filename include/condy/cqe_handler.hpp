@@ -58,4 +58,32 @@ private:
     Br *buffers_;
 };
 
+/**
+ * @brief Result for NVMe passthrough commands, containing the status and result
+ * of the command
+ */
+struct NVMeResult {
+    int status;      // cqe->res
+    uint64_t result; // cqe->big_cqe[0]
+};
+
+/**
+ * @brief A CQE handler for NVMe passthrough commands that extracts the status
+ * and result from the CQE.
+ */
+class NVMePassthruCQEHandler {
+public:
+    using ReturnType = NVMeResult;
+
+    void handle_cqe(io_uring_cqe *cqe) {
+        result_.status = cqe->res;
+        result_.result = cqe->big_cqe[0];
+    }
+
+    ReturnType extract_result() { return result_; }
+
+private:
+    NVMeResult result_;
+};
+
 } // namespace condy
