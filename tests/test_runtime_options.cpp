@@ -66,7 +66,7 @@ TEST_CASE("test runtime_options - enable_iopoll") {
 
     auto func = [&]() -> condy::Coro<void> {
         int n = co_await condy::async_read(fd, condy::buffer(buffer), 0);
-        REQUIRE(n == 4096); // For raw device, the read size is always 4096
+        REQUIRE(n == sizeof(buffer));
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
 

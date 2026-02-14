@@ -10,6 +10,7 @@
 #pragma once
 
 #include "condy/concepts.hpp"
+#include <cassert>
 #include <cerrno>
 #include <cstdint>
 #include <utility>

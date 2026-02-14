@@ -321,7 +321,7 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough - basic") {
         return;
     }
 
-    int fd = open(nvme_ng_device_path, O_RDONLY);
+    int fd = open(nvme_ng_device_path, O_RDWR);
     REQUIRE(fd >= 0);
 
     condy::Runtime runtime(
@@ -355,7 +355,7 @@ TEST_CASE(
         return;
     }
 
-    int fd = open(nvme_ng_device_path, O_RDONLY);
+    int fd = open(nvme_ng_device_path, O_RDWR);
     REQUIRE(fd >= 0);
 
     condy::Runtime runtime(
@@ -442,7 +442,7 @@ TEST_CASE(
         return;
     }
 
-    int fd = open(nvme_ng_device_path, O_RDONLY);
+    int fd = open(nvme_ng_device_path, O_RDWR);
     REQUIRE(fd >= 0);
 
     condy::Runtime runtime(
@@ -478,7 +478,7 @@ TEST_CASE(
         return;
     }
 
-    int fd = open(nvme_ng_device_path, O_RDONLY);
+    int fd = open(nvme_ng_device_path, O_RDWR);
     REQUIRE(fd >= 0);
 
     condy::Runtime runtime(

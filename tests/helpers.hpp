@@ -162,6 +162,11 @@ inline auto my_async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
 }
 #endif
 
+enum nvme_io_opcode : uint8_t {
+    NVME_CMD_WRITE = 0x01,
+    NVME_CMD_READ = 0x02,
+};
+
 template <bool SQE128 = false, condy::FdLike Fd>
 inline auto my_cmd_nvme_read(Fd fd, void *buf, size_t buf_size,
                              uint64_t offset) {
@@ -172,7 +177,7 @@ inline auto my_cmd_nvme_read(Fd fd, void *buf, size_t buf_size,
     auto cmd_func = [=](io_uring_sqe *sqe) {
         struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
         memset(cmd, 0, sizeof(struct nvme_uring_cmd));
-        cmd->opcode = 0x02; // nvme_cmd_read
+        cmd->opcode = NVME_CMD_READ;
         cmd->cdw10 = slba & 0xffffffff;
         cmd->cdw11 = slba >> 32;
         cmd->cdw12 = nlb;
@@ -204,7 +209,7 @@ inline auto my_cmd_nvme_write(Fd fd, const void *buf, size_t buf_size,
     auto cmd_func = [=](io_uring_sqe *sqe) {
         struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
         memset(cmd, 0, sizeof(struct nvme_uring_cmd));
-        cmd->opcode = 0x01; // nvme_cmd_write
+        cmd->opcode = NVME_CMD_WRITE;
         cmd->cdw10 = slba & 0xffffffff;
         cmd->cdw11 = slba >> 32;
         cmd->cdw12 = nlb;
