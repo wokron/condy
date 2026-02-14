@@ -300,39 +300,31 @@ TEST_CASE("test async_operations - test uring_cmd - basic") {
 #endif
 
 TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
-    const char *nvme_device_path = std::getenv("CONDY_TEST_NVME_DEVICE_PATH");
-    const char *nvme_generic_char_device_path =
-        std::getenv("CONDY_TEST_NVME_GENERIC_CHAR_DEVICE_PATH");
-    if (nvme_device_path == nullptr) {
-        MESSAGE("CONDY_TEST_NVME_DEVICE_PATH not set, skipping");
-        return;
-    }
-    if (nvme_generic_char_device_path == nullptr) {
-        MESSAGE("CONDY_TEST_NVME_GENERIC_CHAR_DEVICE_PATH not set, skipping");
+    const char *nvme_ng_device_path =
+        std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
+    if (nvme_ng_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_NG_DEVICE_PATH not set, skipping");
         return;
     }
 
-    int fd = open(nvme_device_path, O_WRONLY);
-    REQUIRE(fd >= 0);
-
-    std::string msg = "Hello, world!";
-    ssize_t written = write(fd, msg.data(), msg.size());
-    REQUIRE(written == (ssize_t)msg.size());
-    fsync(fd);
-    close(fd);
-
-    fd = open(nvme_generic_char_device_path, O_RDONLY);
+    int fd = open(nvme_ng_device_path, O_RDONLY);
     REQUIRE(fd >= 0);
 
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe128().enable_cqe32());
 
+    std::string msg = generate_data(4096);
     alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
-        condy::NVMeResult r =
+        condy::NVMeResult r1 =
+            co_await my_cmd_nvme_write(fd, msg.data(), msg.size(), 0);
+        REQUIRE(r1.status == 0);
+        REQUIRE(r1.result == 0);
+
+        condy::NVMeResult r2 =
             co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
-        REQUIRE(r.status == 0);
-        REQUIRE(r.result == 0);
+        REQUIRE(r2.status == 0);
+        REQUIRE(r2.result == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
