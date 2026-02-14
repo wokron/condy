@@ -150,16 +150,20 @@ inline auto my_async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
         sqe->optlen = optlen;
         sqe->level = level;
     };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
     if constexpr (SQE128) {
         return condy::async_uring_cmd128(cmd_op, fd, cmd_func);
     } else {
         return condy::async_uring_cmd(cmd_op, fd, cmd_func);
     }
+#else
+    return condy::async_uring_cmd(cmd_op, fd, cmd_func);
+#endif
 }
 #endif
 
-template <bool SQE128 = false>
-inline auto my_cmd_nvme_read(int fd, void *buf, size_t buf_size,
+template <bool SQE128 = false, condy::FdLike Fd>
+inline auto my_cmd_nvme_read(Fd fd, void *buf, size_t buf_size,
                              uint64_t offset) {
     constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
     constexpr int nsid = 1;           // Assuming nsid is 1
@@ -176,6 +180,7 @@ inline auto my_cmd_nvme_read(int fd, void *buf, size_t buf_size,
         cmd->data_len = buf_size;
         cmd->nsid = nsid;
     };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
     if constexpr (SQE128) {
         return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
             NVME_URING_CMD_IO, fd, cmd_func);
@@ -183,10 +188,14 @@ inline auto my_cmd_nvme_read(int fd, void *buf, size_t buf_size,
         return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
             NVME_URING_CMD_IO, fd, cmd_func);
     }
+#else
+    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+        NVME_URING_CMD_IO, fd, cmd_func);
+#endif
 }
 
-template <bool SQE128 = false>
-inline auto my_cmd_nvme_write(int fd, const void *buf, size_t buf_size,
+template <bool SQE128 = false, condy::FdLike Fd>
+inline auto my_cmd_nvme_write(Fd fd, const void *buf, size_t buf_size,
                               uint64_t offset) {
     constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
     constexpr int nsid = 1;           // Assuming nsid is 1
@@ -203,6 +212,7 @@ inline auto my_cmd_nvme_write(int fd, const void *buf, size_t buf_size,
         cmd->data_len = buf_size;
         cmd->nsid = nsid;
     };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
     if constexpr (SQE128) {
         return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
             NVME_URING_CMD_IO, fd, cmd_func);
@@ -210,6 +220,10 @@ inline auto my_cmd_nvme_write(int fd, const void *buf, size_t buf_size,
         return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
             NVME_URING_CMD_IO, fd, cmd_func);
     }
+#else
+    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+        NVME_URING_CMD_IO, fd, cmd_func);
+#endif
 }
 
 } // namespace

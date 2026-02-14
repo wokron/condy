@@ -85,7 +85,7 @@ public:
 
 private:
     // Just for debugging, check if the CQE is big as expected
-    bool check_cqe32_(io_uring_cqe *cqe) {
+    bool check_cqe32_([[maybe_unused]] io_uring_cqe *cqe) {
         auto *ring = detail::Context::current().ring();
         assert(ring != nullptr);
         auto ring_flags = ring->ring()->flags;

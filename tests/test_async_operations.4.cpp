@@ -272,7 +272,7 @@ TEST_CASE("test async_operations - test socket - direct") {
 
 // NOTE: cmd_sock available since 2.5
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
-TEST_CASE("test async_operations - test uring_cmd - basic") {
+TEST_CASE("test async_operations - test uring_cmd - cmd sock - basic") {
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     REQUIRE(listen_fd >= 0);
 
@@ -289,7 +289,31 @@ TEST_CASE("test async_operations - test uring_cmd - basic") {
 }
 #endif
 
-TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
+// NOTE: cmd_sock available since 2.5
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
+TEST_CASE("test async_operations - test uring_cmd - cmd sock - fixed fd") {
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        REQUIRE(r == 1);
+
+        int val = 1;
+        r = co_await my_async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
+                                       condy::fixed(0), SOL_SOCKET,
+                                       SO_REUSEADDR, &val, sizeof(val));
+        REQUIRE(r == 0);
+    };
+
+    condy::sync_wait(func());
+
+    close(listen_fd);
+}
+#endif
+
+TEST_CASE("test async_operations - test uring_cmd - nvme passthrough - basic") {
     const char *nvme_ng_device_path =
         std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
     if (nvme_ng_device_path == nullptr) {
@@ -320,32 +344,45 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
     condy::sync_wait(runtime, func());
 }
 
-// NOTE: cmd_sock available since 2.5
-#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
-TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
-    int listen_fd = create_accept_socket();
+TEST_CASE(
+    "test async_operations - test uring_cmd - nvme passthrough - fixed fd") {
+    const char *nvme_ng_device_path =
+        std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
+    if (nvme_ng_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_NG_DEVICE_PATH not set, skipping");
+        return;
+    }
 
+    int fd = open(nvme_ng_device_path, O_RDONLY);
+    REQUIRE(fd >= 0);
+
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe128().enable_cqe32());
+
+    std::string msg = generate_data(4096);
+    alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        int r = co_await condy::async_files_update(&fd, 1, 0);
         REQUIRE(r == 1);
 
-        int val = 1;
-        r = co_await my_async_cmd_sock(SOCKET_URING_OP_SETSOCKOPT,
-                                       condy::fixed(0), SOL_SOCKET,
-                                       SO_REUSEADDR, &val, sizeof(val));
-        REQUIRE(r == 0);
+        condy::NVMeResult r1 = co_await my_cmd_nvme_write(
+            condy::fixed(0), msg.data(), msg.size(), 0);
+        REQUIRE(r1.status == 0);
+        REQUIRE(r1.result == 0);
+
+        condy::NVMeResult r2 = co_await my_cmd_nvme_read(
+            condy::fixed(0), buffer, sizeof(buffer), 0);
+        REQUIRE(r2.status == 0);
+        REQUIRE(r2.result == 0);
+        REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
-
-    condy::sync_wait(func());
-
-    close(listen_fd);
+    condy::sync_wait(runtime, func());
 }
-#endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-TEST_CASE("test async_operations - test uring_cmd128 - basic") {
+TEST_CASE("test async_operations - test uring_cmd128 - cmd sock - basic") {
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
 
@@ -366,7 +403,34 @@ TEST_CASE("test async_operations - test uring_cmd128 - basic") {
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-TEST_CASE("test async_operations - test uring_cmd128 - nvme passthrough") {
+TEST_CASE("test async_operations - test uring_cmd128 - cmd sock - fixed fd") {
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
+
+    int listen_fd = create_accept_socket();
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto &fd_table = condy::current_runtime().fd_table();
+        fd_table.init(1);
+        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        REQUIRE(r == 1);
+
+        int val = 1;
+        r = co_await my_async_cmd_sock<true>(SOCKET_URING_OP_SETSOCKOPT,
+                                             condy::fixed(0), SOL_SOCKET,
+                                             SO_REUSEADDR, &val, sizeof(val));
+        REQUIRE(r == 0);
+    };
+
+    condy::sync_wait(runtime, func());
+
+    close(listen_fd);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE(
+    "test async_operations - test uring_cmd128 - nvme passthrough - basic") {
     const char *nvme_ng_device_path =
         std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
     if (nvme_ng_device_path == nullptr) {
@@ -399,28 +463,41 @@ TEST_CASE("test async_operations - test uring_cmd128 - nvme passthrough") {
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-TEST_CASE("test async_operations - test uring_cmd128 - fixed fd") {
+TEST_CASE(
+    "test async_operations - test uring_cmd128 - nvme passthrough - fixed fd") {
+    const char *nvme_ng_device_path =
+        std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
+    if (nvme_ng_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_NG_DEVICE_PATH not set, skipping");
+        return;
+    }
+
+    int fd = open(nvme_ng_device_path, O_RDONLY);
+    REQUIRE(fd >= 0);
+
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
 
-    int listen_fd = create_accept_socket();
-
+    std::string msg = generate_data(4096);
+    alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
         auto &fd_table = condy::current_runtime().fd_table();
         fd_table.init(1);
-        int r = co_await condy::async_files_update(&listen_fd, 1, 0);
+        int r = co_await condy::async_files_update(&fd, 1, 0);
         REQUIRE(r == 1);
 
-        int val = 1;
-        r = co_await my_async_cmd_sock<true>(SOCKET_URING_OP_SETSOCKOPT,
-                                             condy::fixed(0), SOL_SOCKET,
-                                             SO_REUSEADDR, &val, sizeof(val));
-        REQUIRE(r == 0);
+        condy::NVMeResult r1 = co_await my_cmd_nvme_write<true>(
+            condy::fixed(0), msg.data(), msg.size(), 0);
+        REQUIRE(r1.status == 0);
+        REQUIRE(r1.result == 0);
+
+        condy::NVMeResult r2 = co_await my_cmd_nvme_read<true>(
+            condy::fixed(0), buffer, sizeof(buffer), 0);
+        REQUIRE(r2.status == 0);
+        REQUIRE(r2.result == 0);
+        REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
-
     condy::sync_wait(runtime, func());
-
-    close(listen_fd);
 }
 #endif
 
