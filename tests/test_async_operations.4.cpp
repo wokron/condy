@@ -1,4 +1,5 @@
 #include "condy/buffers.hpp"
+#include "condy/cqe_handler.hpp"
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
 #include "condy/sync_wait.hpp"
@@ -333,8 +334,7 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
                                uint64_t offset) {
         uint64_t slba = offset >> lba_shift;
         uint32_t nlb = (buf_size >> lba_shift) - 1;
-        // TODO: Custom CQEHandler
-        return condy::async_uring_cmd(
+        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
             NVME_URING_CMD_IO, fd, [=](io_uring_sqe *sqe) {
                 struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
                 memset(cmd, 0, sizeof(struct nvme_uring_cmd));
@@ -350,8 +350,10 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
 
     alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
-        int r = co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
-        REQUIRE(r == 0); // nvme cmd returns 0 on success
+        condy::NVMeResult r =
+            co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
+        bool ok = (r.status == 0 && r.result == 0);
+        REQUIRE(ok);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
