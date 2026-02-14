@@ -73,10 +73,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 cat > "$TEMP_DIR/init.sh" <<EOF
 #!/bin/sh
-mkdir -p /mnt/ssd
-mount -t ext4 /dev/nvme0n1 /mnt/ssd
 $COMMAND
-umount /mnt/ssd
 EOF
 chmod +x "$TEMP_DIR/init.sh"
 
