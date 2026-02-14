@@ -76,11 +76,29 @@ public:
     using ReturnType = NVMeResult;
 
     void handle_cqe(io_uring_cqe *cqe) {
+        assert(check_cqe32_(cqe) && "Expected big CQE for NVMe passthrough");
         result_.status = cqe->res;
         result_.result = cqe->big_cqe[0];
     }
 
     ReturnType extract_result() { return result_; }
+
+private:
+    // Just for debugging, check if the CQE is big as expected
+    bool check_cqe32_(io_uring_cqe *cqe) {
+        auto *ring = detail::Context::current().ring();
+        assert(ring != nullptr);
+        auto ring_flags = ring->ring()->flags;
+        if (ring_flags & IORING_SETUP_CQE32) {
+            return true;
+        }
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+        if (ring_flags & IORING_SETUP_CQE_MIXED) {
+            return cqe->flags & IORING_CQE_F_32;
+        }
+#endif
+        return false;
+    }
 
 private:
     NVMeResult result_;
