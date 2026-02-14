@@ -87,7 +87,6 @@ echo "Initrd image created at $TEMP_DIR/$INITRD_OUTPUT"
 # Simulate NVMe SSD with a tmpfs-backed disk image
 SSD_IMG="/dev/shm/vm-ssd.img.$$"
 truncate -s 1G "$SSD_IMG"
-mkfs.ext4 -q "$SSD_IMG"
 trap "rm -f '$SSD_IMG'; rm -rf $TEMP_DIR" EXIT
 SSD_DRIVE="-drive file=$SSD_IMG,if=none,id=ssd0,format=raw,cache=none,aio=io_uring"
 SSD_DEVICE="-device nvme,drive=ssd0,serial=ssd0"
