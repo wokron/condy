@@ -105,4 +105,39 @@ private:
     NVMeResult result_;
 };
 
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+/**
+ * @brief Result for TX timestamp operations, containing timestamp information
+ * from the socket error queue
+ */
+struct TxTimestampResult {
+    int tskey;
+    int tstype;
+    io_timespec ts;
+    bool hwts;
+};
+
+/**
+ * @brief A CQE handler for TX timestamp operations that extracts timestamp
+ * information from the CQE.
+ */
+class TxTimestampCQEHandler {
+public:
+    using ReturnType = TxTimestampResult;
+
+    void handle_cqe(io_uring_cqe *cqe) {
+        result_.tskey = cqe->res;
+        result_.tstype =
+            static_cast<int>(cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT);
+        result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
+        result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
+    }
+
+    ReturnType extract_result() { return result_; }
+
+private:
+    TxTimestampResult result_;
+};
+#endif
+
 } // namespace condy
