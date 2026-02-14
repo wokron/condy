@@ -1,5 +1,6 @@
 #pragma once
 
+#include "condy/concepts.hpp"
 #include <cerrno>
 #include <condy/async_operations.hpp>
 #include <cstddef>
@@ -7,6 +8,7 @@
 #include <doctest/doctest.h>
 #include <fcntl.h>
 #include <linux/futex.h>
+#include <linux/nvme_ioctl.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -137,5 +139,96 @@ private:
     std::string file_path_;
     std::string path_;
 };
+
+#if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
+template <bool SQE128 = false, condy::FdLike Fd>
+inline auto my_async_cmd_sock(int cmd_op, Fd fd, int level, int optname,
+                              void *optval, int optlen) {
+    auto cmd_func = [=](io_uring_sqe *sqe) {
+        sqe->optval = (unsigned long)(uintptr_t)optval;
+        sqe->optname = optname;
+        sqe->optlen = optlen;
+        sqe->level = level;
+    };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+    if constexpr (SQE128) {
+        return condy::async_uring_cmd128(cmd_op, fd, cmd_func);
+    } else {
+        return condy::async_uring_cmd(cmd_op, fd, cmd_func);
+    }
+#else
+    return condy::async_uring_cmd(cmd_op, fd, cmd_func);
+#endif
+}
+#endif
+
+enum nvme_io_opcode : uint8_t {
+    NVME_CMD_WRITE = 0x01,
+    NVME_CMD_READ = 0x02,
+};
+
+template <bool SQE128 = false, condy::FdLike Fd>
+inline auto my_cmd_nvme_read(Fd fd, void *buf, size_t buf_size,
+                             uint64_t offset) {
+    constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
+    constexpr int nsid = 1;           // Assuming nsid is 1
+    uint64_t slba = offset >> lba_shift;
+    uint32_t nlb = (buf_size >> lba_shift) - 1;
+    auto cmd_func = [=](io_uring_sqe *sqe) {
+        struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
+        memset(cmd, 0, sizeof(struct nvme_uring_cmd));
+        cmd->opcode = NVME_CMD_READ;
+        cmd->cdw10 = slba & 0xffffffff;
+        cmd->cdw11 = slba >> 32;
+        cmd->cdw12 = nlb;
+        cmd->addr = (__u64)(uintptr_t)buf;
+        cmd->data_len = buf_size;
+        cmd->nsid = nsid;
+    };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+    if constexpr (SQE128) {
+        return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    } else {
+        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    }
+#else
+    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+        NVME_URING_CMD_IO, fd, cmd_func);
+#endif
+}
+
+template <bool SQE128 = false, condy::FdLike Fd>
+inline auto my_cmd_nvme_write(Fd fd, const void *buf, size_t buf_size,
+                              uint64_t offset) {
+    constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
+    constexpr int nsid = 1;           // Assuming nsid is 1
+    uint64_t slba = offset >> lba_shift;
+    uint32_t nlb = (buf_size >> lba_shift) - 1;
+    auto cmd_func = [=](io_uring_sqe *sqe) {
+        struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
+        memset(cmd, 0, sizeof(struct nvme_uring_cmd));
+        cmd->opcode = NVME_CMD_WRITE;
+        cmd->cdw10 = slba & 0xffffffff;
+        cmd->cdw11 = slba >> 32;
+        cmd->cdw12 = nlb;
+        cmd->addr = (__u64)(uintptr_t)buf;
+        cmd->data_len = buf_size;
+        cmd->nsid = nsid;
+    };
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+    if constexpr (SQE128) {
+        return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    } else {
+        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    }
+#else
+    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+        NVME_URING_CMD_IO, fd, cmd_func);
+#endif
+}
 
 } // namespace

@@ -87,7 +87,10 @@ jobs:
       - name: Run Tests on QEMU
         timeout-minutes: 15
         run: |
-          bash ./scripts/vm-run.sh -c "CONDY_TEST_SSD_BASE_DIR=/mnt/ssd ./tests" ./.cache/bzImage ./build/tests/tests 2>&1 | tee vm-run.log
+          bash ./scripts/vm-run.sh \
+            -c "CONDY_TEST_NVME_DEVICE_PATH=/dev/nvme0n1 CONDY_TEST_NVME_NG_DEVICE_PATH=/dev/ng0n1 ./tests" \
+            ./.cache/bzImage ./build/tests/tests \
+            2>&1 | tee vm-run.log
           if grep -q "SUCCESS!" vm-run.log; then
             echo "::notice:: All tests passed"
           else
