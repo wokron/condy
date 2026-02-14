@@ -139,44 +139,58 @@ private:
     std::string path_;
 };
 
+template <bool SQE128 = false>
 inline auto my_cmd_nvme_read(int fd, void *buf, size_t buf_size,
                              uint64_t offset) {
     constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
     constexpr int nsid = 1;           // Assuming nsid is 1
     uint64_t slba = offset >> lba_shift;
     uint32_t nlb = (buf_size >> lba_shift) - 1;
-    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
-        NVME_URING_CMD_IO, fd, [=](io_uring_sqe *sqe) {
-            struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
-            memset(cmd, 0, sizeof(struct nvme_uring_cmd));
-            cmd->opcode = 0x02; // nvme_cmd_read
-            cmd->cdw10 = slba & 0xffffffff;
-            cmd->cdw11 = slba >> 32;
-            cmd->cdw12 = nlb;
-            cmd->addr = (__u64)(uintptr_t)buf;
-            cmd->data_len = buf_size;
-            cmd->nsid = nsid;
-        });
+    auto cmd_func = [=](io_uring_sqe *sqe) {
+        struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
+        memset(cmd, 0, sizeof(struct nvme_uring_cmd));
+        cmd->opcode = 0x02; // nvme_cmd_read
+        cmd->cdw10 = slba & 0xffffffff;
+        cmd->cdw11 = slba >> 32;
+        cmd->cdw12 = nlb;
+        cmd->addr = (__u64)(uintptr_t)buf;
+        cmd->data_len = buf_size;
+        cmd->nsid = nsid;
+    };
+    if constexpr (SQE128) {
+        return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    } else {
+        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    }
 }
 
+template <bool SQE128 = false>
 inline auto my_cmd_nvme_write(int fd, const void *buf, size_t buf_size,
                               uint64_t offset) {
     constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
     constexpr int nsid = 1;           // Assuming nsid is 1
     uint64_t slba = offset >> lba_shift;
     uint32_t nlb = (buf_size >> lba_shift) - 1;
-    return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
-        NVME_URING_CMD_IO, fd, [=](io_uring_sqe *sqe) {
-            struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
-            memset(cmd, 0, sizeof(struct nvme_uring_cmd));
-            cmd->opcode = 0x01; // nvme_cmd_write
-            cmd->cdw10 = slba & 0xffffffff;
-            cmd->cdw11 = slba >> 32;
-            cmd->cdw12 = nlb;
-            cmd->addr = (__u64)(uintptr_t)buf;
-            cmd->data_len = buf_size;
-            cmd->nsid = nsid;
-        });
+    auto cmd_func = [=](io_uring_sqe *sqe) {
+        struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
+        memset(cmd, 0, sizeof(struct nvme_uring_cmd));
+        cmd->opcode = 0x01; // nvme_cmd_write
+        cmd->cdw10 = slba & 0xffffffff;
+        cmd->cdw11 = slba >> 32;
+        cmd->cdw12 = nlb;
+        cmd->addr = (__u64)(uintptr_t)buf;
+        cmd->data_len = buf_size;
+        cmd->nsid = nsid;
+    };
+    if constexpr (SQE128) {
+        return condy::async_uring_cmd128<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    } else {
+        return condy::async_uring_cmd<condy::NVMePassthruCQEHandler>(
+            NVME_URING_CMD_IO, fd, cmd_func);
+    }
 }
 
 } // namespace

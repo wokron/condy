@@ -365,11 +365,8 @@ TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
 }
 #endif
 
-// TODO: uring_cmd test case with sqe128 + cqe128 + nvme cmd
-
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 TEST_CASE("test async_operations - test uring_cmd128 - basic") {
-    // TODO: Use nvme cmd instead of socket cmd
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
     auto my_async_cmd_sock = [](int cmd_op, int fd, int level, int optname,
@@ -399,8 +396,40 @@ TEST_CASE("test async_operations - test uring_cmd128 - basic") {
 #endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+TEST_CASE("test async_operations - test uring_cmd128 - nvme passthrough") {
+    const char *nvme_ng_device_path =
+        std::getenv("CONDY_TEST_NVME_NG_DEVICE_PATH");
+    if (nvme_ng_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_NG_DEVICE_PATH not set, skipping");
+        return;
+    }
+
+    int fd = open(nvme_ng_device_path, O_RDONLY);
+    REQUIRE(fd >= 0);
+
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
+
+    std::string msg = generate_data(4096);
+    alignas(4096) char buffer[4096];
+    auto func = [&]() -> condy::Coro<void> {
+        condy::NVMeResult r1 =
+            co_await my_cmd_nvme_write<true>(fd, msg.data(), msg.size(), 0);
+        REQUIRE(r1.status == 0);
+        REQUIRE(r1.result == 0);
+
+        condy::NVMeResult r2 =
+            co_await my_cmd_nvme_read<true>(fd, buffer, sizeof(buffer), 0);
+        REQUIRE(r2.status == 0);
+        REQUIRE(r2.result == 0);
+        REQUIRE(std::string_view(buffer, msg.size()) == msg);
+    };
+    condy::sync_wait(runtime, func());
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 TEST_CASE("test async_operations - test uring_cmd128 - fixed fd") {
-    // TODO: Use nvme cmd instead of socket cmd
     condy::Runtime runtime(
         condy::RuntimeOptions().enable_sqe_mixed().enable_cqe_mixed());
     auto my_async_cmd_sock_fixed = [](int cmd_op, int fixed_fd, int level,
