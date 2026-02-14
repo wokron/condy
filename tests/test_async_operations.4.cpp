@@ -10,6 +10,7 @@
 #include <doctest/doctest.h>
 #include <fcntl.h>
 #include <linux/futex.h>
+#include <linux/nvme_ioctl.h>
 #include <netinet/in.h>
 #include <string_view>
 #include <sys/epoll.h>
@@ -296,6 +297,65 @@ TEST_CASE("test async_operations - test uring_cmd - basic") {
     close(listen_fd);
 }
 #endif
+
+TEST_CASE("test async_operations - test uring_cmd - nvme passthrough") {
+    const char *nvme_device_path = std::getenv("CONDY_TEST_NVME_DEVICE_PATH");
+    const char *nvme_generic_char_device_path =
+        std::getenv("CONDY_TEST_NVME_GENERIC_CHAR_DEVICE_PATH");
+    if (nvme_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_DEVICE_PATH not set, skipping");
+        return;
+    }
+    if (nvme_generic_char_device_path == nullptr) {
+        MESSAGE("CONDY_TEST_NVME_GENERIC_CHAR_DEVICE_PATH not set, skipping");
+        return;
+    }
+
+    int fd = open(nvme_device_path, O_WRONLY);
+    REQUIRE(fd >= 0);
+
+    std::string msg = "Hello, world!";
+    ssize_t written = write(fd, msg.data(), msg.size());
+    REQUIRE(written == (ssize_t)msg.size());
+    fsync(fd);
+    close(fd);
+
+    fd = open(nvme_generic_char_device_path, O_RDONLY);
+    REQUIRE(fd >= 0);
+
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_sqe128().enable_cqe32());
+
+    constexpr uint32_t lba_shift = 9; // Assuming 512 bytes sector size
+    constexpr int nsid = 1;           // Assuming nsid is 1
+
+    auto my_cmd_nvme_read = [](int fd, void *buf, size_t buf_size,
+                               uint64_t offset) {
+        uint64_t slba = offset >> lba_shift;
+        uint32_t nlb = (buf_size >> lba_shift) - 1;
+        // TODO: Custom CQEHandler
+        return condy::async_uring_cmd(
+            NVME_URING_CMD_IO, fd, [=](io_uring_sqe *sqe) {
+                struct nvme_uring_cmd *cmd = (struct nvme_uring_cmd *)sqe->cmd;
+                memset(cmd, 0, sizeof(struct nvme_uring_cmd));
+                cmd->opcode = 0x02; // nvme_cmd_read
+                cmd->cdw10 = slba & 0xffffffff;
+                cmd->cdw11 = slba >> 32;
+                cmd->cdw12 = nlb;
+                cmd->addr = (__u64)(uintptr_t)buf;
+                cmd->data_len = buf_size;
+                cmd->nsid = nsid;
+            });
+    };
+
+    alignas(4096) char buffer[4096];
+    auto func = [&]() -> condy::Coro<void> {
+        int r = co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
+        REQUIRE(r == 0); // nvme cmd returns 0 on success
+        REQUIRE(std::string_view(buffer, msg.size()) == msg);
+    };
+    condy::sync_wait(runtime, func());
+}
 
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
 TEST_CASE("test async_operations - test uring_cmd - fixed fd") {
