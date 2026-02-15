@@ -1,4 +1,5 @@
 #include "condy/buffers.hpp"
+#include "condy/channel.hpp"
 #include "condy/cqe_handler.hpp"
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
@@ -10,9 +11,12 @@
 #include <cstring>
 #include <doctest/doctest.h>
 #include <fcntl.h>
+#include <linux/errqueue.h>
 #include <linux/futex.h>
+#include <linux/net_tstamp.h>
 #include <linux/nvme_ioctl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <string_view>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -20,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <unistd.h>
+#include <variant>
 
 TEST_CASE("test async_operations - test mkdirat") {
     char name[] = "temp_dir";
@@ -384,6 +389,71 @@ TEST_CASE(
 
     close(fd);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
+    int r;
+    int fd;
+    int listener = create_accept_socket();
+
+    sockaddr_in addr{};
+    socklen_t addrlen = sizeof(addr);
+    r = getsockname(listener, (sockaddr *)&addr, &addrlen);
+    REQUIRE(r == 0);
+
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(fd >= 0);
+
+    int val = 1;
+    r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+    REQUIRE(r == 0);
+
+    r = connect(fd, (sockaddr *)&addr, sizeof(addr));
+    REQUIRE(r == 0);
+
+    unsigned int sock_opt;
+    sock_opt = SOF_TIMESTAMPING_SOFTWARE | SOF_TIMESTAMPING_OPT_CMSG |
+               SOF_TIMESTAMPING_OPT_ID;
+    sock_opt |= SOF_TIMESTAMPING_TX_SCHED | SOF_TIMESTAMPING_TX_SOFTWARE |
+                SOF_TIMESTAMPING_TX_ACK;
+    sock_opt |= SOF_TIMESTAMPING_OPT_TSONLY;
+
+    r = setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, (char *)&sock_opt,
+                   sizeof(sock_opt));
+    REQUIRE(r == 0);
+
+    condy::Runtime runtime(condy::RuntimeOptions().enable_cqe32());
+
+    auto func = [&]() -> condy::Coro<void> {
+        using condy::operators::operator||;
+        condy::Channel<std::monostate> chan(1);
+        std::string msg = "hello";
+        auto r = co_await condy::async_send(fd, condy::buffer(msg), 0);
+        REQUIRE(r == static_cast<ssize_t>(msg.size()));
+
+        std::vector<condy::TxTimestampResult> results;
+        co_await (
+            condy::async_uring_cmd_multishot<condy::TxTimestampCQEHandler>(
+                SOCKET_URING_OP_TX_TIMESTAMP, fd, [](auto) { /* no-op */ },
+                [&](auto r) {
+                    results.push_back(r);
+                    if (results.size() == 3) {
+                        chan.try_push(std::monostate{});
+                    }
+                }) ||
+            chan.pop());
+        REQUIRE(results.size() == 3);
+        REQUIRE(results[0].tstype == SCM_TSTAMP_SCHED);
+        REQUIRE(results[1].tstype == SCM_TSTAMP_SND);
+        REQUIRE(results[2].tstype == SCM_TSTAMP_ACK);
+    };
+
+    condy::sync_wait(runtime, func());
+
+    close(listener);
+    close(fd);
+}
+#endif
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 TEST_CASE("test async_operations - test uring_cmd128 - cmd sock - basic") {

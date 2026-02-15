@@ -871,6 +871,25 @@ inline auto async_uring_cmd(int cmd_op, Fd fd, CmdFunc &&cmd_func) {
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
 
+/**
+ * @copydoc async_uring_cmd
+ */
+template <CQEHandlerLike CQEHandler = SimpleCQEHandler, FdLike Fd,
+          typename CmdFunc, typename MultiShotFunc>
+inline auto async_uring_cmd_multishot(int cmd_op, Fd fd, CmdFunc &&cmd_func,
+                                      MultiShotFunc &&func) {
+    auto prep_func = [cmd_op, fd,
+                      cmd_func = std::forward<CmdFunc>(cmd_func)](Ring *ring) {
+        auto *sqe = ring->get_sqe();
+        io_uring_prep_uring_cmd(sqe, cmd_op, fd);
+        cmd_func(sqe);
+        return sqe;
+    };
+    auto op = build_multishot_op_awaiter<CQEHandler>(
+        std::move(prep_func), std::forward<MultiShotFunc>(func));
+    return detail::maybe_flag_fixed_fd(std::move(op), fd);
+}
+
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
 /**
  * @brief See io_uring_prep_uring_cmd128

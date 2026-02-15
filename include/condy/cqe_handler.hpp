@@ -17,6 +17,26 @@
 
 namespace condy {
 
+namespace detail {
+
+// Just for debugging, check if the CQE is big as expected
+inline bool check_cqe32([[maybe_unused]] io_uring_cqe *cqe) {
+    auto *ring = detail::Context::current().ring();
+    assert(ring != nullptr);
+    auto ring_flags = ring->ring()->flags;
+    if (ring_flags & IORING_SETUP_CQE32) {
+        return true;
+    }
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+    if (ring_flags & IORING_SETUP_CQE_MIXED) {
+        return cqe->flags & IORING_CQE_F_32;
+    }
+#endif
+    return false;
+}
+
+} // namespace detail
+
 /**
  * @brief A simple CQE handler that extracts the result from the CQE without any
  * additional processing.
@@ -77,7 +97,8 @@ public:
     using ReturnType = NVMeResult;
 
     void handle_cqe(io_uring_cqe *cqe) {
-        assert(check_cqe32_(cqe) && "Expected big CQE for NVMe passthrough");
+        assert(detail::check_cqe32(cqe) &&
+               "Expected big CQE for NVMe passthrough");
         result_.status = cqe->res;
         result_.result = cqe->big_cqe[0];
     }
@@ -85,24 +106,44 @@ public:
     ReturnType extract_result() { return result_; }
 
 private:
-    // Just for debugging, check if the CQE is big as expected
-    bool check_cqe32_([[maybe_unused]] io_uring_cqe *cqe) {
-        auto *ring = detail::Context::current().ring();
-        assert(ring != nullptr);
-        auto ring_flags = ring->ring()->flags;
-        if (ring_flags & IORING_SETUP_CQE32) {
-            return true;
-        }
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-        if (ring_flags & IORING_SETUP_CQE_MIXED) {
-            return cqe->flags & IORING_CQE_F_32;
-        }
-#endif
-        return false;
-    }
-
-private:
     NVMeResult result_;
 };
+
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+/**
+ * @brief Result for TX timestamp operations, containing timestamp information
+ * from the socket error queue
+ */
+struct TxTimestampResult {
+    int tskey;      // cqe->res
+    int tstype;     // cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT
+    io_timespec ts; // *(io_timespec *)(cqe + 1)
+    bool hwts;      // cqe->flags & IORING_CQE_F_TSTAMP_HW
+};
+
+/**
+ * @brief A CQE handler for TX timestamp operations that extracts timestamp
+ * information from the CQE.
+ */
+class TxTimestampCQEHandler {
+public:
+    using ReturnType = TxTimestampResult;
+
+    void handle_cqe(io_uring_cqe *cqe) {
+        assert(detail::check_cqe32(cqe) &&
+               "Expected big CQE for TX timestamp operations");
+        result_.tskey = cqe->res;
+        result_.tstype =
+            static_cast<int>(cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT);
+        result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
+        result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
+    }
+
+    ReturnType extract_result() { return result_; }
+
+private:
+    TxTimestampResult result_;
+};
+#endif
 
 } // namespace condy
