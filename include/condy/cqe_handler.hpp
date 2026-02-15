@@ -115,10 +115,10 @@ private:
  * from the socket error queue
  */
 struct TxTimestampResult {
-    int tskey;
-    int tstype;
-    io_timespec ts;
-    bool hwts;
+    int tskey;      // cqe->res
+    int tstype;     // cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT
+    io_timespec ts; // *(io_timespec *)(cqe + 1)
+    bool hwts;      // cqe->flags & IORING_CQE_F_TSTAMP_HW
 };
 
 /**
@@ -135,8 +135,8 @@ public:
         result_.tskey = cqe->res;
         result_.tstype =
             static_cast<int>(cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT);
-        result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
         result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
+        result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
     }
 
     ReturnType extract_result() { return result_; }
