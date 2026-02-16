@@ -19,9 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <liburing/io_uring.h>
 #include <mutex>
-#include <sys/eventfd.h>
 
 namespace condy {
 
