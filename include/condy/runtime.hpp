@@ -177,24 +177,44 @@ public:
      */
     void allow_exit() {
         pending_works_--;
-        notify();
+        wakeup();
     }
 
-    void notify() {
-        // TODO: check if runtime != nullptr
-        io_uring_sqe sqe = {};
-        io_uring_prep_msg_ring(
-            &sqe, ring_.ring()->ring_fd, 0,
-            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Ignore)),
-            0);
-        [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
-        // EBADFD means the ring is not enabled, which is fine
-        assert(r == 0 || r == -EBADFD);
+    // Wakeup the runtime if it's blocked in Ring::reap_completions_wait()
+    void wakeup() {
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
+            return;
+        }
+
+        auto state = state_.load();
+        if (state != State::Enabled) {
+            return;
+        }
+
+        if (curr_runtime != nullptr) {
+            io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
+            io_uring_prep_msg_ring(sqe, ring_.ring()->ring_fd, 0,
+                                   reinterpret_cast<uint64_t>(
+                                       encode_work(nullptr, WorkType::Ignore)),
+                                   0);
+            io_uring_sqe_set_data(sqe,
+                                  encode_work(nullptr, WorkType::Schedule));
+            curr_runtime->pend_work();
+        } else {
+            io_uring_sqe sqe = {};
+            io_uring_prep_msg_ring(&sqe, ring_.ring()->ring_fd, 0,
+                                   reinterpret_cast<uint64_t>(
+                                       encode_work(nullptr, WorkType::Ignore)),
+                                   0);
+            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
+            assert(r == 0);
+        }
     }
 
     void schedule(WorkInvoker *work) {
-        auto *runtime = detail::Context::current().runtime();
-        if (runtime == this) {
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
             local_queue_.push_back(work);
             return;
         }
@@ -203,7 +223,7 @@ public:
         if (state == State::Enabled) {
             // Fast path: if the ring is enabled, we can directly schedule the
             // work
-            schedule_msg_ring_(runtime, work);
+            schedule_msg_ring_(curr_runtime, work);
         } else {
             // Slow path: if the ring is not enabled, we need to acquire the
             // mutex to ensure the work is scheduled before the ring is enabled
@@ -211,7 +231,7 @@ public:
             state = state_.load();
             if (state == State::Enabled) {
                 lock.unlock();
-                schedule_msg_ring_(runtime, work);
+                schedule_msg_ring_(curr_runtime, work);
             } else {
                 global_queue_.push_back(work);
             }

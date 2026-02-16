@@ -3,7 +3,10 @@
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
+#include "condy/task.hpp"
+#include <atomic>
 #include <doctest/doctest.h>
+#include <thread>
 
 namespace {
 
@@ -184,4 +187,54 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     runtime.run();
 
     REQUIRE(finished);
+}
+
+TEST_CASE("test runtime - allow_exit from other runtime") {
+    condy::Runtime runtime1(options);
+    condy::Runtime runtime2(options);
+
+    std::atomic_bool r1_started = false;
+    auto func1 = [&]() -> condy::Coro<void> {
+        r1_started = true;
+        r1_started.notify_one();
+        co_return;
+    };
+
+    condy::co_spawn(runtime1, func1()).detach();
+
+    std::thread t1([&]() { runtime1.run(); });
+
+    r1_started.wait(false);
+
+    auto func2 = [&]() -> condy::Coro<void> {
+        runtime1.allow_exit();
+        co_return;
+    };
+
+    condy::co_spawn(runtime2, func2()).detach();
+    runtime2.allow_exit();
+    runtime2.run();
+
+    t1.join();
+}
+
+TEST_CASE("test runtime - allow_exit from other thread") {
+    condy::Runtime runtime(options);
+
+    std::atomic_bool r1_started = false;
+    auto func1 = [&]() -> condy::Coro<void> {
+        r1_started = true;
+        r1_started.notify_one();
+        co_return;
+    };
+
+    condy::co_spawn(runtime, func1()).detach();
+
+    std::thread t1([&]() { runtime.run(); });
+
+    r1_started.wait(false);
+
+    runtime.allow_exit();
+
+    t1.join();
 }
