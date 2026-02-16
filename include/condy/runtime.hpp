@@ -26,47 +26,6 @@ namespace condy {
 
 namespace detail {
 
-#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
-class AsyncWaiter {
-public:
-    void async_wait(Ring &) {}
-
-    void notify(Ring &ring) {
-        io_uring_sqe sqe = {};
-        io_uring_prep_msg_ring(
-            &sqe, ring.ring()->ring_fd, 0,
-            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Notify)),
-            0);
-        io_uring_register_sync_msg(&sqe);
-    }
-};
-#else
-class AsyncWaiter {
-public:
-    AsyncWaiter() {
-        notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-        if (notify_fd_ < 0) {
-            throw make_system_error("eventfd", errno);
-        }
-    }
-
-    ~AsyncWaiter() { close(notify_fd_); }
-
-    void async_wait(Ring &ring) {
-        eventfd_read(notify_fd_, &dummy_);
-        io_uring_sqe *sqe = ring.get_sqe();
-        io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Notify));
-    }
-
-    void notify(Ring &) { eventfd_write(notify_fd_, 1); }
-
-private:
-    int notify_fd_;
-    eventfd_t dummy_;
-};
-#endif
-
 class ThreadLocalRing : public ThreadLocalSingleton<ThreadLocalRing> {
 public:
     Ring *ring() { return &ring_; }
@@ -219,7 +178,16 @@ public:
         notify();
     }
 
-    void notify() { async_waiter_.notify(ring_); }
+    void notify() {
+        // TODO: check if runtime != nullptr
+        io_uring_sqe sqe = {};
+        io_uring_prep_msg_ring(
+            &sqe, ring_.ring()->ring_fd, 0,
+            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Notify)),
+            0);
+        [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
+        assert(r == 0);
+    }
 
     void schedule(WorkInvoker *work) {
         auto *runtime = detail::Context::current().runtime();
@@ -340,7 +308,6 @@ private:
 
     void flush_global_queue_() {
         local_queue_.push_back(std::move(global_queue_));
-        async_waiter_.async_wait(ring_);
     }
 
     void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work) {
@@ -424,7 +391,6 @@ private:
 
     // Global state
     std::mutex mutex_;
-    detail::AsyncWaiter async_waiter_;
     WorkListQueue global_queue_;
     std::atomic_size_t pending_works_ = 1;
     std::atomic<State> state_ = State::Idle;
