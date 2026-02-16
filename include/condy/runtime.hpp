@@ -15,6 +15,7 @@
 #include "condy/singleton.hpp"
 #include "condy/utils.hpp"
 #include "condy/work_type.hpp"
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -50,10 +51,11 @@ inline int sync_msg_ring(io_uring_sqe *sqe_data) {
     auto *ring = ThreadLocalRing::current().ring();
     auto *sqe = ring->get_sqe();
     *sqe = *sqe_data;
-    [[maybe_unused]] auto n = ring->reap_completions_wait(
-        []([[maybe_unused]] auto *cqe) { assert(cqe->res == 0); });
+    int r;
+    [[maybe_unused]] auto n =
+        ring->reap_completions_wait([&](io_uring_cqe *cqe) { r = cqe->res; });
     assert(n == 1);
-    return 0;
+    return r;
 #endif
 }
 
@@ -186,7 +188,8 @@ public:
             reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Ignore)),
             0);
         [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
-        assert(r == 0);
+        // EBADFD means the ring is not enabled, which is fine
+        assert(r == 0 || r == -EBADFD);
     }
 
     void schedule(WorkInvoker *work) {
