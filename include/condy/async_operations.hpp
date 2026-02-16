@@ -995,7 +995,11 @@ inline auto async_fixed_fd_install(int fixed_fd, unsigned int flags) {
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
 /**
  * @brief See io_uring_prep_msg_ring_fd
+ * @deprecated This operation is deprecated and will be removed in a future
+ * version.
  */
+[[deprecated("async_fixed_fd_send is deprecated and will be removed in a "
+             "future version")]]
 inline auto async_fixed_fd_send(FdTable &dst, int source_fd, int target_fd,
                                 unsigned int flags) {
     void *payload = nullptr;

@@ -65,8 +65,13 @@ public:
      * @tparam Func The type of the accepter function
      * @param accepter The accepter function to set, which accepts an int32_t
      * parameter representing the fixed file descriptor index being received.
+     * @deprecated This function is deprecated and will be removed in a future
+     * version.
      */
-    template <typename Func> void set_fd_accepter(Func &&accepter) {
+    template <typename Func>
+    [[deprecated("set_fd_accepter is deprecated and will be removed in a "
+                 "future version")]]
+    void set_fd_accepter(Func &&accepter) {
         fd_accepter_ = std::forward<Func>(accepter);
     }
 
