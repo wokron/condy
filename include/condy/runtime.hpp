@@ -12,11 +12,13 @@
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
+#include "condy/singleton.hpp"
 #include "condy/utils.hpp"
 #include "condy/work_type.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <liburing/io_uring.h>
 #include <mutex>
 #include <sys/eventfd.h>
 
@@ -64,6 +66,23 @@ private:
     eventfd_t dummy_;
 };
 #endif
+
+class ThreadLocalRing : public ThreadLocalSingleton<ThreadLocalRing> {
+public:
+    Ring *ring() { return &ring_; }
+
+    ThreadLocalRing() {
+        io_uring_params params = {};
+        params.flags |= IORING_SETUP_CLAMP;
+        params.flags |= IORING_SETUP_SINGLE_ISSUER;
+        params.flags |= IORING_SETUP_SUBMIT_ALL;
+        [[maybe_unused]] int r = ring_.init(8, &params);
+        assert(r == 0);
+    }
+
+private:
+    Ring ring_;
+};
 
 } // namespace detail
 
