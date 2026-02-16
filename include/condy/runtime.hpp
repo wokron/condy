@@ -230,13 +230,19 @@ public:
 
         auto state = state_.load();
         if (state == State::Enabled) {
+            // Fast path: if the ring is enabled, we can directly schedule the
+            // work
             schedule_msg_ring_(runtime, work);
         } else {
-            std::lock_guard<std::mutex> lock(mutex_);
-            bool need_notify = global_queue_.empty();
-            global_queue_.push_back(work);
-            if (need_notify) {
-                notify();
+            // Slow path: if the ring is not enabled, we need to acquire the
+            // mutex to ensure the work is scheduled before the ring is enabled
+            std::unique_lock<std::mutex> lock(mutex_);
+            state = state_.load();
+            if (state == State::Enabled) {
+                lock.unlock();
+                schedule_msg_ring_(runtime, work);
+            } else {
+                global_queue_.push_back(work);
             }
         }
     }
@@ -264,22 +270,21 @@ public:
         r = io_uring_enable_rings(ring_.ring());
         assert(r == 0);
 
-        state_.store(State::Enabled);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            flush_global_queue_();
+            // Now that the ring is enabled and all pending works are scheduled,
+            // we can set the state to Enabled.
+            state_.store(State::Enabled);
+        }
 
         if (!disable_register_ring_fd_) {
             r = io_uring_register_ring_fd(ring_.ring());
-            if (r != 1) { // 1 indicates success for this call
-                throw make_system_error("io_uring_register_ring_fd", -r);
-            }
+            assert(r == 1); // 1 indicates success for this call
         }
 
         detail::Context::current().init(&ring_, this);
         auto d2 = defer([]() { detail::Context::current().reset(); });
-
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            flush_global_queue_();
-        }
 
         while (true) {
             tick_count_++;
