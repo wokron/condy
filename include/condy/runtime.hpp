@@ -183,7 +183,7 @@ public:
         io_uring_sqe sqe = {};
         io_uring_prep_msg_ring(
             &sqe, ring_.ring()->ring_fd, 0,
-            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Notify)),
+            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Ignore)),
             0);
         [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
         assert(r == 0);
@@ -334,14 +334,6 @@ private:
         if (type == WorkType::Ignore) {
             // No-op
             assert(cqe->res != -EINVAL); // If EINVAL, something is wrong
-        } else if (type == WorkType::Notify) {
-            if (cqe->res == -EOPNOTSUPP) {
-                // Notification not supported, ignore. This may happen if we use
-                // eventfd for notification and iopoll is enabled.
-                return;
-            }
-            std::lock_guard<std::mutex> lock(mutex_);
-            flush_global_queue_();
         } else if (type == WorkType::SendFd) {
             auto &fd_table = ring_.fd_table();
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {

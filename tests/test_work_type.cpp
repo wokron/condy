@@ -25,7 +25,6 @@ void test_type(condy::WorkType type) {
 TEST_CASE("test work_type - encode and decode") {
     test_type(condy::WorkType::Common);
     test_type(condy::WorkType::Ignore);
-    test_type(condy::WorkType::Notify);
     test_type(condy::WorkType::SendFd);
     test_type(condy::WorkType::Schedule);
 }

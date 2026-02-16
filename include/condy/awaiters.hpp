@@ -142,13 +142,6 @@ public:
     FlaggedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
 
     void register_operation(unsigned int flags) {
-#if IO_URING_CHECK_VERSION(2, 12) // < 2.12
-        if constexpr (Flags & IOSQE_IO_DRAIN) {
-            auto *runtime = detail::Context::current().runtime();
-            // Ensure every operation before drain will complete
-            runtime->notify();
-        }
-#endif
         Base::register_operation(flags | Flags);
     }
 
