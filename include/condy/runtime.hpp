@@ -189,7 +189,8 @@ public:
         if (state == State::Enabled) {
             // Fast path: if the ring is enabled, we can directly schedule the
             // work
-            schedule_msg_ring_(curr_runtime, work);
+            tsan_release(work);
+            schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
         } else {
             // Slow path: if the ring is not enabled, we need to acquire the
             // mutex to ensure the work is scheduled before the ring is enabled
@@ -197,7 +198,8 @@ public:
             state = state_.load();
             if (state == State::Enabled) {
                 lock.unlock();
-                schedule_msg_ring_(curr_runtime, work);
+                tsan_release(work);
+                schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
             } else {
                 global_queue_.push_back(work);
             }
@@ -281,15 +283,15 @@ public:
     auto &settings() { return ring_.settings(); }
 
 private:
-    void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work) {
-        tsan_release(work);
+    void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work,
+                            WorkType type) {
         if (curr_runtime != nullptr) {
             io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, work, WorkType::Schedule);
+            prep_msg_ring_(sqe, work, type);
             curr_runtime->pend_work();
         } else {
             io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, work, WorkType::Schedule);
+            prep_msg_ring_(&sqe, work, type);
             [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
             assert(r == 0);
         }
@@ -307,16 +309,7 @@ private:
             return;
         }
 
-        if (curr_runtime != nullptr) {
-            io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, nullptr, WorkType::Ignore);
-            curr_runtime->pend_work();
-        } else {
-            io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, nullptr, WorkType::Ignore);
-            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
-            assert(r == 0);
-        }
+        schedule_msg_ring_(curr_runtime, nullptr, WorkType::Ignore);
     }
 
     void flush_global_queue_() {
