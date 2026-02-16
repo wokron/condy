@@ -229,24 +229,9 @@ public:
         }
 
         auto state = state_.load();
-        if (runtime != nullptr && state == State::Enabled) {
-            tsan_release(work);
-            io_uring_sqe *sqe = runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, work);
-            runtime->pend_work();
-            return;
-        }
-
-        if (runtime == nullptr && state == State::Enabled) {
-            tsan_release(work);
-            io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, work);
-            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
-            assert(r == 0);
-            return;
-        }
-
-        {
+        if (state == State::Enabled) {
+            schedule_msg_ring_(runtime, work);
+        } else {
             std::lock_guard<std::mutex> lock(mutex_);
             bool need_notify = global_queue_.empty();
             global_queue_.push_back(work);
@@ -334,6 +319,20 @@ public:
     auto &settings() { return ring_.settings(); }
 
 private:
+    void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work) {
+        tsan_release(work);
+        if (curr_runtime != nullptr) {
+            io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
+            prep_msg_ring_(sqe, work);
+            curr_runtime->pend_work();
+        } else {
+            io_uring_sqe sqe = {};
+            prep_msg_ring_(&sqe, work);
+            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
+            assert(r == 0);
+        }
+    }
+
     void flush_global_queue_() {
         local_queue_.push_back(std::move(global_queue_));
         async_waiter_.async_wait(ring_);
