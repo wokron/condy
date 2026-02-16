@@ -78,6 +78,10 @@ TEST_CASE("test fd_table - use fixed fd") {
     condy::sync_wait(func());
 }
 
+// TODO: Remove these tests once the fd accepter mechanism is removed
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
 TEST_CASE("test fd_table - send fd - basic") {
     condy::Runtime runtime1, runtime2;
@@ -213,3 +217,5 @@ TEST_CASE("test fd_table - send fd - throw without accepter") {
     t2.join();
 }
 #endif
+
+#pragma GCC diagnostic pop
