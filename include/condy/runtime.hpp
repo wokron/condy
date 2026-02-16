@@ -84,6 +84,20 @@ private:
     Ring ring_;
 };
 
+inline int sync_msg_ring(io_uring_sqe *sqe_data) {
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+    return io_uring_register_sync_msg(sqe_data);
+#else
+    auto *ring = ThreadLocalRing::current().ring();
+    auto *sqe = ring->get_sqe();
+    *sqe = *sqe_data;
+    [[maybe_unused]] auto n = ring->reap_completions_wait(
+        []([[maybe_unused]] auto *cqe) { assert(cqe->res == 0); });
+    assert(n == 1);
+    return 0;
+#endif
+}
+
 } // namespace detail
 
 /**
@@ -223,16 +237,14 @@ public:
             return;
         }
 
-#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
         if (runtime == nullptr && state == State::Enabled) {
             tsan_release(work);
             io_uring_sqe sqe = {};
             prep_msg_ring_(&sqe, work);
-            [[maybe_unused]] int r = io_uring_register_sync_msg(&sqe);
+            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
             assert(r == 0);
             return;
         }
-#endif
 
         {
             std::lock_guard<std::mutex> lock(mutex_);
