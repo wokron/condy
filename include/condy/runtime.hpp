@@ -12,58 +12,50 @@
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime_options.hpp"
+#include "condy/singleton.hpp"
 #include "condy/utils.hpp"
 #include "condy/work_type.hpp"
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
-#include <sys/eventfd.h>
 
 namespace condy {
 
 namespace detail {
 
-#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
-class AsyncWaiter {
+class ThreadLocalRing : public ThreadLocalSingleton<ThreadLocalRing> {
 public:
-    void async_wait(Ring &) {}
+    Ring *ring() { return &ring_; }
 
-    void notify(Ring &ring) {
-        io_uring_sqe sqe = {};
-        io_uring_prep_msg_ring(
-            &sqe, ring.ring()->ring_fd, 0,
-            reinterpret_cast<uint64_t>(encode_work(nullptr, WorkType::Notify)),
-            0);
-        io_uring_register_sync_msg(&sqe);
+    ThreadLocalRing() {
+        io_uring_params params = {};
+        params.flags |= IORING_SETUP_CLAMP;
+        params.flags |= IORING_SETUP_SINGLE_ISSUER;
+        params.flags |= IORING_SETUP_SUBMIT_ALL;
+        [[maybe_unused]] int r = ring_.init(8, &params);
+        assert(r == 0);
     }
-};
-#else
-class AsyncWaiter {
-public:
-    AsyncWaiter() {
-        notify_fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-        if (notify_fd_ < 0) {
-            throw make_system_error("eventfd", errno);
-        }
-    }
-
-    ~AsyncWaiter() { close(notify_fd_); }
-
-    void async_wait(Ring &ring) {
-        eventfd_read(notify_fd_, &dummy_);
-        io_uring_sqe *sqe = ring.get_sqe();
-        io_uring_prep_read(sqe, notify_fd_, &dummy_, sizeof(dummy_), 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Notify));
-    }
-
-    void notify(Ring &) { eventfd_write(notify_fd_, 1); }
 
 private:
-    int notify_fd_;
-    eventfd_t dummy_;
+    Ring ring_;
 };
+
+inline int sync_msg_ring(io_uring_sqe *sqe_data) {
+#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
+    return io_uring_register_sync_msg(sqe_data);
+#else
+    auto *ring = ThreadLocalRing::current().ring();
+    auto *sqe = ring->get_sqe();
+    *sqe = *sqe_data;
+    int r;
+    [[maybe_unused]] auto n =
+        ring->reap_completions_wait([&](io_uring_cqe *cqe) { r = cqe->res; });
+    assert(n == 1);
+    return r;
 #endif
+}
 
 } // namespace detail
 
@@ -183,44 +175,33 @@ public:
      */
     void allow_exit() {
         pending_works_--;
-        notify();
+        wakeup_();
     }
 
-    void notify() { async_waiter_.notify(ring_); }
-
     void schedule(WorkInvoker *work) {
-        auto *runtime = detail::Context::current().runtime();
-        if (runtime == this) {
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
             local_queue_.push_back(work);
             return;
         }
 
         auto state = state_.load();
-        if (runtime != nullptr && state == State::Enabled) {
+        if (state == State::Enabled) {
+            // Fast path: if the ring is enabled, we can directly schedule the
+            // work
             tsan_release(work);
-            io_uring_sqe *sqe = runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, work);
-            runtime->pend_work();
-            return;
-        }
-
-#if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
-        if (runtime == nullptr && state == State::Enabled) {
-            tsan_release(work);
-            io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, work);
-            [[maybe_unused]] int r = io_uring_register_sync_msg(&sqe);
-            assert(r == 0);
-            return;
-        }
-#endif
-
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            bool need_notify = global_queue_.empty();
-            global_queue_.push_back(work);
-            if (need_notify) {
-                notify();
+            schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+        } else {
+            // Slow path: if the ring is not enabled, we need to acquire the
+            // mutex to ensure the work is scheduled before the ring is enabled
+            std::unique_lock<std::mutex> lock(mutex_);
+            state = state_.load();
+            if (state == State::Enabled) {
+                lock.unlock();
+                tsan_release(work);
+                schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+            } else {
+                global_queue_.push_back(work);
             }
         }
     }
@@ -248,22 +229,21 @@ public:
         r = io_uring_enable_rings(ring_.ring());
         assert(r == 0);
 
-        state_.store(State::Enabled);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            flush_global_queue_();
+            // Now that the ring is enabled and all pending works are scheduled,
+            // we can set the state to Enabled.
+            state_.store(State::Enabled);
+        }
 
         if (!disable_register_ring_fd_) {
             r = io_uring_register_ring_fd(ring_.ring());
-            if (r != 1) { // 1 indicates success for this call
-                throw make_system_error("io_uring_register_ring_fd", -r);
-            }
+            assert(r == 1); // 1 indicates success for this call
         }
 
         detail::Context::current().init(&ring_, this);
         auto d2 = defer([]() { detail::Context::current().reset(); });
-
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            flush_global_queue_();
-        }
 
         while (true) {
             tick_count_++;
@@ -303,13 +283,41 @@ public:
     auto &settings() { return ring_.settings(); }
 
 private:
-    void flush_global_queue_() {
-        local_queue_.push_back(std::move(global_queue_));
-        async_waiter_.async_wait(ring_);
+    void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work,
+                            WorkType type) {
+        if (curr_runtime != nullptr) {
+            io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
+            prep_msg_ring_(sqe, work, type);
+            curr_runtime->pend_work();
+        } else {
+            io_uring_sqe sqe = {};
+            prep_msg_ring_(&sqe, work, type);
+            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
+            assert(r == 0);
+        }
     }
 
-    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work) {
-        auto data = encode_work(work, WorkType::Schedule);
+    // Wakeup the runtime if it's blocked in Ring::reap_completions_wait()
+    void wakeup_() {
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
+            return;
+        }
+
+        auto state = state_.load();
+        if (state != State::Enabled) {
+            return;
+        }
+
+        schedule_msg_ring_(curr_runtime, nullptr, WorkType::Ignore);
+    }
+
+    void flush_global_queue_() {
+        local_queue_.push_back(std::move(global_queue_));
+    }
+
+    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work, WorkType type) {
+        auto data = encode_work(work, type);
         io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
                                reinterpret_cast<uint64_t>(data), 0);
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
@@ -332,14 +340,6 @@ private:
         if (type == WorkType::Ignore) {
             // No-op
             assert(cqe->res != -EINVAL); // If EINVAL, something is wrong
-        } else if (type == WorkType::Notify) {
-            if (cqe->res == -EOPNOTSUPP) {
-                // Notification not supported, ignore. This may happen if we use
-                // eventfd for notification and iopoll is enabled.
-                return;
-            }
-            std::lock_guard<std::mutex> lock(mutex_);
-            flush_global_queue_();
         } else if (type == WorkType::SendFd) {
             auto &fd_table = ring_.fd_table();
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
@@ -389,7 +389,6 @@ private:
 
     // Global state
     std::mutex mutex_;
-    detail::AsyncWaiter async_waiter_;
     WorkListQueue global_queue_;
     std::atomic_size_t pending_works_ = 1;
     std::atomic<State> state_ = State::Idle;

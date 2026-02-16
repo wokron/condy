@@ -13,7 +13,6 @@ namespace condy {
 enum class WorkType : uint8_t {
     Common,
     Ignore,
-    Notify,
     SendFd,
     Schedule,
 };
