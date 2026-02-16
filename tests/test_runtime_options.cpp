@@ -58,7 +58,6 @@ TEST_CASE("test runtime_options - enable_iopoll") {
 #else
     options.enable_iopoll(/*hybrid=*/false);
 #endif
-    // Disable periodic event peeking to exposure hang caused by eventfd+iopoll
     options.event_interval(std::numeric_limits<size_t>::max());
     condy::Runtime runtime(options);
 
