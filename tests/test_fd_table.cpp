@@ -30,7 +30,8 @@ TEST_CASE("test fd_table - register/unregister fd") {
         int ret = pipe(pipes);
         REQUIRE(ret == 0);
 
-        fd_table.update(0, pipes, 2);
+        int r = fd_table.update(0, pipes, 2);
+        REQUIRE(r == 2);
 
         close(pipes[0]);
         close(pipes[1]);
@@ -38,7 +39,34 @@ TEST_CASE("test fd_table - register/unregister fd") {
         pipes[0] = -1;
         pipes[1] = -1;
 
-        fd_table.update(0, pipes, 2);
+        r = fd_table.update(0, pipes, 2);
+        REQUIRE(r == 2);
+
+        co_return;
+    };
+
+    condy::sync_wait(func());
+}
+
+TEST_CASE("test fd_table - init with fd array") {
+    auto func = []() -> condy::Coro<void> {
+        auto &fd_table = condy::detail::Context::current().ring()->fd_table();
+
+        int pipes[2];
+        int ret = pipe(pipes);
+        REQUIRE(ret == 0);
+
+        int r = fd_table.init(pipes, 2);
+        REQUIRE(r == 0);
+
+        close(pipes[0]);
+        close(pipes[1]);
+
+        pipes[0] = -1;
+        pipes[1] = -1;
+
+        r = fd_table.update(0, pipes, 2);
+        REQUIRE(r == 2);
 
         co_return;
     };

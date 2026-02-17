@@ -54,6 +54,32 @@ TEST_CASE("test buffer_table - register/unregister buffer") {
     condy::sync_wait(func());
 }
 
+TEST_CASE("test buffer_table - init with array of iovec") {
+    auto func = []() -> condy::Coro<void> {
+        auto &buffer_table =
+            condy::detail::Context::current().ring()->buffer_table();
+
+        char buffer1[16];
+        char buffer2[32];
+
+        iovec iov[2] = {
+            {.iov_base = buffer1, .iov_len = sizeof(buffer1)},
+            {.iov_base = buffer2, .iov_len = sizeof(buffer2)},
+        };
+        int r = buffer_table.init(iov, 2);
+        REQUIRE(r == 0);
+
+        iov[0] = {.iov_base = nullptr, .iov_len = 0};
+        iov[1] = {.iov_base = nullptr, .iov_len = 0};
+        int n = buffer_table.update(0, iov, 2);
+        REQUIRE(n == 2);
+
+        co_return;
+    };
+
+    condy::sync_wait(func());
+}
+
 TEST_CASE("test buffer_table - use registered buffer") {
     auto func = []() -> condy::Coro<void> {
         auto &buffer_table =
