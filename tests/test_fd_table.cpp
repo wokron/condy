@@ -179,43 +179,4 @@ TEST_CASE("test fd_table - send fd - auto allocate") {
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
-TEST_CASE("test fd_table - send fd - throw without accepter") {
-    condy::Runtime runtime1, runtime2;
-    runtime1.fd_table().init(4);
-    runtime2.fd_table().init(4);
-
-    int pipe_fds[2];
-    REQUIRE(pipe(pipe_fds) == 0);
-
-    condy::Channel<std::monostate> chan(0);
-
-    auto func1 = [&]() -> condy::Coro<void> {
-        co_await chan.pop();
-
-        auto &fd_table = condy::current_runtime().fd_table();
-
-        fd_table.update(0, pipe_fds, 2);
-        int r = co_await condy::async_fixed_fd_send(runtime2.fd_table(), 0,
-                                                    CONDY_FILE_INDEX_ALLOC, 0);
-        REQUIRE(r == 0);
-    };
-
-    auto func2 = [&]() -> condy::Coro<void> {
-        co_await chan.push(std::monostate{});
-        co_await chan.push(std::monostate{}); // Block here
-        co_return;
-    };
-
-    condy::co_spawn(runtime2, func2()).detach();
-
-    std::thread t2(
-        [&]() { REQUIRE_THROWS_AS(runtime2.run(), std::logic_error); });
-
-    condy::sync_wait(runtime1, func1());
-    runtime2.allow_exit();
-    t2.join();
-}
-#endif
-
 #pragma GCC diagnostic pop

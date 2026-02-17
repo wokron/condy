@@ -42,7 +42,7 @@ private:
     Ring ring_;
 };
 
-inline int sync_msg_ring(io_uring_sqe *sqe_data) {
+inline int sync_msg_ring(io_uring_sqe *sqe_data) noexcept {
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
     return io_uring_register_sync_msg(sqe_data);
 #else
@@ -173,12 +173,12 @@ public:
      * once all pending works are completed.
      * @note This function is thread-safe and can be called from any thread.
      */
-    void allow_exit() {
+    void allow_exit() noexcept {
         pending_works_--;
         wakeup_();
     }
 
-    void schedule(WorkInvoker *work) {
+    void schedule(WorkInvoker *work) noexcept {
         auto *curr_runtime = detail::Context::current().runtime();
         if (curr_runtime == this) {
             local_queue_.push_back(work);
@@ -206,9 +206,9 @@ public:
         }
     }
 
-    void pend_work() { pending_works_++; }
+    void pend_work() noexcept { pending_works_++; }
 
-    void resume_work() { pending_works_--; }
+    void resume_work() noexcept { pending_works_--; }
 
     /**
      * @brief Run the runtime event loop in the current thread.
@@ -218,11 +218,11 @@ public:
      * @note Once exit, the runtime cannot be restarted.
      * @throws std::logic_error if the runtime is already running or stopped.
      */
-    void run() {
+    void run() noexcept {
         State expected = State::Idle;
-        if (!state_.compare_exchange_strong(expected, State::Running)) {
-            throw std::logic_error("Runtime is already running or stopped");
-        }
+        [[maybe_unused]] bool success =
+            state_.compare_exchange_strong(expected, State::Running);
+        assert(success && "Runtime is already running or stopped");
         auto d1 = defer([this]() { state_.store(State::Stopped); });
 
         [[maybe_unused]] int r;
@@ -268,23 +268,23 @@ public:
      * @brief Get the file descriptor table of the runtime.
      * @return FdTable& Reference to the fd table of the runtime.
      */
-    auto &fd_table() { return ring_.fd_table(); }
+    auto &fd_table() noexcept { return ring_.fd_table(); }
 
     /**
      * @brief Get the buffer table of the runtime.
      * @return BufferTable& Reference to the buffer table of the runtime.
      */
-    auto &buffer_table() { return ring_.buffer_table(); }
+    auto &buffer_table() noexcept { return ring_.buffer_table(); }
 
     /**
      * @brief Get the ring settings of the runtime.
      * @return RingSettings& Reference to the ring settings of the runtime.
      */
-    auto &settings() { return ring_.settings(); }
+    auto &settings() noexcept { return ring_.settings(); }
 
 private:
     void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work,
-                            WorkType type) {
+                            WorkType type) noexcept {
         if (curr_runtime != nullptr) {
             io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
             prep_msg_ring_(sqe, work, type);
@@ -298,7 +298,7 @@ private:
     }
 
     // Wakeup the runtime if it's blocked in Ring::reap_completions_wait()
-    void wakeup_() {
+    void wakeup_() noexcept {
         auto *curr_runtime = detail::Context::current().runtime();
         if (curr_runtime == this) {
             return;
@@ -312,28 +312,29 @@ private:
         schedule_msg_ring_(curr_runtime, nullptr, WorkType::Ignore);
     }
 
-    void flush_global_queue_() {
+    void flush_global_queue_() noexcept {
         local_queue_.push_back(std::move(global_queue_));
     }
 
-    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work, WorkType type) {
+    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work,
+                        WorkType type) noexcept {
         auto data = encode_work(work, type);
         io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
                                reinterpret_cast<uint64_t>(data), 0);
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
-    size_t flush_ring_() {
+    size_t flush_ring_() noexcept {
         return ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
     }
 
-    size_t flush_ring_wait_() {
+    size_t flush_ring_wait_() noexcept {
         return ring_.reap_completions_wait(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
     }
 
-    void process_cqe_(io_uring_cqe *cqe) {
+    void process_cqe_(io_uring_cqe *cqe) noexcept {
         auto *data_raw = io_uring_cqe_get_data(cqe);
         auto [data, type] = decode_work(data_raw);
 
@@ -343,7 +344,8 @@ private:
         } else if (type == WorkType::SendFd) {
             auto &fd_table = ring_.fd_table();
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
-                throw std::logic_error("No way to accept sent fd");
+                std::fprintf(stderr, "[Deprecated Warning] Received a file "
+                                     "descriptor but no accepter is set.");
             }
             uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
             if (payload == 0) { // Auto-allocate

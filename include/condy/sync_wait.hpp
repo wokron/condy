@@ -24,12 +24,7 @@ template <typename T, typename Allocator>
 T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
     auto t = co_spawn(runtime, std::move(coro));
     runtime.allow_exit();
-    try {
-        runtime.run();
-    } catch (...) {
-        t.detach(); // Just to avoid panic here
-        throw;
-    }
+    runtime.run();
     return t.wait();
 }
 
