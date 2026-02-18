@@ -216,7 +216,6 @@ public:
      * current thread. It will process events, schedule tasks, and handle
      * notifications until there are no pending works left.
      * @note Once exit, the runtime cannot be restarted.
-     * @throws std::logic_error if the runtime is already running or stopped.
      */
     void run() noexcept {
         State expected = State::Idle;
@@ -345,7 +344,7 @@ private:
             auto &fd_table = ring_.fd_table();
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
                 std::fprintf(stderr, "[Deprecated Warning] Received a file "
-                                     "descriptor but no accepter is set.");
+                                     "descriptor but no accepter is set.\n");
             }
             uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
             if (payload == 0) { // Auto-allocate
