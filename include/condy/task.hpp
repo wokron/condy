@@ -22,13 +22,22 @@ template <typename T = void, typename Allocator = void> class TaskBase {
 public:
     using PromiseType = typename Coro<T, Allocator>::promise_type;
 
+    TaskBase() : TaskBase(nullptr) {}
     TaskBase(std::coroutine_handle<PromiseType> h) : handle_(h) {}
     TaskBase(TaskBase &&other) noexcept
         : handle_(std::exchange(other.handle_, nullptr)) {}
+    TaskBase &operator=(TaskBase &&other) noexcept {
+        if (this != &other) {
+            if (handle_) {
+                panic_on("Task destroyed without being awaited");
+            }
+            handle_ = std::exchange(other.handle_, nullptr);
+        }
+        return *this;
+    }
 
     TaskBase(const TaskBase &) = delete;
     TaskBase &operator=(const TaskBase &) = delete;
-    TaskBase &operator=(TaskBase &&other) = delete;
 
     ~TaskBase() {
         if (handle_) {
@@ -48,6 +57,11 @@ public:
         handle_.promise().request_detach();
         handle_ = nullptr;
     }
+
+    /**
+     * @brief Check if the task is still awaitable.
+     */
+    bool awaitable() const noexcept { return handle_ != nullptr; }
 
     /**
      * @brief Await the task asynchronously.

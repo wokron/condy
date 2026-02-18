@@ -11,6 +11,24 @@ condy::RuntimeOptions options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 } // namespace
 
+TEST_CASE("test task - construct") {
+    condy::Runtime runtime(options);
+    auto func = []() -> condy::Coro<void> { co_return; };
+
+    condy::Task<void> task;
+    REQUIRE(!task.awaitable());
+
+    auto task2 = condy::co_spawn(runtime, func());
+    REQUIRE(task2.awaitable());
+
+    task = std::move(task2);
+    REQUIRE(task.awaitable());
+    REQUIRE(!task2.awaitable());
+
+    task.detach();
+    REQUIRE(!task.awaitable());
+}
+
 TEST_CASE("test task - local spawn and await") {
     condy::Runtime runtime(options);
     bool finished = false;
