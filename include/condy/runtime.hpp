@@ -345,13 +345,14 @@ private:
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
                 std::fprintf(stderr, "[Deprecated Warning] Received a file "
                                      "descriptor but no accepter is set.\n");
-            }
-            uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
-            if (payload == 0) { // Auto-allocate
-                fd_table.fd_accepter_(cqe->res);
             } else {
-                int target_fd = static_cast<int>(payload - 1);
-                fd_table.fd_accepter_(target_fd);
+                uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
+                if (payload == 0) { // Auto-allocate
+                    fd_table.fd_accepter_(cqe->res);
+                } else {
+                    int target_fd = static_cast<int>(payload - 1);
+                    fd_table.fd_accepter_(target_fd);
+                }
             }
         } else if (type == WorkType::Schedule) {
             if (data == nullptr) {
