@@ -3,6 +3,7 @@
 #include "condy/runtime_options.hpp"
 #include "condy/task.hpp"
 #include <doctest/doctest.h>
+#include <stdexcept>
 #include <thread>
 
 namespace {
@@ -10,6 +11,47 @@ namespace {
 condy::RuntimeOptions options = condy::RuntimeOptions().sq_size(8).cq_size(16);
 
 } // namespace
+
+TEST_CASE("test task - construct") {
+    condy::Runtime runtime(options);
+    auto func = []() -> condy::Coro<void> { co_return; };
+
+    condy::Task<void> task;
+    REQUIRE(!task.joinable());
+
+    auto task2 = condy::co_spawn(runtime, func());
+    REQUIRE(task2.joinable());
+
+    task = std::move(task2);
+    REQUIRE(task.joinable());
+    // NOLINTNEXTLINE(bugprone-use-after-move)
+    REQUIRE(!task2.joinable());
+
+    task.detach();
+    REQUIRE(!task.joinable());
+}
+
+TEST_CASE("test task - joinable check") {
+    condy::Runtime runtime(options);
+    std::thread rt_thread([&]() { runtime.run(); });
+
+    condy::Task<void> task;
+    REQUIRE(!task.joinable());
+    REQUIRE_THROWS_AS(task.wait(), std::invalid_argument);
+
+    auto func = [&]() -> condy::Coro<void> {
+        REQUIRE(!task.joinable());
+        REQUIRE_THROWS_AS((co_await task), std::invalid_argument);
+        co_return;
+    };
+
+    auto task2 = condy::co_spawn(runtime, func());
+    REQUIRE(task2.joinable());
+    REQUIRE_NOTHROW(task2.wait());
+
+    runtime.allow_exit();
+    rt_thread.join();
+}
 
 TEST_CASE("test task - local spawn and await") {
     condy::Runtime runtime(options);
