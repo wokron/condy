@@ -22,9 +22,11 @@ struct Action;
 
 template <typename T>
 concept HandleLike = requires(T handle, Invoker *invoker) {
-    typename T::ReturnType;
+    typename std::decay_t<T>::ReturnType;
     { handle.set_invoker(invoker) } -> std::same_as<void>;
-    { handle.extract_result() } -> std::same_as<typename T::ReturnType>;
+    {
+        handle.extract_result()
+    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
     { handle.cancel() } -> std::same_as<void>;
 };
 
@@ -42,22 +44,26 @@ concept PrepFuncLike = requires(T prep_func, Ring *ring) {
 
 template <typename T>
 concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
-    typename T::ReturnType;
+    typename std::decay_t<T>::ReturnType;
     { handler.handle_cqe(cqe) } -> std::same_as<void>;
-    { handler.extract_result() } -> std::same_as<typename T::ReturnType>;
+    {
+        handler.extract_result()
+    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
 };
 
 template <typename T>
 concept AwaiterLike = requires(T awaiter) {
-    typename T::HandleType;
-    { awaiter.get_handle() } -> std::same_as<typename T::HandleType *>;
+    typename std::decay_t<T>::HandleType;
+    {
+        awaiter.get_handle()
+    } -> std::same_as<typename std::decay_t<T>::HandleType *>;
     { awaiter.init_finish_handle() } -> std::same_as<void>;
     { awaiter.register_operation(0) } -> std::same_as<void>;
     { awaiter.await_ready() } -> std::same_as<bool>;
     { awaiter.await_suspend(std::declval<std::coroutine_handle<>>()) };
     {
         awaiter.await_resume()
-    } -> std::same_as<typename T::HandleType::ReturnType>;
+    } -> std::same_as<typename std::decay_t<T>::HandleType::ReturnType>;
 };
 
 template <typename T>
@@ -66,9 +72,11 @@ concept AwaiterRange =
 
 template <typename T>
 concept BufferRingLike = requires(T br) {
-    typename T::ReturnType;
+    typename std::decay_t<T>::ReturnType;
     { br.bgid() } -> std::same_as<uint16_t>;
-    { br.handle_finish(0, 0) } -> std::same_as<typename T::ReturnType>;
+    {
+        br.handle_finish(0, 0)
+    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
 };
 
 template <typename T>

@@ -97,7 +97,7 @@ TEST_CASE("test op_awaiter - concurrent op") {
         auto awaiter2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto [r1, r2] = co_await condy::WhenAllAwaiter<decltype(awaiter1),
                                                        decltype(awaiter2)>(
-            std::move(awaiter1), std::move(awaiter2));
+            awaiter1, awaiter2);
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
         --unfinished;
@@ -134,7 +134,7 @@ TEST_CASE("test op_awaiter - cancel op") {
         auto awaiter2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto awaiter =
             condy::WhenAnyAwaiter<decltype(awaiter1), decltype(awaiter2)>(
-                std::move(awaiter1), std::move(awaiter2));
+                awaiter1, awaiter2);
         auto r = co_await awaiter;
         REQUIRE(r.index() == 1);
         REQUIRE(std::get<1>(r) == 0);
