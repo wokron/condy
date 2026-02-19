@@ -425,7 +425,7 @@ Condy provides the `condy::parallel()` function, which is a lower-level interfac
 For example, you can set the Awaiter type to `condy::ParallelAnyAwaiter`. The return type of this Awaiter is `std::pair<std::array<size_t, N>, std::tuple<...>>`, where the first element is the completion order of all asynchronous operations, and the second is the results of all operations. This allows you to implement more complex control logic.
 
 ```cpp
-auto [order, results] = co_await condy::parallel<condy::ParallelAnyAwaiter>(std::move(aw1), std::move(aw2));
+auto [order, results] = co_await condy::parallel<condy::ParallelAnyAwaiter>(aw1, aw2);
 ```
 
 ### Controlling Single Operations
