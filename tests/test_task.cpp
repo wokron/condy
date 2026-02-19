@@ -23,6 +23,7 @@ TEST_CASE("test task - construct") {
 
     task = std::move(task2);
     REQUIRE(task.awaitable());
+    // NOLINTNEXTLINE(bugprone-use-after-move)
     REQUIRE(!task2.awaitable());
 
     task.detach();
