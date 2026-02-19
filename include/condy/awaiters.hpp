@@ -58,11 +58,6 @@ public:
 
     OpAwaiterBase(HandleBox<Handle> handle, Func func)
         : prep_func_(func), finish_handle_(std::move(handle)) {}
-    OpAwaiterBase(OpAwaiterBase &&) = default;
-
-    OpAwaiterBase(const OpAwaiterBase &) = delete;
-    OpAwaiterBase &operator=(const OpAwaiterBase &) = delete;
-    OpAwaiterBase &operator=(OpAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_.get(); }
@@ -171,12 +166,6 @@ public:
 
     RangedParallelAwaiterBase(std::vector<Awaiter> awaiters)
         : awaiters_(std::move(awaiters)) {}
-    RangedParallelAwaiterBase(RangedParallelAwaiterBase &&) = default;
-
-    RangedParallelAwaiterBase(const RangedParallelAwaiterBase &) = delete;
-    RangedParallelAwaiterBase &
-    operator=(const RangedParallelAwaiterBase &) = delete;
-    RangedParallelAwaiterBase &operator=(RangedParallelAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -317,15 +306,10 @@ public:
 
     ParallelAwaiterBase(Awaiters... awaiters)
         : awaiters_(std::move(awaiters)...) {}
-    ParallelAwaiterBase(ParallelAwaiterBase &&) = default;
     template <typename ParallelAwaiter, AwaiterLike New>
     ParallelAwaiterBase(ParallelAwaiter &&aws, New new_awaiter)
         : awaiters_(std::tuple_cat(std::move(aws.awaiters_),
                                    std::make_tuple(std::move(new_awaiter)))) {}
-
-    ParallelAwaiterBase(const ParallelAwaiterBase &) = delete;
-    ParallelAwaiterBase &operator=(const ParallelAwaiterBase &) = delete;
-    ParallelAwaiterBase &operator=(ParallelAwaiterBase &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
