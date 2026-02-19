@@ -41,6 +41,17 @@ public:
     }
 
     /**
+     * @brief Initialize the file descriptor table with the given array of file
+     * descriptors
+     * @param fds Pointer to the array of file descriptors to register
+     * @param nr_fds Number of file descriptors in the array
+     * @return int Returns 0 on success or a negative error code on failure
+     */
+    int init(const int *fds, unsigned nr_fds) {
+        return io_uring_register_files(&ring_, fds, nr_fds);
+    }
+
+    /**
      * @brief Destroy the file descriptor table
      * @return int Returns 0 on success or a negative error code on failure
      */
@@ -51,7 +62,8 @@ public:
      * @param index_base The starting index to update
      * @param fds Pointer to the array of file descriptors
      * @param nr_fds Number of file descriptors to update
-     * @return int Returns 0 on success or a negative error code on failure
+     * @return int Return number of file descriptors updated on success or a
+     * negative error code on failure
      */
     int update(unsigned index_base, const int *fds, unsigned nr_fds) {
         return io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
@@ -124,6 +136,22 @@ public:
     }
 
     /**
+     * @brief Initialize the buffer table with the given array of iovec
+     * structures
+     * @param vecs Pointer to the array of iovec structures representing buffers
+     * @param nr_vecs Number of buffers in the array
+     * @return int Returns 0 on success or a negative error code on failure
+     */
+    int init(const iovec *vecs, unsigned nr_vecs) {
+        int r = io_uring_register_buffers(&ring_, vecs, nr_vecs);
+        if (r < 0) {
+            return r;
+        }
+        initialized_ = true;
+        return r;
+    }
+
+    /**
      * @brief Destroy the buffer table
      * @return int Returns 0 on success or a negative error code on failure
      */
@@ -137,7 +165,8 @@ public:
      * @param index_base The starting index to update
      * @param vecs Pointer to the array of iovec structures representing buffers
      * @param nr_vecs Number of buffers to update
-     * @return int Returns 0 on success or a negative error code on failure
+     * @return int Returns number of buffers updated on success or a negative
+     * error code on failure
      */
     int update(unsigned index_base, const iovec *vecs, unsigned nr_vecs) {
         return io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
