@@ -19,6 +19,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <tuple>
 
 namespace condy {
@@ -29,6 +30,8 @@ public:
 
     Handle &get() { return handle_; }
 
+    void maybe_release() { /* No-op */ }
+
 private:
     Handle handle_;
 };
@@ -37,12 +40,16 @@ template <typename Func, OpFinishHandleLike HandleBase>
 class HandleBox<ZeroCopyMixin<Func, HandleBase>> {
 public:
     using Handle = ZeroCopyMixin<Func, HandleBase>;
-    HandleBox(Handle h) : handle_ptr_(new Handle(std::move(h))) {}
+    HandleBox(Handle h) : handle_ptr_(std::make_unique<Handle>(std::move(h))) {}
+    HandleBox(const HandleBox &other) // Deep copy
+        : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}
 
     Handle &get() { return *handle_ptr_; }
 
+    void maybe_release() { handle_ptr_.release(); }
+
 private:
-    Handle *handle_ptr_;
+    std::unique_ptr<Handle> handle_ptr_;
 };
 
 template <OpFinishHandleLike Handle, PrepFuncLike Func> class OpAwaiterBase {
@@ -85,7 +92,11 @@ public:
         register_operation(0);
     }
 
-    auto await_resume() { return finish_handle_.get().extract_result(); }
+    auto await_resume() {
+        auto result = finish_handle_.get().extract_result();
+        finish_handle_.maybe_release();
+        return result;
+    }
 
 protected:
     Func prep_func_;
