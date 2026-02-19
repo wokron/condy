@@ -17,36 +17,36 @@ TEST_CASE("test task - construct") {
     auto func = []() -> condy::Coro<void> { co_return; };
 
     condy::Task<void> task;
-    REQUIRE(!task.awaitable());
+    REQUIRE(!task.joinable());
 
     auto task2 = condy::co_spawn(runtime, func());
-    REQUIRE(task2.awaitable());
+    REQUIRE(task2.joinable());
 
     task = std::move(task2);
-    REQUIRE(task.awaitable());
+    REQUIRE(task.joinable());
     // NOLINTNEXTLINE(bugprone-use-after-move)
-    REQUIRE(!task2.awaitable());
+    REQUIRE(!task2.joinable());
 
     task.detach();
-    REQUIRE(!task.awaitable());
+    REQUIRE(!task.joinable());
 }
 
-TEST_CASE("test task - awaitable check") {
+TEST_CASE("test task - joinable check") {
     condy::Runtime runtime(options);
     std::thread rt_thread([&]() { runtime.run(); });
 
     condy::Task<void> task;
-    REQUIRE(!task.awaitable());
+    REQUIRE(!task.joinable());
     REQUIRE_THROWS_AS(task.wait(), std::invalid_argument);
 
     auto func = [&]() -> condy::Coro<void> {
-        REQUIRE(!task.awaitable());
+        REQUIRE(!task.joinable());
         REQUIRE_THROWS_AS((co_await task), std::invalid_argument);
         co_return;
     };
 
     auto task2 = condy::co_spawn(runtime, func());
-    REQUIRE(task2.awaitable());
+    REQUIRE(task2.joinable());
     REQUIRE_NOTHROW(task2.wait());
 
     runtime.allow_exit();
