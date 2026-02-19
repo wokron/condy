@@ -101,7 +101,7 @@ public:
     void unhandled_exception() { exception_ = std::current_exception(); }
 
     struct FinalAwaiter {
-        bool await_ready() noexcept { return false; }
+        bool await_ready() const noexcept { return false; }
 
         std::coroutine_handle<>
         await_suspend(std::coroutine_handle<PromiseType> handle) noexcept {
