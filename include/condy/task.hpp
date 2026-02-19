@@ -59,13 +59,15 @@ public:
     }
 
     /**
-     * @brief Check if the task is still awaitable.
+     * @brief Check if the task is still awaitable. Similar to
+     * `std::thread::joinable()`.
      */
     bool awaitable() const noexcept { return handle_ != nullptr; }
 
     /**
      * @brief Await the task asynchronously.
      * @return T The result of the coroutine.
+     * @throw std::invalid_argument If the task is not awaitable.
      * @throws Any exception thrown inside the coroutine.
      * @details This function allows the caller to await the completion of the
      * coroutine associated with the task. It suspends the caller coroutine
@@ -86,6 +88,9 @@ void TaskBase<T, Allocator>::wait_inner_(
     std::coroutine_handle<PromiseType> handle) {
     if (detail::Context::current().runtime() != nullptr) [[unlikely]] {
         throw std::logic_error("Sync wait inside runtime");
+    }
+    if (handle == nullptr) [[unlikely]] {
+        throw std::invalid_argument("Task not awaitable");
     }
     std::promise<void> prom;
     auto fut = prom.get_future();
@@ -126,6 +131,7 @@ public:
     /**
      * @brief Wait synchronously for the task to complete and get the result.
      * @return T The result of the coroutine.
+     * @throws std::invalid_argument If the task is not awaitable.
      * @throws Any exception thrown inside the coroutine.
      * @details This function blocks the current thread until the coroutine
      * associated with the task completes. It then retrieves the result of the
@@ -154,6 +160,7 @@ public:
 
     /**
      * @brief Wait synchronously for the task to complete.
+     * @throws std::invalid_argument If the task is not awaitable.
      * @throws Any exception thrown inside the coroutine.
      * @details This function blocks the current thread until the coroutine
      * associated with the task completes. If the coroutine throws an exception,
@@ -178,7 +185,12 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
         Runtime *runtime)
         : task_handle_(task_handle), runtime_(runtime) {}
 
-    bool await_ready() const noexcept { return false; }
+    bool await_ready() const {
+        if (task_handle_ == nullptr) {
+            throw std::invalid_argument("Task not awaitable");
+        }
+        return false;
+    }
 
     template <typename PromiseType>
     bool

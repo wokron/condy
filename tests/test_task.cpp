@@ -3,6 +3,7 @@
 #include "condy/runtime_options.hpp"
 #include "condy/task.hpp"
 #include <doctest/doctest.h>
+#include <stdexcept>
 #include <thread>
 
 namespace {
@@ -28,6 +29,28 @@ TEST_CASE("test task - construct") {
 
     task.detach();
     REQUIRE(!task.awaitable());
+}
+
+TEST_CASE("test task - awaitable check") {
+    condy::Runtime runtime(options);
+    std::thread rt_thread([&]() { runtime.run(); });
+
+    condy::Task<void> task;
+    REQUIRE(!task.awaitable());
+    REQUIRE_THROWS_AS(task.wait(), std::invalid_argument);
+
+    auto func = [&]() -> condy::Coro<void> {
+        REQUIRE(!task.awaitable());
+        REQUIRE_THROWS_AS((co_await task), std::invalid_argument);
+        co_return;
+    };
+
+    auto task2 = condy::co_spawn(runtime, func());
+    REQUIRE(task2.awaitable());
+    REQUIRE_NOTHROW(task2.wait());
+
+    runtime.allow_exit();
+    rt_thread.join();
 }
 
 TEST_CASE("test task - local spawn and await") {
