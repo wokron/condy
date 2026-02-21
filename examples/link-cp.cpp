@@ -33,7 +33,7 @@ condy::Coro<void> copy_file_task(size_t task_id, loff_t &offset,
             condy::fixed(0), condy::fixed(buffer_index, buf), current_offset);
         auto aw2 = condy::async_write(
             condy::fixed(1), condy::fixed(buffer_index, buf), current_offset);
-        auto [r1, r2] = co_await (std::move(aw1) >> std::move(aw2));
+        auto [r1, r2] = co_await (aw1 >> aw2);
 
         if (r1 < 0 || r2 < 0) {
             std::fprintf(stderr, "Failed to copy at offset %lld: %d %d\n",
