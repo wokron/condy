@@ -36,7 +36,7 @@ public:
      * @param capacity The number of file descriptors to allocate in the table
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int init(size_t capacity) {
+    int init(size_t capacity) noexcept {
         return io_uring_register_files_sparse(&ring_, capacity);
     }
 
@@ -55,7 +55,7 @@ public:
      * @brief Destroy the file descriptor table
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int destroy() { return io_uring_unregister_files(&ring_); }
+    int destroy() noexcept { return io_uring_unregister_files(&ring_); }
 
     /**
      * @brief Update the file descriptor table starting from the given index
@@ -65,7 +65,7 @@ public:
      * @return int Return number of file descriptors updated on success or a
      * negative error code on failure
      */
-    int update(unsigned index_base, const int *fds, unsigned nr_fds) {
+    int update(unsigned index_base, const int *fds, unsigned nr_fds) noexcept {
         return io_uring_register_files_update(&ring_, index_base, fds, nr_fds);
     }
 
@@ -93,7 +93,7 @@ public:
      * @param size The size of the file allocation range
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int set_file_alloc_range(unsigned offset, unsigned size) {
+    int set_file_alloc_range(unsigned offset, unsigned size) noexcept {
         return io_uring_register_file_alloc_range(&ring_, offset, size);
     }
 
@@ -126,7 +126,7 @@ public:
      * @param capacity The number of buffers to allocate in the table
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int init(size_t capacity) {
+    int init(size_t capacity) noexcept {
         int r = io_uring_register_buffers_sparse(&ring_, capacity);
         if (r < 0) {
             return r;
@@ -155,7 +155,7 @@ public:
      * @brief Destroy the buffer table
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int destroy() {
+    int destroy() noexcept {
         initialized_ = false;
         return io_uring_unregister_buffers(&ring_);
     }
@@ -168,7 +168,8 @@ public:
      * @return int Returns number of buffers updated on success or a negative
      * error code on failure
      */
-    int update(unsigned index_base, const iovec *vecs, unsigned nr_vecs) {
+    int update(unsigned index_base, const iovec *vecs,
+               unsigned nr_vecs) noexcept {
         return io_uring_register_buffers_update_tag(&ring_, index_base, vecs,
                                                     nullptr, nr_vecs);
     }
@@ -184,7 +185,7 @@ public:
      * @return int Returns 0 on success or a negative error code on failure
      */
     int clone_buffers(BufferTable &src, unsigned int dst_off = 0,
-                      unsigned int src_off = 0, unsigned int nr = 0) {
+                      unsigned int src_off = 0, unsigned int nr = 0) noexcept {
         auto *src_ring = &src.ring_;
         auto *dst_ring = &ring_;
         unsigned int flags = 0;
@@ -234,14 +235,16 @@ public:
      * @param cpusz Number of CPUs in the affinity mask.
      * @param mask Pointer to the CPU affinity mask.
      */
-    int apply_iowq_aff(size_t cpusz, const cpu_set_t *mask) {
+    int apply_iowq_aff(size_t cpusz, const cpu_set_t *mask) noexcept {
         return io_uring_register_iowq_aff(&ring_, cpusz, mask);
     }
     /**
      * @brief Remove I/O worker queue affinity settings.
      * @return int Returns 0 on success or a negative error code on failure
      */
-    int remove_iowq_aff() { return io_uring_unregister_iowq_aff(&ring_); }
+    int remove_iowq_aff() noexcept {
+        return io_uring_unregister_iowq_aff(&ring_);
+    }
 
     /**
      * @brief Set the maximum number of I/O workers.
@@ -249,7 +252,7 @@ public:
      * @param values Pointer to an array with 2 elements representing the
      * max_workers
      */
-    int set_iowq_max_workers(unsigned int *values) {
+    int set_iowq_max_workers(unsigned int *values) noexcept {
         return io_uring_register_iowq_max_workers(&ring_, values);
     }
 
@@ -258,7 +261,7 @@ public:
      * @return io_uring_probe* Pointer to the io_uring probe structure. User
      * shall not free the returned pointer.
      */
-    io_uring_probe *get_probe() {
+    io_uring_probe *get_probe() noexcept {
         if (probe_) {
             return probe_;
         }
@@ -270,7 +273,7 @@ public:
      * @brief Get the supported features of the ring.
      * @return uint32_t Supported features bitmask.
      */
-    uint32_t get_features() const { return features_; }
+    uint32_t get_features() const noexcept { return features_; }
 
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
     /**
@@ -278,14 +281,14 @@ public:
      * @details See io_uring_register_napi for more details.
      * @param napi Pointer to the io_uring_napi structure.
      */
-    int apply_napi(io_uring_napi *napi) {
+    int apply_napi(io_uring_napi *napi) noexcept {
         return io_uring_register_napi(&ring_, napi);
     }
     /**
      * @brief Remove NAPI settings from the io_uring instance.
      * @param napi Pointer to the io_uring_napi structure. Can be nullptr.
      */
-    int remove_napi(io_uring_napi *napi = nullptr) {
+    int remove_napi(io_uring_napi *napi = nullptr) noexcept {
         return io_uring_unregister_napi(&ring_, napi);
     }
 #endif
@@ -296,7 +299,7 @@ public:
      * @details See io_uring_register_clock for more details.
      * @param clock_reg Pointer to the io_uring_clock_register structure.
      */
-    int set_clock(io_uring_clock_register *clock_reg) {
+    int set_clock(io_uring_clock_register *clock_reg) noexcept {
         return io_uring_register_clock(&ring_, clock_reg);
     }
 #endif
@@ -307,7 +310,7 @@ public:
      * @details See io_uring_resize_rings for more details.
      * @param params Pointer to the io_uring_params structure.
      */
-    int set_rings_size(io_uring_params *params) {
+    int set_rings_size(io_uring_params *params) noexcept {
         return io_uring_resize_rings(&ring_, params);
     }
 #endif
@@ -318,7 +321,7 @@ public:
      * @details See io_uring_set_iowait for more details.
      * @param enable_iowait Boolean flag to enable or disable iowait mode.
      */
-    int set_iowait(bool enable_iowait) {
+    int set_iowait(bool enable_iowait) noexcept {
         return io_uring_set_iowait(&ring_, enable_iowait);
     }
 #endif
@@ -344,7 +347,7 @@ public:
 public:
     int init(unsigned int entries, io_uring_params *params,
              [[maybe_unused]] void *buf = nullptr,
-             [[maybe_unused]] size_t buf_size = 0) {
+             [[maybe_unused]] size_t buf_size = 0) noexcept {
         int r;
         assert(!initialized_);
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
@@ -362,16 +365,17 @@ public:
         return r;
     }
 
-    void destroy() {
+    void destroy() noexcept {
         if (initialized_) {
             io_uring_queue_exit(&ring_);
             initialized_ = false;
         }
     }
 
-    void submit() { io_uring_submit(&ring_); }
+    void submit() noexcept { io_uring_submit(&ring_); }
 
-    template <typename Func> size_t reap_completions_wait(Func &&process_func) {
+    template <typename Func>
+    size_t reap_completions_wait(Func &&process_func) noexcept {
         unsigned head;
         io_uring_cqe *cqe;
         size_t reaped = 0;
@@ -382,7 +386,7 @@ public:
             } else if (r == -EINTR) {
                 continue;
             } else {
-                throw make_system_error("io_uring_submit_and_wait", -r);
+                assert(false && "io_uring_submit_and_wait failed");
             }
         } while (true);
 
@@ -398,7 +402,8 @@ public:
         return reaped;
     }
 
-    template <typename Func> size_t reap_completions(Func &&process_func) {
+    template <typename Func>
+    size_t reap_completions(Func &&process_func) noexcept {
         unsigned head;
         io_uring_cqe *cqe;
         size_t reaped = 0;
@@ -418,7 +423,7 @@ public:
         return reaped;
     }
 
-    void reserve_space(size_t n) {
+    void reserve_space(size_t n) noexcept {
         size_t space_left;
         do {
             space_left = io_uring_sq_space_left(&ring_);
@@ -429,18 +434,18 @@ public:
         } while (true);
     }
 
-    io_uring *ring() { return &ring_; }
+    io_uring *ring() noexcept { return &ring_; }
 
-    FdTable &fd_table() { return fd_table_; }
+    FdTable &fd_table() noexcept { return fd_table_; }
 
-    BufferTable &buffer_table() { return buffer_table_; }
+    BufferTable &buffer_table() noexcept { return buffer_table_; }
 
-    RingSettings &settings() { return settings_; }
+    RingSettings &settings() noexcept { return settings_; }
 
-    io_uring_sqe *get_sqe() { return get_sqe_<io_uring_get_sqe>(); }
+    io_uring_sqe *get_sqe() noexcept { return get_sqe_<io_uring_get_sqe>(); }
 
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-    io_uring_sqe *get_sqe128() {
+    io_uring_sqe *get_sqe128() noexcept {
         if (ring_.flags & (IORING_SETUP_SQE128 | IORING_SETUP_SQE_MIXED))
             [[likely]] {
             return get_sqe_<io_uring_get_sqe128>();
@@ -452,7 +457,7 @@ public:
 
 private:
     template <io_uring_sqe *(*get_sqe)(struct io_uring *)>
-    io_uring_sqe *get_sqe_() {
+    io_uring_sqe *get_sqe_() noexcept {
         [[maybe_unused]] int r;
         io_uring_sqe *sqe;
         do {

@@ -505,7 +505,7 @@ public:
 
     void init_finish_handle() { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) {
+    void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
@@ -519,7 +519,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) {
+    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());

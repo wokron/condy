@@ -62,7 +62,7 @@ public:
 
     void init_finish_handle() { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept {
         auto &context = detail::Context::current();
         auto *ring = context.ring();
 
@@ -76,10 +76,10 @@ public:
     }
 
 public:
-    bool await_ready() { return false; }
+    bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.get().set_invoker(&h.promise());
         register_operation(0);
