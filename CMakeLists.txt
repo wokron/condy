@@ -50,11 +50,17 @@ if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS OR LINK_LIBURING)
     set_target_properties(uring PROPERTIES IMPORTED_LOCATION ${LIBURING_SOURCE_DIR}/src/liburing.a)
     target_include_directories(uring INTERFACE ${LIBURING_SOURCE_DIR}/src/include)
     add_dependencies(uring build_uring)
+
+    # stdexec
+    add_library(stdexec INTERFACE)
+    target_include_directories(stdexec INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stdexec/include)
 endif()
 
 if(LINK_LIBURING)
     target_link_libraries(condy INTERFACE uring)
 endif()
+
+target_link_libraries(condy INTERFACE stdexec)
 
 # Warnings as errors
 add_compile_options(-Wall -Wextra -Werror)
