@@ -10,6 +10,7 @@
 #include "condy/concepts.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
+#include "condy/zcrx.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -124,5 +125,25 @@ struct TxTimestampCQEHandler {
     }
 };
 #endif
+
+class ZeroCopyRxCQEHandler {
+public:
+    using ReturnType = std::pair<int, ZeroCopyRxBuffer>;
+
+    ZeroCopyRxCQEHandler(ZeroCopyRxBufferPool *pool) : pool_(pool) {}
+
+    void handle_cqe(io_uring_cqe *cqe) {
+        assert(detail::check_cqe32(cqe) &&
+               "Expected big CQE for zero-copy RX operations");
+        result_.first = cqe->res;
+        result_.second = pool_->handle_finish(cqe);
+    }
+
+    ReturnType extract_result() { return std::move(result_); }
+
+private:
+    ReturnType result_;
+    ZeroCopyRxBufferPool *pool_;
+};
 
 } // namespace condy
