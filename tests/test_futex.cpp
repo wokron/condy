@@ -9,9 +9,9 @@
 #include <thread>
 
 TEST_CASE("test async_futex - basic wait and notify") {
-    std::atomic<int> atomic_counter(0);
-    std::atomic_ref<int> ref_to_atomic(reinterpret_cast<int &>(atomic_counter));
-    condy::AsyncFutex<int> futex(ref_to_atomic);
+    int counter = 0;
+    std::atomic_ref<int> atomic_counter(counter);
+    condy::AsyncFutex<int> futex(atomic_counter);
 
     bool finished = false;
 
@@ -36,9 +36,9 @@ TEST_CASE("test async_futex - basic wait and notify") {
 }
 
 TEST_CASE("test async_futex - notify all") {
-    std::atomic<int> atomic_counter(0);
-    std::atomic_ref<int> ref_to_atomic(reinterpret_cast<int &>(atomic_counter));
-    condy::AsyncFutex<int> futex(ref_to_atomic);
+    int counter = 0;
+    std::atomic_ref<int> atomic_counter(counter);
+    condy::AsyncFutex<int> futex(atomic_counter);
 
     std::vector<int> finished(10, false);
 
@@ -76,9 +76,9 @@ TEST_CASE("test async_futex - notify all") {
 }
 
 TEST_CASE("test async_futex - cross thread") {
-    std::atomic<int> atomic_counter(0);
-    std::atomic_ref<int> ref_to_atomic(reinterpret_cast<int &>(atomic_counter));
-    condy::AsyncFutex<int> futex(ref_to_atomic);
+    int counter = 0;
+    std::atomic_ref<int> atomic_counter(counter);
+    condy::AsyncFutex<int> futex(atomic_counter);
 
     bool finished = false;
 
@@ -106,9 +106,9 @@ TEST_CASE("test async_futex - cross thread") {
 }
 
 TEST_CASE("test async_futex - cancel") {
-    std::atomic<int> atomic_counter(0);
-    std::atomic_ref<int> ref_to_atomic(reinterpret_cast<int &>(atomic_counter));
-    condy::AsyncFutex<int> futex(ref_to_atomic);
+    int counter = 0;
+    std::atomic_ref<int> atomic_counter(counter);
+    condy::AsyncFutex<int> futex(atomic_counter);
 
     auto wait_func = [&]() -> condy::Coro<void> {
         auto r = co_await condy::when_any(futex.wait(0), condy::async_nop());
