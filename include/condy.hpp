@@ -21,6 +21,7 @@
 #include "condy/sync_wait.hpp"          // IWYU pragma: export
 #include "condy/task.hpp"               // IWYU pragma: export
 #include "condy/version.hpp"            // IWYU pragma: export
+#include "condy/zcrx.hpp"               // IWYU pragma: export
 
 /**
  * @brief The main namespace for the Condy library.
