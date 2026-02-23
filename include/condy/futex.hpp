@@ -1,3 +1,8 @@
+/**
+ * @file futex.hpp
+ * @brief User-space "futex" implementation for efficient synchronization.
+ */
+
 #pragma once
 
 #include "condy/intrusive.hpp"
@@ -7,6 +12,14 @@
 
 namespace condy {
 
+/**
+ * @brief User-space "futex" implementation for efficient synchronization.
+ * @details This class provides a user-space futex implementation that allows
+ * coroutines to wait on a futex value and be efficiently notified when the
+ * value changes. This class is different from condy::async_futex_wait()
+ * which can be used together with thread-based synchronous wait.
+ * @tparam T Type of the futex value.
+ */
 template <typename T> class AsyncFutex {
 public:
     AsyncFutex(std::atomic_ref<T> futex) : futex_(futex) {}
@@ -18,20 +31,35 @@ public:
 
 public:
     struct [[nodiscard]] WaitAwaiter;
+    /**
+     * @brief Wait if the futex value equals to the specified old value. The
+     * awaiting coroutine will be suspended until a notify is received. If the
+     * value of the futex is not equal to the old value, the awaiting coroutine
+     * will not be suspended.
+     * @param old The old value to compare with the futex value.
+     * @return WaitAwaiter Awaiter object for the wait operation.
+     */
     WaitAwaiter wait(T old) { return {*this, std::move(old)}; }
 
+    /**
+     * @brief Notify one awaiting coroutine, if any.
+     * @note This function is thread-safe and can be called from any thread.
+     */
     void notify_one() {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!wait_awaiters_.empty()) {
-            auto *handle = wait_awaiters_.pop_front();
+        auto *handle = wait_awaiters_.pop_front();
+        if (handle) {
             handle->schedule();
         }
     }
 
+    /**
+     * @brief Notify all awaiting coroutines.
+     * @note This function is thread-safe and can be called from any thread.
+     */
     void notify_all() {
         std::lock_guard<std::mutex> lock(mutex_);
-        while (!wait_awaiters_.empty()) {
-            auto *handle = wait_awaiters_.pop_front();
+        while (auto *handle = wait_awaiters_.pop_front()) {
             handle->schedule();
         }
     }
@@ -114,6 +142,11 @@ private:
     bool canceled_ = false;
 };
 
+/**
+ * @brief Awaiter for waiting on the futex.
+ * @return true if the wait operation is successful, false if the wait operation
+ * is canceled.
+ */
 template <typename T> struct AsyncFutex<T>::WaitAwaiter {
 public:
     using HandleType = WaitFinishHandle;
