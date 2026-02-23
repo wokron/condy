@@ -1,3 +1,4 @@
+#include "condy/async_operations.hpp"
 #include "condy/coro.hpp"
 #include "condy/futex.hpp"
 #include "condy/sync_wait.hpp"
@@ -102,4 +103,18 @@ TEST_CASE("test async_futex - cross thread") {
     t1.join();
 
     REQUIRE(finished);
+}
+
+TEST_CASE("test async_futex - cancel") {
+    std::atomic<int> atomic_counter(0);
+    std::atomic_ref<int> ref_to_atomic(reinterpret_cast<int &>(atomic_counter));
+    condy::AsyncFutex<int> futex(ref_to_atomic);
+
+    auto wait_func = [&]() -> condy::Coro<void> {
+        auto r = co_await condy::when_any(futex.wait(0), condy::async_nop());
+        REQUIRE(r.index() == 1);
+        REQUIRE(atomic_counter.load() == 0);
+    };
+
+    condy::sync_wait(wait_func());
 }

@@ -117,7 +117,9 @@ public:
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
     void invoke() {
-        runtime_->resume_work();
+        if (need_resume_) {
+            runtime_->resume_work();
+        }
         (*invoker_)();
     }
 
@@ -129,7 +131,10 @@ public:
 
     T &get_old_value() { return old_value_; }
 
-    void schedule() { runtime_->schedule(this); }
+    void schedule() {
+        need_resume_ = true;
+        runtime_->schedule(this);
+    }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -139,6 +144,7 @@ private:
     AsyncFutex *futex_ = nullptr;
     Runtime *runtime_ = nullptr;
     T old_value_;
+    bool need_resume_ = false;
     bool canceled_ = false;
 };
 
