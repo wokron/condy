@@ -41,13 +41,13 @@ public:
      * @param old The old value to compare with the futex value.
      * @return WaitAwaiter Awaiter object for the wait operation.
      */
-    WaitAwaiter wait(T old) { return {*this, std::move(old)}; }
+    WaitAwaiter wait(T old) noexcept { return {*this, std::move(old)}; }
 
     /**
      * @brief Notify one awaiting coroutine, if any.
      * @note This function is thread-safe and can be called from any thread.
      */
-    void notify_one() {
+    void notify_one() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto *handle = wait_awaiters_.pop_front();
         if (handle) {
@@ -59,7 +59,7 @@ public:
      * @brief Notify all awaiting coroutines.
      * @note This function is thread-safe and can be called from any thread.
      */
-    void notify_all() {
+    void notify_all() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         while (auto *handle = wait_awaiters_.pop_front()) {
             handle->schedule();
@@ -69,13 +69,13 @@ public:
 private:
     class WaitFinishHandle;
 
-    bool cancel_wait_(WaitFinishHandle *handle) {
+    bool cancel_wait_(WaitFinishHandle *handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return wait_awaiters_.remove(handle);
     }
 
     // Returns true if the caller needs to suspend
-    bool request_wait_(WaitFinishHandle *handle) {
+    bool request_wait_(WaitFinishHandle *handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto current_value = futex_.load(std::memory_order_relaxed);
         if (current_value != handle->get_old_value()) {
@@ -103,7 +103,7 @@ public:
 
     WaitFinishHandle(T old_value) : old_value_(std::move(old_value)) {}
 
-    void cancel() {
+    void cancel() noexcept {
         if (futex_->cancel_wait_(this)) {
             // Successfully canceled
             canceled_ = true;
@@ -112,14 +112,14 @@ public:
         }
     }
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept {
         bool success = !canceled_;
         return success;
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
-    void invoke() {
+    void invoke() noexcept {
         if (need_resume_) {
             runtime_->resume_work();
         }
@@ -127,14 +127,14 @@ public:
     }
 
 public:
-    void init(AsyncFutex *futex, Runtime *runtime) {
+    void init(AsyncFutex *futex, Runtime *runtime) noexcept {
         futex_ = futex;
         runtime_ = runtime;
     }
 
-    T &get_old_value() { return old_value_; }
+    T &get_old_value() noexcept { return old_value_; }
 
-    void schedule() {
+    void schedule() noexcept {
         need_resume_ = true;
         runtime_->schedule(this);
     }
@@ -164,11 +164,11 @@ public:
         : futex_(futex), finish_handle_(std::move(old_value)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) {
+    void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&futex_, runtime);
         bool need_suspend = futex_.request_wait_(&finish_handle_);
