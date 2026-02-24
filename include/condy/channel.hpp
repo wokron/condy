@@ -444,11 +444,6 @@ public:
 
     PushAwaiter(Channel &channel, T item)
         : channel_(channel), finish_handle_(std::move(item)) {}
-    PushAwaiter(PushAwaiter &&) = default;
-
-    PushAwaiter(const PushAwaiter &) = delete;
-    PushAwaiter &operator=(const PushAwaiter &) = delete;
-    PushAwaiter &operator=(PushAwaiter &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
@@ -494,11 +489,6 @@ public:
     using HandleType = PopFinishHandle;
 
     PopAwaiter(Channel &channel) : channel_(channel) {}
-    PopAwaiter(PopAwaiter &&) = default;
-
-    PopAwaiter(const PopAwaiter &) = delete;
-    PopAwaiter &operator=(const PopAwaiter &) = delete;
-    PopAwaiter &operator=(PopAwaiter &&) = delete;
 
 public:
     HandleType *get_handle() { return &finish_handle_; }
