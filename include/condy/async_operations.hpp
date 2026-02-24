@@ -687,6 +687,8 @@ inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+
 namespace detail {
 
 inline void prep_recv_zc_multishot(io_uring_sqe *sqe, int fd, size_t len,
@@ -713,6 +715,8 @@ inline auto async_recv_zc_multishot(Fd fd, size_t len,
         std::move(prep_func), std::forward<MultiShotFunc>(func), &pool);
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }
+
+#endif
 
 /**
  * @brief See io_uring_prep_openat2
