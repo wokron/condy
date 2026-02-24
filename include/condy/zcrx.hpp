@@ -4,10 +4,11 @@
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
-#include <liburing/io_uring.h>
 #include <utility>
 
 namespace condy {
+
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 
 class ZeroCopyRxBufferPool;
 
@@ -95,7 +96,7 @@ public:
     }
 
     ~ZeroCopyRxBufferPool() {
-        int r;
+        [[maybe_unused]] int r;
         assert(area_ptr_ != nullptr);
         r = munmap(area_ptr_, area_size_);
         assert(r == 0);
@@ -196,5 +197,7 @@ inline void ZeroCopyRxBuffer::reset() {
     size_ = 0;
     pool_ = nullptr;
 }
+
+#endif
 
 } // namespace condy

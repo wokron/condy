@@ -126,6 +126,7 @@ struct TxTimestampCQEHandler {
 };
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 class ZeroCopyRxCQEHandler {
 public:
     using ReturnType = std::pair<int, ZeroCopyRxBuffer>;
@@ -145,5 +146,6 @@ private:
     ReturnType result_;
     ZeroCopyRxBufferPool *pool_;
 };
+#endif
 
 } // namespace condy
