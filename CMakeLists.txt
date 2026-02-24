@@ -9,9 +9,6 @@ option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(TESTS_STATIC_LINK "Use static linking for tests" OFF)
 option(LINK_LIBURING "Use liburing from third_party and link it to condy" ON)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 if (ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
     if(CLANG_TIDY_EXE)
@@ -24,6 +21,7 @@ endif()
 
 add_library(condy INTERFACE)
 target_include_directories(condy INTERFACE include)
+target_compile_features(condy INTERFACE cxx_std_20)
 
 if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS OR LINK_LIBURING)
     # liburing
