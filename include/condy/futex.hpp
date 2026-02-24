@@ -1,6 +1,7 @@
 /**
  * @file futex.hpp
- * @brief User-space "futex" implementation for efficient synchronization.
+ * @brief User-space "futex" implementation for efficient synchronization
+ * between coroutines.
  */
 
 #pragma once
@@ -13,7 +14,8 @@
 namespace condy {
 
 /**
- * @brief User-space "futex" implementation for efficient synchronization.
+ * @brief User-space "futex" implementation for efficient synchronization
+ * between coroutines.
  * @details This class provides a user-space futex implementation that allows
  * coroutines to wait on a futex value and be efficiently notified when the
  * value changes. This class is different from condy::async_futex_wait()
@@ -72,6 +74,7 @@ private:
         return wait_awaiters_.remove(handle);
     }
 
+    // Returns true if the caller needs to suspend
     bool request_wait_(WaitFinishHandle *handle) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto current_value = futex_.load(std::memory_order_relaxed);

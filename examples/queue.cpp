@@ -4,7 +4,6 @@
  * condy::AsyncFutex
  */
 
-#include "condy/futex.hpp"
 #include <atomic>
 #include <cassert>
 #include <condy.hpp>
@@ -42,7 +41,9 @@ public:
 
     void release(uint32_t n = 1) {
         count.fetch_add(n, std::memory_order_release);
-        futex.notify_all();
+        for (uint32_t i = 0; i < n; ++i) {
+            futex.notify_one();
+        }
     }
 
 private:
@@ -102,14 +103,6 @@ public:
 
 private:
     std::queue<T> queue;
-    FutexMutex queue_mutex;
-    FutexSemaphore empty, full;
-};
-
-struct State {
-    State(size_t queue_size) : empty(queue_size), full(0) {}
-
-    std::queue<int> queue;
     FutexMutex queue_mutex;
     FutexSemaphore empty, full;
 };
