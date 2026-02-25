@@ -72,6 +72,29 @@ TEST_CASE("test buffers - buffer iovec") {
     REQUIRE(mbuf.size() == sizeof(data));
 }
 
+TEST_CASE("test buffers - buffer span") {
+    int arr[4] = {1, 2, 3, 4};
+    std::span<int> sp(arr);
+    condy::MutableBuffer mbuf = condy::buffer(sp.subspan(1));
+    REQUIRE(mbuf.data() == reinterpret_cast<void *>(arr + 1));
+    REQUIRE(mbuf.size() == sizeof(int) * 3);
+
+    std::span<const int> csp(arr);
+    condy::ConstBuffer cbuf = condy::buffer(csp.subspan(1));
+    REQUIRE(cbuf.data() == reinterpret_cast<const void *>(arr + 1));
+    REQUIRE(cbuf.size() == sizeof(int) * 3);
+
+    std::span<int, 4> sp2(arr);
+    condy::MutableBuffer mbuf2 = condy::buffer(sp2);
+    REQUIRE(mbuf2.data() == reinterpret_cast<void *>(arr));
+    REQUIRE(mbuf2.size() == sizeof(int) * 4);
+
+    std::span<const int, 4> csp2(arr);
+    condy::ConstBuffer cbuf2 = condy::buffer(csp2);
+    REQUIRE(cbuf2.data() == reinterpret_cast<const void *>(arr));
+    REQUIRE(cbuf2.size() == sizeof(int) * 4);
+}
+
 TEST_CASE("test buffers - provided buffer queue init") {
     auto func = []() -> condy::Coro<void> {
         condy::ProvidedBufferQueue queue(16);
