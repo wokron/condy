@@ -10,6 +10,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
+#include <span>
 #include <string>
 #include <sys/mman.h>
 #include <sys/uio.h>
@@ -169,6 +170,24 @@ inline ConstBuffer buffer(std::string_view strv) {
  */
 inline MutableBuffer buffer(iovec &iov) {
     return MutableBuffer(iov.iov_base, iov.iov_len);
+}
+
+/**
+ * @copydoc buffer(void*, size_t)
+ */
+template <typename PodType, size_t N>
+inline ConstBuffer buffer(std::span<const PodType, N> sp) {
+    return ConstBuffer(static_cast<const void *>(sp.data()),
+                       sp.size() * sizeof(PodType));
+}
+
+/**
+ * @copydoc buffer(void*, size_t)
+ */
+template <typename PodType, size_t N>
+inline MutableBuffer buffer(std::span<PodType, N> sp) {
+    return MutableBuffer(static_cast<void *>(sp.data()),
+                         sp.size() * sizeof(PodType));
 }
 
 } // namespace condy
