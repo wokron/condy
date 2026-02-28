@@ -310,7 +310,10 @@ public:
     ReturnType extract_result() {
         auto r = Base::extract_result();
         auto &[order, results] = r;
-        return std::make_pair(order[0], std::move(results[order[0]]));
+        // May throw out_of_range if the range is empty, which is expected and
+        // should be handled by caller.
+        auto idx = order.at(0);
+        return std::make_pair(idx, std::move(results[idx]));
     }
 };
 
