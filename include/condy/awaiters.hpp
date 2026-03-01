@@ -188,7 +188,7 @@ public:
     }
 
 public:
-    bool await_ready() const noexcept { return false; }
+    bool await_ready() const noexcept { return awaiters_.empty(); }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) {
@@ -249,6 +249,7 @@ using RangedWhenAllAwaiter = RangedParallelAwaiterBase<
  * @brief Awaiter to wait for any operation in a range to complete.
  * @details An awaiter that waits for any operation in a range to complete.
  * @tparam Awaiter The type of the awaiters in the range.
+ * @throws std::out_of_range if the range is empty.
  * @return std::pair<size_t, ...> A pair containing the index of the completed
  * awaiter and its result.
  */

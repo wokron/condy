@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
+#include <stdexcept>
 
 using namespace condy::operators;
 
@@ -162,6 +163,33 @@ TEST_CASE("test awaiter_operations - test ranged when_all") {
     context.reset();
 }
 
+TEST_CASE("test awaiter_operations - test when_all with empty range") {
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::detail::Context::current();
+    context.init(&ring, &runtime);
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro<void> {
+        using OpAwaiter =
+            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
+        std::vector<OpAwaiter> awaiters;
+        auto r = co_await condy::when_all(std::move(awaiters));
+        REQUIRE(r.empty());
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
+    REQUIRE(unfinished == 0);
+
+    context.reset();
+}
+
 TEST_CASE("test awaiter_operations - test ranged when_any") {
     condy::Ring ring;
     io_uring_params params{};
@@ -202,6 +230,33 @@ TEST_CASE("test awaiter_operations - test ranged when_any") {
     REQUIRE(unfinished == 1);
 
     event_loop(unfinished);
+    REQUIRE(unfinished == 0);
+
+    context.reset();
+}
+
+TEST_CASE("test awaiter_operations - test when_any with empty range") {
+    condy::Ring ring;
+    io_uring_params params{};
+    std::memset(&params, 0, sizeof(params));
+    ring.init(8, &params);
+    auto &context = condy::detail::Context::current();
+    context.init(&ring, &runtime);
+
+    size_t unfinished = 1;
+    auto func = [&]() -> condy::Coro<void> {
+        using OpAwaiter =
+            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
+        std::vector<OpAwaiter> awaiters;
+        REQUIRE_THROWS_AS(co_await condy::when_any(std::move(awaiters)),
+                          std::out_of_range);
+        --unfinished;
+    };
+
+    auto coro = func();
+    REQUIRE(unfinished == 1);
+
+    coro.release().resume();
     REQUIRE(unfinished == 0);
 
     context.reset();
