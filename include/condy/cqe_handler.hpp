@@ -10,6 +10,8 @@
 #pragma once
 
 #include "condy/concepts.hpp"
+#include "condy/context.hpp"
+#include "condy/ring.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstdint>

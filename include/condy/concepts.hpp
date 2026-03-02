@@ -5,13 +5,15 @@
 #pragma once
 
 #include "condy/buffers.hpp"
+#include "condy/condy_uring.hpp"
 #include "condy/invoker.hpp"
-#include "condy/provided_buffers.hpp"
 #include <coroutine>
 
 namespace condy {
 
 class Ring;
+class BundledProvidedBufferPool;
+class BundledProvidedBufferQueue;
 
 namespace detail {
 
