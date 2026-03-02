@@ -79,6 +79,9 @@ public:
         [[maybe_unused]] int r = io_uring_unregister_buf_ring(
             detail::Context::current().ring()->ring(), bgid_);
         assert(r == 0);
+        if (r == 0) {
+            detail::Context::current().recycle_bgid(bgid_);
+        }
     }
 
     BundledProvidedBufferQueue(const BundledProvidedBufferQueue &) = delete;
@@ -293,6 +296,9 @@ public:
         [[maybe_unused]] int r = io_uring_unregister_buf_ring(
             detail::Context::current().ring()->ring(), bgid_);
         assert(r == 0);
+        if (r == 0) {
+            detail::Context::current().recycle_bgid(bgid_);
+        }
     }
 
     BundledProvidedBufferPool(const BundledProvidedBufferPool &) = delete;
