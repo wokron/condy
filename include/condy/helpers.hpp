@@ -144,7 +144,7 @@ inline auto fixed(int buf_index, const struct msghdr *msg) {
  * buffer.
  */
 inline auto &bundled(ProvidedBufferPool &buffer) {
-    return static_cast<BundledProvidedBufferPool &>(buffer);
+    return static_cast<detail::BundledProvidedBufferPool &>(buffer);
 }
 
 /**
@@ -154,7 +154,7 @@ inline auto &bundled(ProvidedBufferPool &buffer) {
  * @return auto& The bundled variant of the provided buffer.
  */
 inline auto &bundled(ProvidedBufferQueue &buffer) {
-    return static_cast<BundledProvidedBufferQueue &>(buffer);
+    return static_cast<detail::BundledProvidedBufferQueue &>(buffer);
 }
 
 } // namespace condy
