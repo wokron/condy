@@ -13,6 +13,9 @@
 #include <exception>
 #include <functional>
 #include <iostream>
+#include <limits>
+#include <stack>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 
@@ -162,5 +165,39 @@ template <typename M, typename T> T *container_of(M T::*member, M *ptr) {
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
 }
+
+template <typename T, T From = 0, T To = std::numeric_limits<T>::max()>
+class IdPool {
+public:
+    static_assert(From < To, "Invalid ID range");
+
+    T allocate() {
+        if (!recycled_ids_.empty()) {
+            T id = recycled_ids_.top();
+            recycled_ids_.pop();
+            return id;
+        }
+        if (next_id_ < To) {
+            return next_id_++;
+        }
+        throw std::runtime_error("ID pool exhausted");
+    }
+
+    void recycle(T id) {
+        assert(From <= id && id < next_id_ && id < To);
+        recycled_ids_.push(id);
+    }
+
+    void reset() {
+        next_id_ = From;
+        while (!recycled_ids_.empty()) {
+            recycled_ids_.pop();
+        }
+    }
+
+private:
+    T next_id_ = From;
+    std::stack<T> recycled_ids_;
+};
 
 } // namespace condy

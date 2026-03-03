@@ -89,3 +89,30 @@ TEST_CASE("test small_array - large with raw_storage") {
     arr[1].destroy();
     arr[2].destroy();
 }
+
+TEST_CASE("test id_pool - basic") {
+    condy::IdPool<uint32_t, 0, 8> pool;
+    auto id1 = pool.allocate();
+    auto id2 = pool.allocate();
+    REQUIRE(id1 != id2);
+    pool.recycle(id1);
+    auto id3 = pool.allocate();
+    REQUIRE(id3 == id1);
+    pool.recycle(id2);
+    pool.recycle(id3);
+    pool.reset();
+    auto id4 = pool.allocate();
+    REQUIRE(id4 == 0);
+}
+
+TEST_CASE("test id_pool - exhaustion") {
+    constexpr uint32_t max_ids = 2;
+    condy::IdPool<uint32_t, 0, max_ids> pool;
+    for (uint32_t i = 0; i < max_ids; ++i) {
+        pool.allocate();
+    }
+    REQUIRE_THROWS_AS(pool.allocate(), std::runtime_error);
+    pool.recycle(0);
+    auto id = pool.allocate();
+    REQUIRE(id == 0);
+}

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "condy/singleton.hpp"
+#include "condy/utils.hpp"
 #include <cassert>
 #include <cstdint>
 
@@ -21,24 +22,26 @@ public:
     void init(Ring *ring, Runtime *runtime) {
         ring_ = ring;
         runtime_ = runtime;
-        next_bgid_ = 0;
+        bgid_pool_.reset();
     }
     void reset() {
         ring_ = nullptr;
         runtime_ = nullptr;
-        next_bgid_ = 0;
+        bgid_pool_.reset();
     }
 
     Ring *ring() { return ring_; }
 
     Runtime *runtime() { return runtime_; }
 
-    uint16_t next_bgid() { return next_bgid_++; }
+    uint16_t next_bgid() { return bgid_pool_.allocate(); }
+
+    void recycle_bgid(uint16_t bgid) { bgid_pool_.recycle(bgid); }
 
 private:
     Ring *ring_ = nullptr;
     Runtime *runtime_ = nullptr;
-    uint16_t next_bgid_ = 0;
+    IdPool<uint16_t> bgid_pool_;
 };
 
 } // namespace detail
