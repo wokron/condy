@@ -218,15 +218,14 @@ TEST_CASE("test op_awaiter - multishot op") {
 }
 
 TEST_CASE("test op_awaiter - select buffer op") {
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
+    condy::Runtime runtime;
+    condy::Ring &ring = runtime.ring();
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
+    REQUIRE(io_uring_enable_rings(ring.ring()) == 0);
 
     {
-        condy::ProvidedBufferPool pool(16, 32);
+        condy::ProvidedBufferPool pool(runtime, 16, 32);
 
         int pipefd[2];
         REQUIRE(pipe(pipefd) == 0);

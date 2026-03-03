@@ -109,15 +109,10 @@ TEST_CASE("test buffers - provided buffer queue init") {
 
 TEST_CASE("test buffers - provided buffer queue usage") {
     condy::Runtime runtime;
-    condy::Ring ring;
-    io_uring_params params = {};
-    ring.init(8, &params);
+    condy::Ring &ring = runtime.ring();
 
-    condy::detail::Context::current().init(&ring, &runtime);
-    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
-
-    condy::ProvidedBufferQueue queue(4);
-    REQUIRE(queue.capacity() == (1 << 2));
+    condy::ProvidedBufferQueue queue(runtime, 4);
+    REQUIRE(queue.capacity() == 4);
 
     char buf1[32], buf2[32];
     REQUIRE(queue.push(condy::buffer(buf1)) == 0);
@@ -132,6 +127,8 @@ TEST_CASE("test buffers - provided buffer queue usage") {
 
     r = ::write(pipefd[1], "test", 4);
     REQUIRE(r == 4);
+
+    REQUIRE(io_uring_enable_rings(ring.ring()) == 0);
 
     auto *sqe = ring.get_sqe();
     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
@@ -173,15 +170,10 @@ TEST_CASE("test buffers - provided buffer pool init") {
 
 TEST_CASE("test buffers - provided buffer pool usage") {
     condy::Runtime runtime;
-    condy::Ring ring;
-    io_uring_params params = {};
-    ring.init(8, &params);
-    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+    condy::Ring &ring = runtime.ring();
 
-    condy::detail::Context::current().init(&ring, &runtime);
-
-    condy::ProvidedBufferPool pool(4, 16);
-    REQUIRE(pool.capacity() == (1 << 2));
+    condy::ProvidedBufferPool pool(runtime, 4, 16);
+    REQUIRE(pool.capacity() == 4);
 
     int pipefd[2];
     REQUIRE(pipe(pipefd) == 0);
@@ -190,6 +182,8 @@ TEST_CASE("test buffers - provided buffer pool usage") {
 
     r = ::write(pipefd[1], "test", 4);
     REQUIRE(r == 4);
+
+    REQUIRE(io_uring_enable_rings(ring.ring()) == 0);
 
     auto *sqe = ring.get_sqe();
     io_uring_prep_read(sqe, pipefd[0], nullptr, 0, 0);
