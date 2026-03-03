@@ -46,10 +46,10 @@ class BundledProvidedBufferQueue {
 public:
     using ReturnType = BufferInfo;
 
-    BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
-        : capacity_(std::bit_ceil(capacity)) {
-        runtime_ = detail::Context::current().runtime();
-        auto bgid = runtime_->next_bgid();
+    BundledProvidedBufferQueue(Runtime &runtime, uint32_t capacity,
+                               unsigned int flags)
+        : runtime_(runtime), capacity_(std::bit_ceil(capacity)) {
+        auto bgid = runtime_.next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -64,8 +64,7 @@ public:
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = capacity_;
         reg.bgid = bgid;
-        int r =
-            io_uring_register_buf_ring(runtime_->ring().ring(), &reg, flags);
+        int r = io_uring_register_buf_ring(runtime_.ring().ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
@@ -74,15 +73,19 @@ public:
         bgid_ = bgid;
     }
 
+    BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags)
+        : BundledProvidedBufferQueue(*detail::Context::current().runtime(),
+                                     capacity, flags) {}
+
     ~BundledProvidedBufferQueue() {
         assert(br_ != nullptr);
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         munmap(br_, data_size);
         [[maybe_unused]] int r =
-            io_uring_unregister_buf_ring(runtime_->ring().ring(), bgid_);
+            io_uring_unregister_buf_ring(runtime_.ring().ring(), bgid_);
         assert(r == 0);
         if (r == 0) {
-            runtime_->recycle_bgid(bgid_);
+            runtime_.recycle_bgid(bgid_);
         }
     }
 
@@ -165,7 +168,7 @@ public:
     }
 
 private:
-    Runtime *runtime_;
+    Runtime &runtime_;
     io_uring_buf_ring *br_ = nullptr;
     uint32_t size_ = 0;
     uint32_t capacity_;
@@ -182,6 +185,17 @@ private:
  */
 class ProvidedBufferQueue : public BundledProvidedBufferQueue {
 public:
+    /**
+     * @brief Construct a new Provided Buffer Queue object
+     * @param runtime The runtime instance this buffer queue is associated with.
+     * @param capacity Number of buffers the queue can hold.
+     * @param flags Optional flags for io_uring buffer ring registration
+     * (default: 0).
+     */
+    ProvidedBufferQueue(Runtime &runtime, uint32_t capacity,
+                        unsigned int flags = 0)
+        : BundledProvidedBufferQueue(runtime, capacity, flags) {}
+
     /**
      * @brief Construct a new ProvidedBufferQueue object.
      * @param capacity Number of buffers the queue can hold.
@@ -254,11 +268,11 @@ class BundledProvidedBufferPool {
 public:
     using ReturnType = std::vector<ProvidedBuffer>;
 
-    BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
-                              unsigned int flags = 0)
-        : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
-        runtime_ = detail::Context::current().runtime();
-        auto bgid = runtime_->next_bgid();
+    BundledProvidedBufferPool(Runtime &runtime, uint32_t num_buffers,
+                              size_t buffer_size, unsigned int flags)
+        : runtime_(runtime), num_buffers_(std::bit_ceil(num_buffers)),
+          buffer_size_(buffer_size) {
+        auto bgid = runtime_.next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -273,8 +287,7 @@ public:
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = num_buffers_;
         reg.bgid = bgid;
-        int r =
-            io_uring_register_buf_ring(runtime_->ring().ring(), &reg, flags);
+        int r = io_uring_register_buf_ring(runtime_.ring().ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
@@ -293,15 +306,20 @@ public:
         io_uring_buf_ring_advance(br_, static_cast<int>(num_buffers_));
     }
 
+    BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
+                              unsigned int flags)
+        : BundledProvidedBufferPool(*detail::Context::current().runtime(),
+                                    num_buffers, buffer_size, flags) {}
+
     ~BundledProvidedBufferPool() {
         assert(br_ != nullptr);
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
         munmap(br_, data_size);
         [[maybe_unused]] int r =
-            io_uring_unregister_buf_ring(runtime_->ring().ring(), bgid_);
+            io_uring_unregister_buf_ring(runtime_.ring().ring(), bgid_);
         assert(r == 0);
         if (r == 0) {
-            runtime_->recycle_bgid(bgid_);
+            runtime_.recycle_bgid(bgid_);
         }
     }
 
@@ -389,7 +407,7 @@ private:
     void advance_io_uring_buf_() { br_head_++; }
 
 private:
-    Runtime *runtime_;
+    Runtime &runtime_;
     io_uring_buf_ring *br_ = nullptr;
     uint32_t num_buffers_;
     uint32_t buffer_size_;
@@ -419,6 +437,18 @@ inline void ProvidedBuffer::reset() {
 class ProvidedBufferPool : public BundledProvidedBufferPool {
 public:
     using ReturnType = ProvidedBuffer;
+
+    /**
+     * @brief Construct a new Provided Buffer Pool object
+     * @param runtime The runtime instance this buffer pool is associated with.
+     * @param num_buffers Number of buffers to allocate in the pool.
+     * @param buffer_size Size of each buffer in bytes.
+     * @param flags Optional flags for io_uring buffer registration (default:
+     * 0).
+     */
+    ProvidedBufferPool(Runtime &runtime, uint32_t num_buffers,
+                       size_t buffer_size, unsigned int flags = 0)
+        : BundledProvidedBufferPool(runtime, num_buffers, buffer_size, flags) {}
 
     /**
      * @brief Construct a new ProvidedBufferPool object.
