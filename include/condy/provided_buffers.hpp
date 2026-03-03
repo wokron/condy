@@ -203,7 +203,7 @@ public:
         : BundledProvidedBufferQueue(runtime, capacity, flags) {}
 
     /**
-     * @brief Construct a new ProvidedBufferQueue object.
+     * @brief Construct a new ProvidedBufferQueue object in current runtime.
      * @param capacity Number of buffers the queue can hold.
      * @param flags Optional flags for io_uring buffer ring registration
      * (default: 0).
@@ -457,7 +457,7 @@ public:
     using ReturnType = ProvidedBuffer;
 
     /**
-     * @brief Construct a new Provided Buffer Pool object
+     * @brief Construct a new Provided Buffer Pool object.
      * @param runtime The runtime instance this buffer pool is associated with.
      * @param num_buffers Number of buffers to allocate in the pool.
      * @param buffer_size Size of each buffer in bytes.
@@ -469,7 +469,7 @@ public:
         : BundledProvidedBufferPool(runtime, num_buffers, buffer_size, flags) {}
 
     /**
-     * @brief Construct a new ProvidedBufferPool object.
+     * @brief Construct a new ProvidedBufferPool object in current runtime.
      * @param num_buffers Number of buffers to allocate in the pool.
      * @param buffer_size Size of each buffer in bytes.
      * @param flags Optional flags for io_uring buffer registration (default:
