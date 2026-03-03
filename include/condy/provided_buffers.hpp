@@ -48,8 +48,8 @@ public:
 
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
         : capacity_(std::bit_ceil(capacity)) {
-        auto &context = detail::Context::current();
-        auto bgid = context.next_bgid();
+        runtime_ = detail::Context::current().runtime();
+        auto bgid = runtime_->next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -64,7 +64,8 @@ public:
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = capacity_;
         reg.bgid = bgid;
-        int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
+        int r =
+            io_uring_register_buf_ring(runtime_->ring().ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
@@ -77,11 +78,11 @@ public:
         assert(br_ != nullptr);
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         munmap(br_, data_size);
-        [[maybe_unused]] int r = io_uring_unregister_buf_ring(
-            detail::Context::current().ring()->ring(), bgid_);
+        [[maybe_unused]] int r =
+            io_uring_unregister_buf_ring(runtime_->ring().ring(), bgid_);
         assert(r == 0);
         if (r == 0) {
-            detail::Context::current().recycle_bgid(bgid_);
+            runtime_->recycle_bgid(bgid_);
         }
     }
 
@@ -164,6 +165,7 @@ public:
     }
 
 private:
+    Runtime *runtime_;
     io_uring_buf_ring *br_ = nullptr;
     uint32_t size_ = 0;
     uint32_t capacity_;
@@ -255,8 +257,8 @@ public:
     BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                               unsigned int flags = 0)
         : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
-        auto &context = detail::Context::current();
-        auto bgid = context.next_bgid();
+        runtime_ = detail::Context::current().runtime();
+        auto bgid = runtime_->next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -271,7 +273,8 @@ public:
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = num_buffers_;
         reg.bgid = bgid;
-        int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
+        int r =
+            io_uring_register_buf_ring(runtime_->ring().ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
             munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
@@ -294,11 +297,11 @@ public:
         assert(br_ != nullptr);
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size_);
         munmap(br_, data_size);
-        [[maybe_unused]] int r = io_uring_unregister_buf_ring(
-            detail::Context::current().ring()->ring(), bgid_);
+        [[maybe_unused]] int r =
+            io_uring_unregister_buf_ring(runtime_->ring().ring(), bgid_);
         assert(r == 0);
         if (r == 0) {
-            detail::Context::current().recycle_bgid(bgid_);
+            runtime_->recycle_bgid(bgid_);
         }
     }
 
@@ -386,6 +389,7 @@ private:
     void advance_io_uring_buf_() { br_head_++; }
 
 private:
+    Runtime *runtime_;
     io_uring_buf_ring *br_ = nullptr;
     uint32_t num_buffers_;
     uint32_t buffer_size_;

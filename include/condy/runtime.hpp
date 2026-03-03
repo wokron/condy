@@ -210,6 +210,12 @@ public:
 
     void resume_work() noexcept { pending_works_--; }
 
+    uint16_t next_bgid() { return bgid_pool_.allocate(); }
+
+    void recycle_bgid(uint16_t bgid) { bgid_pool_.recycle(bgid); }
+
+    Ring &ring() noexcept { return ring_; }
+
     /**
      * @brief Run the runtime event loop in the current thread.
      * @details This function starts the event loop of the runtime in the
@@ -399,6 +405,7 @@ private:
     WorkListQueue local_queue_;
     Ring ring_;
     size_t tick_count_ = 0;
+    IdPool<uint16_t> bgid_pool_;
 
     // Configurable parameters
     size_t event_interval_ = 61;
