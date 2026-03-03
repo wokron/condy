@@ -186,6 +186,8 @@ private:
  * queue.
  * @returns std::pair<int, BufferInfo> When pass to async operations, the return
  * type will be a pair of the operation result and the @ref BufferInfo.
+ * @note The lifetime of this queue must not exceed the lifetime of the Runtime
+ * it is associated with.
  */
 class ProvidedBufferQueue : public detail::BundledProvidedBufferQueue {
 public:
@@ -219,6 +221,8 @@ class BundledProvidedBufferPool;
  * @details A provided buffer represents a buffer obtained from a provided
  * buffer pool. It automatically returns the buffer to the pool when it goes
  * out of scope.
+ * @note The lifetime of the provided buffer must not exceed the lifetime of the
+ * provided buffer pool it is associated with.
  */
 struct ProvidedBuffer : public BufferBase {
 public:
@@ -444,6 +448,9 @@ inline void ProvidedBuffer::reset() {
  * @returns std::pair<int, ProvidedBuffer> When pass to async operations, the
  * return type will be a pair of the operation result and the @ref
  * ProvidedBuffer.
+ * @note The lifetime of this pool must not exceed the lifetime of the Runtime
+ * it is associated with, and the lifetime of any ProvidedBuffer obtained from
+ * this pool must not exceed the lifetime of this pool.
  */
 class ProvidedBufferPool : public detail::BundledProvidedBufferPool {
 public:
