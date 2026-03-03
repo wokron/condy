@@ -107,6 +107,16 @@ TEST_CASE("test buffers - provided buffer queue init") {
     condy::sync_wait(func());
 }
 
+TEST_CASE("test buffers - provided buffer queue init before run") {
+    condy::Runtime runtime;
+    condy::ProvidedBufferQueue queue(runtime, 4);
+    auto func = [&]() -> condy::Coro<void> {
+        REQUIRE(queue.capacity() == 4);
+        co_return;
+    };
+    condy::sync_wait(runtime, func());
+}
+
 TEST_CASE("test buffers - provided buffer queue usage") {
     condy::Runtime runtime;
     condy::Ring &ring = runtime.ring();
@@ -166,6 +176,16 @@ TEST_CASE("test buffers - provided buffer pool init") {
     };
 
     condy::sync_wait(func());
+}
+
+TEST_CASE("test buffers - provided buffer pool init before run") {
+    condy::Runtime runtime;
+    condy::ProvidedBufferPool pool(runtime, 4, 16);
+    auto func = [&]() -> condy::Coro<void> {
+        REQUIRE(pool.capacity() == 4);
+        co_return;
+    };
+    condy::sync_wait(runtime, func());
 }
 
 TEST_CASE("test buffers - provided buffer pool usage") {
