@@ -12,13 +12,13 @@
 namespace condy {
 
 class Ring;
-class BundledProvidedBufferPool;
-class BundledProvidedBufferQueue;
 
 namespace detail {
 
 struct FixedFd;
 struct Action;
+class BundledProvidedBufferPool;
+class BundledProvidedBufferQueue;
 
 } // namespace detail
 
@@ -83,8 +83,8 @@ concept BufferRingLike = requires(T br) {
 
 template <typename T>
 concept BundledBufferRing =
-    std::same_as<std::decay_t<T>, BundledProvidedBufferPool> ||
-    std::same_as<std::decay_t<T>, BundledProvidedBufferQueue>;
+    std::same_as<std::decay_t<T>, detail::BundledProvidedBufferPool> ||
+    std::same_as<std::decay_t<T>, detail::BundledProvidedBufferQueue>;
 
 template <typename T>
 concept NotBundledBufferRing = BufferRingLike<T> && !BundledBufferRing<T>;

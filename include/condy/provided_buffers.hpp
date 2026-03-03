@@ -42,6 +42,8 @@ struct BufferInfo {
     uint16_t num_buffers;
 };
 
+namespace detail {
+
 class BundledProvidedBufferQueue {
 public:
     using ReturnType = BufferInfo;
@@ -175,6 +177,8 @@ private:
     uint16_t bgid_;
 };
 
+} // namespace detail
+
 /**
  * @brief Provided buffer queue.
  * @details A provided buffer queue manages a queue of buffers that can be used
@@ -183,7 +187,7 @@ private:
  * @returns std::pair<int, BufferInfo> When pass to async operations, the return
  * type will be a pair of the operation result and the @ref BufferInfo.
  */
-class ProvidedBufferQueue : public BundledProvidedBufferQueue {
+class ProvidedBufferQueue : public detail::BundledProvidedBufferQueue {
 public:
     /**
      * @brief Construct a new Provided Buffer Queue object
@@ -206,7 +210,9 @@ public:
         : BundledProvidedBufferQueue(capacity, flags) {}
 };
 
+namespace detail {
 class BundledProvidedBufferPool;
+}
 
 /**
  * @brief Provided buffer.
@@ -217,7 +223,8 @@ class BundledProvidedBufferPool;
 struct ProvidedBuffer : public BufferBase {
 public:
     ProvidedBuffer() = default;
-    ProvidedBuffer(void *data, size_t size, BundledProvidedBufferPool *pool)
+    ProvidedBuffer(void *data, size_t size,
+                   detail::BundledProvidedBufferPool *pool)
         : data_(data), size_(size), pool_(pool) {}
     ProvidedBuffer(ProvidedBuffer &&other) noexcept
         : data_(std::exchange(other.data_, nullptr)),
@@ -261,8 +268,10 @@ public:
 private:
     void *data_ = nullptr;
     size_t size_ = 0;
-    BundledProvidedBufferPool *pool_ = nullptr;
+    detail::BundledProvidedBufferPool *pool_ = nullptr;
 };
+
+namespace detail {
 
 class BundledProvidedBufferPool {
 public:
@@ -416,6 +425,8 @@ private:
     uint16_t br_head_ = 0;
 };
 
+} // namespace detail
+
 inline void ProvidedBuffer::reset() {
     if (pool_ != nullptr) {
         pool_->add_buffer_back(data_);
@@ -434,7 +445,7 @@ inline void ProvidedBuffer::reset() {
  * return type will be a pair of the operation result and the @ref
  * ProvidedBuffer.
  */
-class ProvidedBufferPool : public BundledProvidedBufferPool {
+class ProvidedBufferPool : public detail::BundledProvidedBufferPool {
 public:
     using ReturnType = ProvidedBuffer;
 
