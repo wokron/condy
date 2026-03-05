@@ -49,12 +49,40 @@ public:
     /**
      * @brief See IORING_SETUP_IOPOLL
      * @param hybrid See IORING_SETUP_HYBRID_IOPOLL
+     * @deprecated Use enable_iopoll() and enable_hybrid_iopoll() instead
      */
-    Self &enable_iopoll(bool hybrid = false) {
-        enable_iopoll_ = true;
-        enable_hybrid_iopoll_ = hybrid;
+    [[deprecated("Use enable_iopoll() and enable_hybrid_iopoll() instead")]]
+    Self &enable_iopoll([[maybe_unused]] bool hybrid) {
+        enable_iopoll();
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+        if (hybrid) {
+            enable_hybrid_iopoll();
+        }
+#endif
         return *this;
     }
+
+    /**
+     * @brief See IORING_SETUP_IOPOLL
+     */
+    Self &enable_iopoll() {
+        enable_iopoll_ = true;
+        return *this;
+    }
+
+#if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
+    /**
+     * @brief See IORING_SETUP_HYBRID_IOPOLL
+     */
+    Self &enable_hybrid_iopoll() {
+        if (!enable_iopoll_) {
+            throw std::logic_error(
+                "hybrid_iopoll cannot be enabled without iopoll");
+        }
+        enable_hybrid_iopoll_ = true;
+        return *this;
+    }
+#endif
 
     /**
      * @brief See IORING_SETUP_SQPOLL
