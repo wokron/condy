@@ -14,8 +14,7 @@
 
 class FutexSemaphore {
 public:
-    FutexSemaphore(uint32_t initial_count = 0)
-        : count(initial_count), futex(std::atomic_ref(*raw_count_ptr_())) {}
+    FutexSemaphore(uint32_t initial_count = 0) : count_raw_(initial_count) {}
 
     FutexSemaphore(const FutexSemaphore &) = delete;
     FutexSemaphore &operator=(const FutexSemaphore &) = delete;
@@ -28,32 +27,30 @@ public:
         while (true) {
             size_t retries = 0;
             while (retries++ < MAX_RETRIES) {
-                c = count.load(std::memory_order_relaxed);
-                if (c > 0 && count.compare_exchange_weak(
+                c = count_.load(std::memory_order_relaxed);
+                if (c > 0 && count_.compare_exchange_weak(
                                  c, c - 1, std::memory_order_acquire,
                                  std::memory_order_relaxed)) {
                     co_return;
                 }
             }
-            co_await futex.wait(c);
+            co_await futex_.wait(c);
         }
     }
 
     void release(uint32_t n = 1) {
-        count.fetch_add(n, std::memory_order_release);
+        count_.fetch_add(n, std::memory_order_release);
         for (uint32_t i = 0; i < n; ++i) {
-            futex.notify_one();
+            futex_.notify_one();
         }
     }
 
 private:
-    uint32_t *raw_count_ptr_() { return reinterpret_cast<uint32_t *>(&count); }
-
-private:
     static constexpr size_t MAX_RETRIES = 32;
 
-    std::atomic<uint32_t> count;
-    condy::AsyncFutex<uint32_t> futex;
+    uint32_t count_raw_;
+    std::atomic_ref<uint32_t> count_{count_raw_};
+    condy::AsyncFutex<uint32_t> futex_{count_};
 };
 
 class FutexMutex {
@@ -66,45 +63,45 @@ public:
     FutexMutex &operator=(FutexMutex &&) = delete;
 
 public:
-    auto lock() { return sem.acquire(); }
+    auto lock() { return sem_.acquire(); }
 
-    void unlock() { sem.release(); }
+    void unlock() { sem_.release(); }
 
 private:
-    FutexSemaphore sem{1};
+    FutexSemaphore sem_{1};
 };
 
 template <typename T> class Queue {
 public:
-    Queue(size_t queue_size) : empty(queue_size), full(0) {}
+    Queue(size_t queue_size) : empty_(queue_size), full_(0) {}
 
     condy::Coro<void> enqueue(const T &item) {
-        co_await empty.acquire();
+        co_await empty_.acquire();
         {
-            co_await queue_mutex.lock();
-            queue.push(item);
-            queue_mutex.unlock();
+            co_await queue_mutex_.lock();
+            queue_.push(item);
+            queue_mutex_.unlock();
         }
-        full.release();
+        full_.release();
     }
 
     condy::Coro<T> dequeue() {
-        co_await full.acquire();
+        co_await full_.acquire();
         T item;
         {
-            co_await queue_mutex.lock();
-            item = queue.front();
-            queue.pop();
-            queue_mutex.unlock();
+            co_await queue_mutex_.lock();
+            item = queue_.front();
+            queue_.pop();
+            queue_mutex_.unlock();
         }
-        empty.release();
+        empty_.release();
         co_return item;
     }
 
 private:
-    std::queue<T> queue;
-    FutexMutex queue_mutex;
-    FutexSemaphore empty, full;
+    std::queue<T> queue_;
+    FutexMutex queue_mutex_;
+    FutexSemaphore empty_, full_;
 };
 
 condy::Coro<void> producer(Queue<int> &q, size_t produce_count) {

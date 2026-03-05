@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <doctest/doctest.h>
+#include <queue>
 #include <thread>
 
 TEST_CASE("test async_futex - basic wait and notify") {
@@ -117,4 +118,126 @@ TEST_CASE("test async_futex - cancel") {
     };
 
     condy::sync_wait(wait_func());
+}
+
+namespace {
+
+class FutexSemaphore {
+public:
+    FutexSemaphore(uint32_t initial_count = 0) : count_raw_(initial_count) {}
+
+    FutexSemaphore(const FutexSemaphore &) = delete;
+    FutexSemaphore &operator=(const FutexSemaphore &) = delete;
+    FutexSemaphore(FutexSemaphore &&) = delete;
+    FutexSemaphore &operator=(FutexSemaphore &&) = delete;
+
+public:
+    condy::Coro<void> acquire() {
+        uint32_t c;
+        while (true) {
+            size_t retries = 0;
+            while (retries++ < MAX_RETRIES) {
+                c = count_.load(std::memory_order_relaxed);
+                if (c > 0 && count_.compare_exchange_weak(
+                                 c, c - 1, std::memory_order_acquire,
+                                 std::memory_order_relaxed)) {
+                    co_return;
+                }
+            }
+            co_await futex_.wait(c);
+        }
+    }
+
+    void release(uint32_t n = 1) {
+        count_.fetch_add(n, std::memory_order_release);
+        for (uint32_t i = 0; i < n; ++i) {
+            futex_.notify_one();
+        }
+    }
+
+private:
+    static constexpr size_t MAX_RETRIES = 32;
+
+    uint32_t count_raw_;
+    std::atomic_ref<uint32_t> count_{count_raw_};
+    condy::AsyncFutex<uint32_t> futex_{count_};
+};
+
+class FutexMutex {
+public:
+    FutexMutex() = default;
+
+    FutexMutex(const FutexMutex &) = delete;
+    FutexMutex &operator=(const FutexMutex &) = delete;
+    FutexMutex(FutexMutex &&) = delete;
+    FutexMutex &operator=(FutexMutex &&) = delete;
+
+public:
+    auto lock() { return sem_.acquire(); }
+
+    void unlock() { sem_.release(); }
+
+private:
+    FutexSemaphore sem_{1};
+};
+
+template <typename T> class Queue {
+public:
+    Queue(size_t queue_size) : empty_(queue_size), full_(0) {}
+
+    condy::Coro<void> enqueue(const T &item) {
+        co_await empty_.acquire();
+        {
+            co_await queue_mutex_.lock();
+            queue_.push(item);
+            queue_mutex_.unlock();
+        }
+        full_.release();
+    }
+
+    condy::Coro<T> dequeue() {
+        co_await full_.acquire();
+        T item;
+        {
+            co_await queue_mutex_.lock();
+            item = queue_.front();
+            queue_.pop();
+            queue_mutex_.unlock();
+        }
+        empty_.release();
+        co_return item;
+    }
+
+private:
+    std::queue<T> queue_;
+    FutexMutex queue_mutex_;
+    FutexSemaphore empty_, full_;
+};
+
+} // namespace
+
+TEST_CASE("test async_futex - queue") {
+    constexpr size_t queue_size = 32;
+    constexpr size_t num_messages = 100;
+
+    Queue<int> queue(queue_size);
+
+    auto producer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < num_messages; ++i) {
+            co_await queue.enqueue(static_cast<int>(i));
+        }
+    };
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < num_messages; ++i) {
+            int item = co_await queue.dequeue();
+            REQUIRE(item == static_cast<int>(i));
+        }
+    };
+
+    std::thread rt1_thread([&] { condy::sync_wait(producer()); });
+
+    condy::sync_wait(consumer());
+
+    rt1_thread.join();
 }
