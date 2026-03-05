@@ -534,7 +534,8 @@ inline auto async_send(Fd sockfd, ProvidedBufferQueue &buf, int flags) {
  * @brief See io_uring_prep_send
  */
 template <FdLike Fd>
-inline auto async_send(Fd sockfd, BundledProvidedBufferQueue &buf, int flags) {
+inline auto async_send(Fd sockfd, detail::BundledProvidedBufferQueue &buf,
+                       int flags) {
     auto op = detail::make_bundle_select_buffer_op_awaiter(
         &buf, io_uring_prep_send, sockfd, nullptr, 0, flags);
     return detail::maybe_flag_fixed_fd(std::move(op), sockfd);
@@ -568,8 +569,9 @@ inline auto async_sendto(Fd sockfd, ProvidedBufferQueue &buf, int flags,
  * @brief See io_uring_prep_send and io_uring_prep_send_set_addr
  */
 template <FdLike Fd>
-inline auto async_sendto(Fd sockfd, BundledProvidedBufferQueue &buf, int flags,
-                         const struct sockaddr *addr, socklen_t addrlen) {
+inline auto async_sendto(Fd sockfd, detail::BundledProvidedBufferQueue &buf,
+                         int flags, const struct sockaddr *addr,
+                         socklen_t addrlen) {
     auto op = detail::make_bundle_select_buffer_op_awaiter(
         &buf, detail::prep_sendto, sockfd, nullptr, 0, flags, addr, addrlen);
     return detail::maybe_flag_fixed_fd(std::move(op), sockfd);

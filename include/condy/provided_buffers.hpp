@@ -41,11 +41,13 @@ struct BufferInfo {
     uint16_t num_buffers;
 };
 
+namespace detail {
+
 class BundledProvidedBufferQueue {
 public:
     using ReturnType = BufferInfo;
 
-    BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
+    BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags)
         : capacity_(std::bit_ceil(capacity)) {
         auto &context = detail::Context::current();
         auto bgid = context.next_bgid();
@@ -169,6 +171,8 @@ private:
     uint16_t bgid_;
 };
 
+} // namespace detail
+
 /**
  * @brief Provided buffer queue.
  * @details A provided buffer queue manages a queue of buffers that can be used
@@ -176,11 +180,14 @@ private:
  * queue.
  * @returns std::pair<int, BufferInfo> When pass to async operations, the return
  * type will be a pair of the operation result and the @ref BufferInfo.
+ * @note The lifetime of this queue must not exceed the running period of the
+ * associated Runtime. The buffers pushed into the queue must remain valid until
+ * they are consumed from the queue.
  */
-class ProvidedBufferQueue : public BundledProvidedBufferQueue {
+class ProvidedBufferQueue : public detail::BundledProvidedBufferQueue {
 public:
     /**
-     * @brief Construct a new ProvidedBufferQueue object.
+     * @brief Construct a new ProvidedBufferQueue object in current Runtime.
      * @param capacity Number of buffers the queue can hold.
      * @param flags Optional flags for io_uring buffer ring registration
      * (default: 0).
@@ -189,18 +196,23 @@ public:
         : BundledProvidedBufferQueue(capacity, flags) {}
 };
 
+namespace detail {
 class BundledProvidedBufferPool;
+}
 
 /**
  * @brief Provided buffer.
  * @details A provided buffer represents a buffer obtained from a provided
  * buffer pool. It automatically returns the buffer to the pool when it goes
  * out of scope.
+ * @note The lifetime of the provided buffer must not exceed the lifetime of the
+ * provided buffer pool it is associated with.
  */
 struct ProvidedBuffer : public BufferBase {
 public:
     ProvidedBuffer() = default;
-    ProvidedBuffer(void *data, size_t size, BundledProvidedBufferPool *pool)
+    ProvidedBuffer(void *data, size_t size,
+                   detail::BundledProvidedBufferPool *pool)
         : data_(data), size_(size), pool_(pool) {}
     ProvidedBuffer(ProvidedBuffer &&other) noexcept
         : data_(std::exchange(other.data_, nullptr)),
@@ -244,15 +256,17 @@ public:
 private:
     void *data_ = nullptr;
     size_t size_ = 0;
-    BundledProvidedBufferPool *pool_ = nullptr;
+    detail::BundledProvidedBufferPool *pool_ = nullptr;
 };
+
+namespace detail {
 
 class BundledProvidedBufferPool {
 public:
     using ReturnType = std::vector<ProvidedBuffer>;
 
     BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
-                              unsigned int flags = 0)
+                              unsigned int flags)
         : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
         auto &context = detail::Context::current();
         auto bgid = context.next_bgid();
@@ -393,6 +407,8 @@ private:
     uint16_t br_head_ = 0;
 };
 
+} // namespace detail
+
 inline void ProvidedBuffer::reset() {
     if (pool_ != nullptr) {
         pool_->add_buffer_back(data_);
@@ -410,13 +426,16 @@ inline void ProvidedBuffer::reset() {
  * @returns std::pair<int, ProvidedBuffer> When pass to async operations, the
  * return type will be a pair of the operation result and the @ref
  * ProvidedBuffer.
+ * @note The lifetime of this pool must not exceed the running period of the
+ * associated Runtime, and the lifetime of any ProvidedBuffer obtained from
+ * this pool must not exceed the lifetime of this pool.
  */
-class ProvidedBufferPool : public BundledProvidedBufferPool {
+class ProvidedBufferPool : public detail::BundledProvidedBufferPool {
 public:
     using ReturnType = ProvidedBuffer;
 
     /**
-     * @brief Construct a new ProvidedBufferPool object.
+     * @brief Construct a new ProvidedBufferPool object in current Runtime.
      * @param num_buffers Number of buffers to allocate in the pool.
      * @param buffer_size Size of each buffer in bytes.
      * @param flags Optional flags for io_uring buffer registration (default:
