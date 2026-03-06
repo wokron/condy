@@ -53,10 +53,9 @@ TEST_CASE("test runtime_options - enable_iopoll") {
     REQUIRE(fd >= 0);
 
     condy::RuntimeOptions options;
+    options.enable_iopoll();
 #if !IO_URING_CHECK_VERSION(2, 9) // >= 2.9
-    options.enable_iopoll(/*hybrid=*/true);
-#else
-    options.enable_iopoll(/*hybrid=*/false);
+    options.enable_hybrid_iopoll();
 #endif
     options.event_interval(std::numeric_limits<size_t>::max());
     condy::Runtime runtime(options);
