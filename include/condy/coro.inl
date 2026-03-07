@@ -177,12 +177,11 @@ public:
     }
 
 protected:
-    std::mutex mutex_;
-    std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
+    AtomicMutex mutex_;
     bool auto_destroy_ = true;
     bool finished_ = false;
+    std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
     Invoker *remote_callback_ = nullptr;
-
     std::exception_ptr exception_;
 };
 
