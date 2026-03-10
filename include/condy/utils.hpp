@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -91,8 +92,8 @@ private:
     bool use_mutex_ = false;
 };
 
-[[noreturn]] inline void panic_on(const char *msg) noexcept {
-    std::cerr << "Panic: " << msg << '\n';
+[[noreturn]] inline void panic_on(std::string_view msg) noexcept {
+    std::cerr << std::format("Panic: {}\n", msg);
 #ifndef CRASH_TEST
     std::terminate();
 #else

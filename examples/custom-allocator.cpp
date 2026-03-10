@@ -4,6 +4,7 @@
  */
 
 #include <condy.hpp>
+#include <format>
 #include <iostream>
 #include <memory_resource>
 #include <vector>
@@ -28,9 +29,9 @@ condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
     std::chrono::duration<double> duration = end - start;
     double tasks_per_second =
         static_cast<double>(task_count) / duration.count();
-    std::cout << "Spawned and completed " << task_count << " tasks in "
-              << duration.count() << " seconds (" << tasks_per_second
-              << " tasks/second)\n";
+    std::cout << std::format("Spawned and completed {} tasks in {:.2f} seconds "
+                             "({:.2f} tasks/second)\n",
+                             task_count, duration.count(), tasks_per_second);
 }
 
 int main() noexcept(false) {
