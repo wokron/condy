@@ -148,14 +148,15 @@ condy::Coro<void> async_consumer(State &share, int id, size_t consume_count) {
         }
         co_await share.empty.async_release();
 
-        std::printf("Consumer %d consumed item %d\n", id, item);
+        std::cout << std::format("Consumer {} consumed item {}\n", id, item);
     }
 }
 
 void usage(const char *prog_name) {
-    std::printf("Usage: %s [-h] [-q queue_size] [-p num_producers] [-c "
-                "num_consumers] [-n items_per_producer]\n",
-                prog_name);
+    std::cerr << std::format(
+        "Usage: {} [-h] [-q queue_size] [-p num_producers] [-c num_consumers] "
+        "[-n items_per_producer]\n",
+        prog_name);
 }
 
 static size_t queue_size = 32;
@@ -190,10 +191,9 @@ int main(int argc, char *argv[]) noexcept(false) {
 
     size_t total_items = num_producers * items_per_producer;
     if (total_items % num_consumers != 0) {
-        std::fprintf(stderr,
-                     "Total items (%zu) must be divisible by number of "
-                     "consumers (%zu)\n",
-                     total_items, num_consumers);
+        std::cerr << std::format(
+            "Total items ({}) must be divisible by number of consumers ({})\n",
+            total_items, num_consumers);
         return 1;
     }
     size_t items_per_consumer = total_items / num_consumers;
@@ -227,9 +227,8 @@ int main(int argc, char *argv[]) noexcept(false) {
 #else
 
 int main() {
-    std::fprintf(stderr,
-                 "Futex-based semaphore and mutex require io_uring version "
-                 "2.6 or higher.\n");
+    std::cerr << std::format("Futex-based semaphore and mutex require io_uring "
+                             "version 2.6 or higher.\n");
     return 1;
 }
 

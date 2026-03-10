@@ -36,8 +36,9 @@ condy::Coro<void> copy_file_task(size_t task_id, loff_t &offset,
         auto [r1, r2] = co_await (aw1 >> aw2);
 
         if (r1 < 0 || r2 < 0) {
-            std::fprintf(stderr, "Failed to copy at offset %lld: %d %d\n",
-                         (long long)current_offset, r1, r2);
+            std::cerr << std::format("Failed to copy at offset {}: read result "
+                                     "{}, write result {}\n",
+                                     current_offset, r1, r2);
             exit(1);
         }
     }
@@ -47,7 +48,7 @@ condy::Coro<void> do_file_copy(int infd, int outfd, loff_t size) {
     size_t buffers_size = task_num * chunk_size;
     void *raw_buffer;
     if (posix_memalign(&raw_buffer, 4096, buffers_size) != 0) {
-        std::fprintf(stderr, "Failed to allocate aligned buffers: %d\n", errno);
+        std::perror("Failed to allocate aligned buffers");
         exit(1);
     }
 
@@ -70,7 +71,8 @@ condy::Coro<void> do_file_copy(int infd, int outfd, loff_t size) {
     int r_faddvise = co_await condy::async_fadvise(
         infd, 0, static_cast<off_t>(size), POSIX_FADV_SEQUENTIAL);
     if (r_faddvise < 0) {
-        std::fprintf(stderr, "Failed to fadvise input file: %d\n", r_faddvise);
+        std::cerr << std::format("Failed to fadvise input file: {}\n",
+                                 r_faddvise);
         exit(1);
     }
 
@@ -100,7 +102,7 @@ condy::Coro<void> co_main(const char *infile, const char *outfile) {
         co_await (condy::async_open(infile, O_RDONLY | flags, 0) &&
                   condy::async_open(outfile, O_WRONLY | O_CREAT | flags, 0644));
     if (infd < 0 || outfd < 0) {
-        std::fprintf(stderr, "Failed to open file: %d %d\n", infd, outfd);
+        std::cerr << std::format("Failed to open file: {} {}\n", infd, outfd);
         exit(1);
     }
 
@@ -108,20 +110,19 @@ condy::Coro<void> co_main(const char *infile, const char *outfile) {
     int r_stat = co_await condy::async_statx(
         AT_FDCWD, infile, AT_STATX_SYNC_AS_STAT, STATX_SIZE, &statx_buf);
     if (r_stat < 0) {
-        std::fprintf(stderr, "Failed to statx file: %d\n", r_stat);
+        std::cerr << std::format("Failed to statx file: {}\n", r_stat);
         exit(1);
     }
 
     if (use_direct && (statx_buf.stx_size % 4096 != 0)) {
-        std::fprintf(
-            stderr,
-            "File size %lld is not multiple of 4096 bytes for O_DIRECT\n",
-            (long long)statx_buf.stx_size);
+        std::cerr << std::format(
+            "File size {} is not multiple of 4096 bytes for O_DIRECT\n",
+            statx_buf.stx_size);
         exit(1);
     }
 
-    std::printf("Copy %lld bytes from %s to %s\n",
-                (long long)statx_buf.stx_size, infile, outfile);
+    std::cout << std::format("Copy {} bytes from {} to {}\n",
+                             statx_buf.stx_size, infile, outfile);
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -132,16 +133,16 @@ condy::Coro<void> co_main(const char *infile, const char *outfile) {
     double mbps =
         (static_cast<double>(statx_buf.stx_size) / (1024.0 * 1024.0)) /
         elapsed.count();
-    std::printf("Copied %lld bytes in %.2f seconds (%.2f MB/s)\n",
-                (long long)statx_buf.stx_size, elapsed.count(), mbps);
+    std::cout << std::format(
+        "Copied {} bytes in {:.2f} seconds ({:.2f} MB/s)\n", statx_buf.stx_size,
+        elapsed.count(), mbps);
 
     co_await (condy::async_close(infd) && condy::async_close(outfd));
 }
 
 void usage(const char *progname) {
-    std::fprintf(
-        stderr,
-        "Usage: %s [-hd] [-t <task_num>] [-c <chunk_size>] <infile> <outfile>\n"
+    std::cerr << std::format(
+        "Usage: {} [-hd] [-t <task_num>] [-c <chunk_size>] <infile> <outfile>\n"
         "  -h               Show this help message\n"
         "  -d               Use O_DIRECT for file operations\n"
         "  -t <task_num>    Number of concurrent copy tasks\n"

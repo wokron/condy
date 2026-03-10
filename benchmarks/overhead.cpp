@@ -42,8 +42,9 @@ int main() noexcept(false) {
         duration_condy =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
                 .count();
-        std::printf("Condy NOP: %zu iterations took %ld ns (%ld ns per op)\n",
-                    iterations, duration_condy, duration_condy / iterations);
+        std::cout << std::format(
+            "Condy NOP: {} iterations took {} ns ({} ns per op)\n", iterations,
+            duration_condy, duration_condy / iterations);
     }
 
     {
@@ -53,14 +54,15 @@ int main() noexcept(false) {
         duration_raw =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
                 .count();
-        std::printf("Raw NOP: %zu iterations took %ld ns (%ld ns per op)\n",
-                    iterations, duration_raw, duration_raw / iterations);
+        std::cout << std::format(
+            "Raw NOP: {} iterations took {} ns ({} ns per op)\n", iterations,
+            duration_raw, duration_raw / iterations);
     }
 
     long overhead = duration_condy - duration_raw;
     long overhead_per_op = overhead / static_cast<long>(iterations);
-    std::printf(
-        "Overhead: %ld ns per operation (%.2f%%)\n", overhead_per_op,
+    std::cout << std::format(
+        "Overhead: {} ns per operation ({:.2f}%)\n", overhead_per_op,
         (static_cast<double>(overhead) / static_cast<double>(duration_raw)) *
             100.0);
 

@@ -343,8 +343,8 @@ private:
         } else if (type == WorkType::SendFd) {
             auto &fd_table = ring_.fd_table();
             if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
-                std::fprintf(stderr, "[Deprecated Warning] Received a file "
-                                     "descriptor but no accepter is set.\n");
+                std::cerr << "[Deprecated Warning] Received a file "
+                             "descriptor but no accepter is set.\n";
             } else {
                 uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
                 if (payload == 0) { // Auto-allocate

@@ -35,7 +35,7 @@ condy::pmr::Coro<void> spawn_tasks(auto &alloc, size_t task_count) {
 }
 
 int main() noexcept(false) {
-    std::printf("This example is faster than benchmark spawn_tasks.cpp!!!\n");
+    std::cout << "This example is faster than benchmark spawn_tasks.cpp!!!\n";
 
     const size_t task_count = 50'000'000;
 
