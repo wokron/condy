@@ -56,7 +56,7 @@ public:
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (data == MAP_FAILED) [[unlikely]] {
-            throw make_system_error("mmap", errno);
+            throw make_system_error("mmap");
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
@@ -275,7 +275,7 @@ public:
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (data == MAP_FAILED) [[unlikely]] {
-            throw make_system_error("mmap", errno);
+            throw make_system_error("mmap");
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
