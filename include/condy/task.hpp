@@ -263,7 +263,8 @@ inline auto TaskBase<T, Allocator>::operator co_await() noexcept {
  * runtime.
  */
 template <typename T, typename Allocator>
-inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
+inline Task<T, Allocator> co_spawn(Runtime &runtime,
+                                   Coro<T, Allocator> coro) noexcept {
     auto handle = coro.release();
     auto &promise = handle.promise();
     promise.set_auto_destroy(false);
@@ -314,6 +315,8 @@ struct [[nodiscard]] SwitchAwaiter {
  * run in the specified runtime. The caller coroutine will be resumed in the
  * target runtime.
  */
-inline detail::SwitchAwaiter co_switch(Runtime &runtime) { return {&runtime}; }
+inline detail::SwitchAwaiter co_switch(Runtime &runtime) noexcept {
+    return {&runtime};
+}
 
 } // namespace condy
