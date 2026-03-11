@@ -3,7 +3,6 @@
  * @brief Simple HTTP file server using condy library
  */
 
-#include "condy/buffers.hpp"
 #include <arpa/inet.h>
 #include <condy.hpp>
 #include <cstdint>
