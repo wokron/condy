@@ -219,7 +219,7 @@ public:
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
 
-    void init(std::vector<Handle *> handles) {
+    void init(std::vector<Handle *> handles) noexcept {
         handles_ = std::move(handles);
         child_invokers_.resize(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -232,7 +232,7 @@ public:
         order_.resize(handles_.size());
     }
 
-    void cancel() {
+    void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
             for (auto &handle : handles_) {
@@ -250,10 +250,10 @@ public:
         return std::make_pair(std::move(order_), std::move(result));
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 private:
-    void finish_(size_t idx) {
+    void finish_(size_t idx) noexcept {
         size_t no = finished_count_++;
         order_[no] = idx;
 
@@ -330,12 +330,12 @@ public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
-    template <typename... HandlePtr> void init(HandlePtr... handles) {
+    template <typename... HandlePtr> void init(HandlePtr... handles) noexcept {
         handles_ = std::make_tuple(handles...);
         foreach_set_invoker_();
     }
 
-    void cancel() {
+    void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
             constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
@@ -352,10 +352,10 @@ public:
         return std::make_pair(std::move(order_), std::move(result));
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 private:
-    template <size_t I = 0> void foreach_set_invoker_() {
+    template <size_t I = 0> void foreach_set_invoker_() noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto *handle = std::get<I>(handles_);
             auto &invoker = std::get<I>(child_invokers_);
@@ -365,7 +365,8 @@ private:
         }
     }
 
-    template <size_t SkipIdx, size_t I = 0> void foreach_call_cancel_() {
+    template <size_t SkipIdx, size_t I = 0>
+    void foreach_call_cancel_() noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto handle = std::get<I>(handles_);
             if constexpr (I != SkipIdx) {
@@ -375,7 +376,7 @@ private:
         }
     }
 
-    template <size_t Idx> void finish_() {
+    template <size_t Idx> void finish_() noexcept {
         size_t no = finished_count_++;
         order_[no] = Idx;
 

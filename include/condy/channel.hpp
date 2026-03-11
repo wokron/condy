@@ -173,7 +173,7 @@ private:
         return false;
     }
 
-    bool cancel_push_(PushFinishHandle *finish_handle) {
+    bool cancel_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return push_awaiters_.remove(finish_handle);
     }
@@ -190,7 +190,7 @@ private:
         return std::nullopt;
     }
 
-    bool cancel_pop_(PopFinishHandle *finish_handle) {
+    bool cancel_pop_(PopFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return pop_awaiters_.remove(finish_handle);
     }
@@ -323,7 +323,7 @@ public:
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    void cancel() {
+    void cancel() noexcept {
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
             canceled_ = true;
@@ -340,7 +340,7 @@ public:
         return success;
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
     void invoke() noexcept {
         if (need_resume_) {
@@ -388,7 +388,7 @@ class Channel<T, N>::PopFinishHandle
 public:
     using ReturnType = T;
 
-    void cancel() {
+    void cancel() noexcept {
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
             runtime_->resume_work();
@@ -398,7 +398,7 @@ public:
 
     ReturnType extract_result() { return std::move(result_); }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
     void invoke() noexcept {
         if (need_resume_) {
