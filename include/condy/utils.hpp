@@ -17,6 +17,7 @@
 #include <limits>
 #include <stack>
 #include <stdexcept>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
@@ -91,7 +92,7 @@ private:
     bool use_mutex_ = false;
 };
 
-[[noreturn]] inline void panic_on(const char *msg) noexcept {
+[[noreturn]] inline void panic_on(std::string_view msg) noexcept {
     std::cerr << "Panic: " << msg << '\n';
 #ifndef CRASH_TEST
     std::terminate();

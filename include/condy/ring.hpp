@@ -13,6 +13,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <format>
 
 namespace condy {
 
@@ -386,7 +387,7 @@ public:
             } else if (r == -EINTR) {
                 continue;
             } else {
-                assert(false && "io_uring_submit_and_wait failed");
+                panic_on(std::format("io_uring_submit_and_wait failed: {}", r));
             }
         } while (true);
 
