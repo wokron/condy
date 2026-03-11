@@ -53,12 +53,12 @@ public:
         return handle_func_(this, cqe);
     }
 
-    void invoke() {
+    void invoke() noexcept {
         assert(invoker_ != nullptr);
         (*invoker_)();
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 protected:
     OpFinishHandleBase() = default;
@@ -139,7 +139,7 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    void invoke() /* fake override */ {
+    void invoke() noexcept /* fake override */ {
         assert(this->invoker_ != nullptr);
         (*this->invoker_)();
         resumed_ = true;
@@ -183,7 +183,7 @@ private:
         maybe_free_();
     }
 
-    static void invoke_static_(void *data) {
+    static void invoke_static_(void *data) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         self->invoke();
     }
@@ -269,7 +269,7 @@ private:
 
 private:
     struct FinishInvoker : public InvokerAdapter<FinishInvoker> {
-        void invoke() { self_->finish_(no_); }
+        void invoke() noexcept { self_->finish_(no_); }
         RangedParallelFinishHandle *self_;
         size_t no_;
     };
@@ -387,7 +387,7 @@ private:
 private:
     template <size_t I>
     struct FinishInvoker : public InvokerAdapter<FinishInvoker<I>> {
-        void invoke() { self_->template finish_<I>(); }
+        void invoke() noexcept { self_->template finish_<I>(); }
         ParallelFinishHandle *self_;
     };
 

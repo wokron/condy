@@ -342,7 +342,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() {
+    void invoke() noexcept {
         if (need_resume_) {
             runtime_->resume_work();
         }
@@ -400,7 +400,7 @@ public:
 
     void set_invoker(Invoker *invoker) { invoker_ = invoker; }
 
-    void invoke() {
+    void invoke() noexcept {
         if (need_resume_) {
             runtime_->resume_work();
         }
