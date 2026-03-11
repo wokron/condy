@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <format>
+#include <iostream>
 #include <linux/stat.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -41,7 +43,7 @@ condy::Coro<void> sendfile(int out_fd, int in_fd) {
 
     int pipe_fds[2];
     if (pipe(pipe_fds) != 0) {
-        std::fprintf(stderr, "Failed to create pipe: %d\n", errno);
+        std::perror("Failed to create pipe");
         exit(1);
     }
 
@@ -52,14 +54,14 @@ condy::Coro<void> sendfile(int out_fd, int in_fd) {
             co_return;
         }
         if (n < 0) {
-            std::fprintf(stderr, "Error during splice operation: %d\n", n);
+            std::cerr << std::format("Error during splice operation: {}\n", n);
             exit(1);
         }
 
         n = co_await condy::async_splice(pipe_fds[0], -1, out_fd, -1,
                                          CHUNK_SIZE, 0);
         if (n < 0) {
-            std::fprintf(stderr, "Error during splice operation: %d\n", n);
+            std::cerr << std::format("Error during splice operation: {}\n", n);
             exit(1);
         }
     }
@@ -93,7 +95,7 @@ condy::Coro<void> session(int client_fd) {
     char buffer[1024];
     int n = co_await condy::async_recv(client_fd, condy::buffer(buffer), 0);
     if (n < 0) {
-        std::fprintf(stderr, "Read error: %d\n", n);
+        std::cerr << std::format("Read error: {}\n", n);
         co_await condy::async_close(client_fd);
         co_return;
     }
@@ -125,7 +127,7 @@ condy::Coro<void> session(int client_fd) {
         file_fd, "", AT_EMPTY_PATH | AT_STATX_SYNC_AS_STAT,
         STATX_SIZE | STATX_MODE, &statx_buf);
     if (r_stat < 0) {
-        std::fprintf(stderr, "Failed to statx file: %d\n", r_stat);
+        std::cerr << std::format("Failed to statx file: {}\n", r_stat);
         co_await condy::async_send(
             client_fd, condy::buffer(HTTP_500, sizeof(HTTP_500) - 1), 0);
         co_await condy::async_close(file_fd);
@@ -158,8 +160,8 @@ condy::Coro<int> co_main(int server_fd) {
         int client_fd = co_await condy::async_accept(
             server_fd, (struct sockaddr *)&client_addr, &client_len, 0);
         if (client_fd < 0) {
-            std::fprintf(stderr, "Failed to accept connection: %d\n",
-                         client_fd);
+            std::cerr << std::format("Failed to accept connection: {}\n",
+                                     client_fd);
             co_return 1;
         }
 
@@ -176,8 +178,8 @@ void prepare_address(const std::string &host, uint16_t port,
 }
 
 void usage(const char *prog_name) {
-    std::printf(
-        "Usage: %s [-h] [-b <address>] [-d <directory>] [-p <port>]\n"
+    std::cerr << std::format(
+        "Usage: {} [-h] [-b <address>] [-d <directory>] [-p <port>]\n"
         "  -h               Show this help message\n"
         "  -b <address>     Bind to the specified address (default: 0.0.0.0)\n"
         "  -d <directory>   Serve directory (default: current directory)\n"
@@ -237,8 +239,8 @@ int main(int argc, char **argv) noexcept(false) {
         return 1;
     }
 
-    std::printf("Serving HTTP on port %d (http://%s:%d/) ...\n", port,
-                bind_address.c_str(), port);
+    std::cout << std::format("Serving HTTP on port {} (http://{}:{}/) ...\n",
+                             port, bind_address, port);
 
     return condy::sync_wait(co_main(server_fd));
 }

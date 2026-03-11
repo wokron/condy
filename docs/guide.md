@@ -122,6 +122,8 @@ The following example creates 5 coroutine tasks, each calling `condy::async_time
 ```cpp
 #include <chrono>
 #include <condy.hpp>
+#include <format>
+#include <iostream>
 
 condy::Coro<void> sleep_task(int no, int seconds) {
     __kernel_timespec ts = {
@@ -131,7 +133,7 @@ condy::Coro<void> sleep_task(int no, int seconds) {
 
     int r = co_await condy::async_timeout(&ts, 0, 0);
     (void)r;
-    std::printf("Task %d: Wake up\n", no);
+    std::cout << std::format("Task {}: Wake up\n", no);
 }
 
 condy::Coro<void> co_main(int times, int sleep_seconds) {
@@ -146,7 +148,8 @@ condy::Coro<void> co_main(int times, int sleep_seconds) {
     }
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = end - start;
-    std::printf("All tasks completed in %.2f seconds\n", elapsed.count());
+    std::cout << std::format("All tasks completed in {:.2f} seconds\n",
+                             elapsed.count());
 }
 
 int main() {
@@ -179,12 +182,13 @@ You can also close a channel using the `condy::Channel::push_close()` function. 
 The following example creates a producer task and a consumer task.
 
 ```cpp
-#include "condy/runtime.hpp"
 #include <condy.hpp>
+#include <format>
+#include <iostream>
 
 condy::Coro<void> producer(condy::Channel<int> &ch) {
     for (int i = 0; i < 10; ++i) {
-        std::printf("Producing: %d\n", i);
+        std::cout << std::format("Producing: {}\n", i);
         co_await ch.push(i);
     }
     co_return;
@@ -193,7 +197,7 @@ condy::Coro<void> producer(condy::Channel<int> &ch) {
 condy::Coro<void> consumer(condy::Channel<int> &ch) {
     for (int i = 0; i < 10; ++i) {
         int value = co_await ch.pop();
-        std::printf("Consumed: %d\n", value);
+        std::cout << std::format("Consumed: {}\n", value);
     }
     co_return;
 }

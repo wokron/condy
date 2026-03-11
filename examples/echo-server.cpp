@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <format>
+#include <iostream>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -24,7 +26,7 @@ condy::Coro<void> session(int client_fd) {
                                            condy::buffer(buffer), 0);
         if (n <= 0) {
             if (n < 0) {
-                std::fprintf(stderr, "Read error: %d\n", n);
+                std::cerr << std::format("Read error: {}\n", n);
             }
             break;
         }
@@ -32,7 +34,7 @@ condy::Coro<void> session(int client_fd) {
         n = co_await condy::async_send(condy::fixed(client_fd),
                                        condy::buffer(buffer, n), 0);
         if (n < 0) {
-            std::fprintf(stderr, "Write error: %d\n", n);
+            std::cerr << std::format("Write error: {}\n", n);
             break;
         }
     }
@@ -48,8 +50,8 @@ condy::Coro<int> co_main(int server_fd) {
             server_fd, (struct sockaddr *)&client_addr, &client_len, 0,
             CONDY_FILE_INDEX_ALLOC);
         if (client_fd < 0) {
-            std::fprintf(stderr, "Failed to accept connection: %d\n",
-                         client_fd);
+            std::cerr << std::format("Failed to accept connection: {}\n",
+                                     client_fd);
             co_return 1;
         }
 
@@ -67,7 +69,7 @@ void prepare_address(const std::string &host, uint16_t port,
 
 int main(int argc, char **argv) noexcept(false) {
     if (argc < 3) {
-        std::fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
+        std::cerr << std::format("Usage: {} <host> <port>\n", argv[0]);
         return 1;
     }
 
@@ -96,7 +98,7 @@ int main(int argc, char **argv) noexcept(false) {
         return 1;
     }
 
-    std::printf("Echo server listening on %s:%d\n", host.c_str(), port);
+    std::cout << std::format("Echo server listening on {}:{}\n", host, port);
 
     condy::Runtime runtime(condy::RuntimeOptions().sq_size(MAX_CONNECTIONS));
 

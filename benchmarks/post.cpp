@@ -1,4 +1,7 @@
+#include <chrono>
 #include <condy.hpp>
+#include <format>
+#include <iostream>
 
 condy::Coro<void> test_post(size_t times) {
     for (size_t i = 0; i < times; ++i) {
@@ -16,7 +19,8 @@ int main() noexcept(false) {
     auto duration =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
             .count();
-    printf("Performed %zu context switches in %ld ns\n", times, duration);
-    printf("Average time per context switch: %.2f ns\n",
-           static_cast<double>(duration) / times);
+    std::cout << std::format("Performed {} context switches in {} ns\n", times,
+                             duration);
+    std::cout << std::format("Average time per context switch: {:.2f} ns\n",
+                             static_cast<double>(duration) / times);
 }

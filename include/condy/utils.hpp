@@ -12,11 +12,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <stack>
 #include <stdexcept>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
@@ -91,8 +93,8 @@ private:
     bool use_mutex_ = false;
 };
 
-[[noreturn]] inline void panic_on(const char *msg) noexcept {
-    std::cerr << "Panic: " << msg << '\n';
+[[noreturn]] inline void panic_on(std::string_view msg) noexcept {
+    std::cerr << std::format("Panic: {}\n", msg);
 #ifndef CRASH_TEST
     std::terminate();
 #else
@@ -152,8 +154,8 @@ private:
     };
 };
 
-inline auto make_system_error(const char *msg, int ec) {
-    return std::system_error(ec, std::generic_category(), msg);
+inline auto make_system_error(std::string_view msg, int ec) {
+    return std::system_error(ec, std::generic_category(), std::string(msg));
 }
 
 template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
