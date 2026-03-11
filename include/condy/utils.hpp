@@ -154,8 +154,8 @@ private:
     };
 };
 
-inline auto make_system_error(const char *msg, int ec) {
-    return std::system_error(ec, std::generic_category(), msg);
+inline auto make_system_error(std::string_view msg, int ec) {
+    return std::system_error(ec, std::generic_category(), std::string(msg));
 }
 
 template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
