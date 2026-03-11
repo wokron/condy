@@ -14,7 +14,7 @@ public:
     ThreadLocalSingleton(ThreadLocalSingleton &&) = delete;
     ThreadLocalSingleton &operator=(ThreadLocalSingleton &&) = delete;
 
-    static T &current() {
+    static T &current() noexcept {
         static thread_local T instance;
         return instance;
     }
