@@ -374,6 +374,7 @@ private:
             }
         } else {
             assert(false && "Invalid work type");
+            unreachable();
         }
     }
 
