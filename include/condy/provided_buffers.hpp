@@ -56,7 +56,7 @@ public:
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (data == MAP_FAILED) [[unlikely]] {
-            throw std::bad_alloc();
+            throw make_system_error("mmap", errno);
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
@@ -97,12 +97,12 @@ public:
     /**
      * @brief Get the current size of the buffer queue
      */
-    size_t size() const { return size_; }
+    size_t size() const noexcept { return size_; }
 
     /**
      * @brief Get the capacity of the buffer queue
      */
-    size_t capacity() const { return capacity_; }
+    size_t capacity() const noexcept { return capacity_; }
 
     /**
      * @brief Push a buffer into the provided buffer queue
@@ -129,9 +129,9 @@ public:
     }
 
 public:
-    uint16_t bgid() const { return bgid_; }
+    uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(int32_t res, uint32_t flags) {
+    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
         if (!(flags & IORING_CQE_F_BUFFER)) {
             return ReturnType{0, 0};
         }
@@ -236,22 +236,22 @@ public:
     /**
      * @brief Get the data pointer of the provided buffer
      */
-    void *data() const { return data_; }
+    void *data() const noexcept { return data_; }
 
     /** *
      * @brief Get the size of the provided buffer
      */
-    size_t size() const { return size_; }
+    size_t size() const noexcept { return size_; }
 
     /**
      * @brief Reset the provided buffer, returning it to the pool if owned
      */
-    void reset();
+    void reset() noexcept;
 
     /**
      * @brief Check if the provided buffer owns a buffer from a pool.
      */
-    bool owns_buffer() const { return pool_ != nullptr; }
+    bool owns_buffer() const noexcept { return pool_ != nullptr; }
 
 private:
     void *data_ = nullptr;
@@ -275,7 +275,7 @@ public:
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
                           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (data == MAP_FAILED) [[unlikely]] {
-            throw std::bad_alloc();
+            throw make_system_error("mmap", errno);
         }
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
@@ -325,17 +325,17 @@ public:
     /**
      * @brief Get the capacity of the buffer pool
      */
-    size_t capacity() const { return num_buffers_; }
+    size_t capacity() const noexcept { return num_buffers_; }
 
     /**
      * @brief Get the size of each buffer in the pool
      */
-    size_t buffer_size() const { return buffer_size_; }
+    size_t buffer_size() const noexcept { return buffer_size_; }
 
 public:
-    uint16_t bgid() const { return bgid_; }
+    uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(int32_t res, [[maybe_unused]] uint32_t flags) {
+    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
         std::vector<ProvidedBuffer> buffers;
 
         if (!(flags & IORING_CQE_F_BUFFER)) {
@@ -369,7 +369,7 @@ public:
         return buffers;
     }
 
-    void add_buffer_back(void *ptr) {
+    void add_buffer_back(void *ptr) noexcept {
         char *base = get_buffers_base_();
         assert(ptr >= base);
         size_t offset = static_cast<char *>(ptr) - base;
@@ -382,21 +382,21 @@ public:
     }
 
 private:
-    char *get_buffer_(uint16_t bid) const {
+    char *get_buffer_(uint16_t bid) const noexcept {
         return get_buffers_base_() + static_cast<size_t>(bid) * buffer_size_;
     }
 
-    char *get_buffers_base_() const {
+    char *get_buffers_base_() const noexcept {
         return reinterpret_cast<char *>(br_) +
                sizeof(io_uring_buf) * num_buffers_;
     }
 
-    io_uring_buf *curr_io_uring_buf_() {
+    io_uring_buf *curr_io_uring_buf_() noexcept {
         auto mask = io_uring_buf_ring_mask(num_buffers_);
         return &br_->bufs[br_head_ & mask];
     }
 
-    void advance_io_uring_buf_() { br_head_++; }
+    void advance_io_uring_buf_() noexcept { br_head_++; }
 
 private:
     io_uring_buf_ring *br_ = nullptr;
@@ -409,7 +409,7 @@ private:
 
 } // namespace detail
 
-inline void ProvidedBuffer::reset() {
+inline void ProvidedBuffer::reset() noexcept {
     if (pool_ != nullptr) {
         pool_->add_buffer_back(data_);
     }
@@ -446,7 +446,7 @@ public:
         : BundledProvidedBufferPool(num_buffers, buffer_size, flags) {}
 
 public:
-    ReturnType handle_finish(int32_t res, uint32_t flags) {
+    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
         auto buffers = BundledProvidedBufferPool::handle_finish(res, flags);
         if (buffers.empty()) {
             return ReturnType();
