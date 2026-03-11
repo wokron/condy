@@ -222,4 +222,16 @@ private:
     std::atomic_bool lock_ = false;
 };
 
+[[noreturn]] inline void unreachable() {
+#if __cplusplus >= 202302L
+    std::unreachable();
+#else
+#if defined(_MSC_VER) && !defined(__clang__) // MSVC
+    __assume(false);
+#else                                        // GCC, Clang
+    __builtin_unreachable();
+#endif
+#endif
+}
+
 } // namespace condy
