@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <limits>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -102,6 +103,10 @@ protected:
 template <typename Func, OpFinishHandleLike HandleBase>
 class MultiShotMixin : public HandleBase {
 public:
+    // TODO: uncomment this when the implementation is ready.
+    // static_assert(
+    //     std::is_nothrow_invocable_v<Func, typename HandleBase::ReturnType>);
+
     template <typename... Args>
     MultiShotMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
@@ -138,6 +143,9 @@ using MultiShotOpFinishHandle =
 template <typename Func, OpFinishHandleLike HandleBase>
 class ZeroCopyMixin : public HandleBase {
 public:
+    // TODO: uncomment this when the implementation is ready.
+    // static_assert(std::is_nothrow_invocable_v<Func, int32_t>);
+
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
