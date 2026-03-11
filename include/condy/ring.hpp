@@ -377,9 +377,6 @@ public:
 
     template <typename Func>
     size_t reap_completions_wait(Func &&process_func) noexcept {
-        unsigned head;
-        io_uring_cqe *cqe;
-        size_t reaped = 0;
         do {
             int r = io_uring_submit_and_wait(&ring_, 1);
             if (r >= 0) [[likely]] {
@@ -391,6 +388,9 @@ public:
             }
         } while (true);
 
+        unsigned head;
+        io_uring_cqe *cqe;
+        size_t reaped = 0;
         io_uring_for_each_cqe(&ring_, head, cqe) {
             process_func(cqe);
 #if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
@@ -405,21 +405,26 @@ public:
 
     template <typename Func>
     size_t reap_completions(Func &&process_func) noexcept {
-        unsigned head;
         io_uring_cqe *cqe;
-        size_t reaped = 0;
 
-        if (io_uring_peek_cqe(&ring_, &cqe) == 0) {
-            io_uring_for_each_cqe(&ring_, head, cqe) {
-                process_func(cqe);
-#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
-                reaped += io_uring_cqe_nr(cqe);
-#else
-                reaped++;
-#endif
-            }
-            io_uring_cq_advance(&ring_, reaped);
+        int r = io_uring_peek_cqe(&ring_, &cqe);
+        if (r == -EAGAIN) {
+            return 0;
+        } else if (r < 0) {
+            panic_on(std::format("io_uring_peek_cqe failed: {}", r));
         }
+
+        unsigned head;
+        size_t reaped = 0;
+        io_uring_for_each_cqe(&ring_, head, cqe) {
+            process_func(cqe);
+#if !IO_URING_CHECK_VERSION(2, 13) // >= 2.13
+            reaped += io_uring_cqe_nr(cqe);
+#else
+            reaped++;
+#endif
+        }
+        io_uring_cq_advance(&ring_, reaped);
 
         return reaped;
     }
