@@ -13,6 +13,7 @@
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/work_type.hpp"
 #include <array>
 #include <cerrno>
@@ -240,7 +241,7 @@ public:
         }
     }
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(is_nothrow_extract_result_v<Handle>) {
         std::vector<ChildReturnType> result;
         result.reserve(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -301,7 +302,7 @@ public:
     using Base = RangedParallelAllFinishHandle<Handle>;
     using ReturnType = std::vector<typename Handle::ReturnType>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -314,7 +315,7 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         auto &[order, results] = r;
         // May throw out_of_range if the range is empty, which is expected and
@@ -342,7 +343,8 @@ public:
         }
     }
 
-    ReturnType extract_result() {
+    ReturnType
+    extract_result() noexcept((is_nothrow_extract_result_v<Handles> && ...)) {
         auto result = std::apply(
             [](auto *...handle_ptrs) {
                 return std::make_tuple(handle_ptrs->extract_result()...);
@@ -433,7 +435,7 @@ public:
     using Base = ParallelAllFinishHandle<Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -445,7 +447,7 @@ public:
     using Base = ParallelAnyFinishHandle<Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         auto &[order, results] = r;
         return tuple_at_(std::move(results), order[0]);
