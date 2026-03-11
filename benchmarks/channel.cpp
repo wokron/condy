@@ -2,6 +2,7 @@
 #include <condy.hpp>
 #include <cstddef>
 #include <cstdio>
+#include <format>
 #include <iostream>
 
 condy::Coro<void> producer_task(condy::Channel<int> &channel,

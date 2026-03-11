@@ -1,4 +1,8 @@
 #include <condy.hpp>
+#include <cstdio>
+#include <cstring>
+#include <format>
+#include <iostream>
 
 void run_raw_nop(size_t times) {
     io_uring ring;

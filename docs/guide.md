@@ -123,6 +123,7 @@ The following example creates 5 coroutine tasks, each calling `condy::async_time
 #include <chrono>
 #include <condy.hpp>
 #include <format>
+#include <iostream>
 
 condy::Coro<void> sleep_task(int no, int seconds) {
     __kernel_timespec ts = {
@@ -183,6 +184,7 @@ The following example creates a producer task and a consumer task.
 ```cpp
 #include <condy.hpp>
 #include <format>
+#include <iostream>
 
 condy::Coro<void> producer(condy::Channel<int> &ch) {
     for (int i = 0; i < 10; ++i) {
