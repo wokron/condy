@@ -74,14 +74,19 @@ public:
         return try_pop_inner_();
     }
 
-    template <typename U> void force_push(U &&item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (try_push_inner_(std::forward<U>(item))) [[likely]] {
-            return;
+    template <typename U> void force_push(U &&item) noexcept {
+        try {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (try_push_inner_(std::forward<U>(item))) [[likely]] {
+                return;
+            }
+            auto *fake_handle = new PushFinishHandle(std::forward<U>(item));
+            assert(pop_awaiters_.empty());
+            push_awaiters_.push_back(fake_handle);
+        } catch (const std::exception &e) {
+            auto msg = std::string("Failed to push into channel: ") + e.what();
+            panic_on(msg.c_str());
         }
-        auto *fake_handle = new PushFinishHandle(std::forward<U>(item));
-        assert(pop_awaiters_.empty());
-        push_awaiters_.push_back(fake_handle);
     }
 
     struct [[nodiscard]] PushAwaiter;
@@ -196,8 +201,9 @@ private:
     }
 
 private:
-    template <typename U> bool try_push_inner_(U &&item) {
-        if (closed_) [[unlikely]] {
+    template <typename U>
+    bool try_push_inner_(U &&item, bool check_closed = true) {
+        if (check_closed && closed_) [[unlikely]] {
             throw std::logic_error("Push to closed channel");
         }
         if (!pop_awaiters_.empty()) {

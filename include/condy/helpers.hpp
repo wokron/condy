@@ -30,17 +30,20 @@ namespace condy {
 namespace detail {
 
 template <typename CoroFunc> struct SpawnHelper {
-    void operator()(auto &&res) {
+    void operator()(auto &&res) noexcept {
+        // This helper will only be called inside the coroutine context, so it's
+        // safe to assume that the runtime is available.
+        assert(detail::Context::current().runtime() != nullptr);
         co_spawn(func(std::forward<decltype(res)>(res))).detach();
     }
-    std::decay_t<CoroFunc> func;
+    CoroFunc func;
 };
 
 template <typename Channel> struct PushHelper {
-    void operator()(auto &&res) {
+    void operator()(auto &&res) noexcept {
         channel.force_push(std::forward<decltype(res)>(res));
     }
-    std::decay_t<Channel> &channel;
+    Channel &channel;
 };
 
 } // namespace detail
@@ -70,7 +73,7 @@ template <typename CoroFunc> auto will_spawn(CoroFunc &&coro) {
  * async_read_multishot().
  */
 template <typename Channel> auto will_push(Channel &channel) {
-    return detail::PushHelper<std::decay_t<Channel>>{channel};
+    return detail::PushHelper<Channel>{channel};
 }
 
 namespace detail {
