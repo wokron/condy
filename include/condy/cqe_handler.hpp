@@ -47,9 +47,9 @@ class SimpleCQEHandler {
 public:
     using ReturnType = int32_t;
 
-    void handle_cqe(io_uring_cqe *cqe) { res_ = cqe->res; }
+    void handle_cqe(io_uring_cqe *cqe) noexcept { res_ = cqe->res; }
 
-    ReturnType extract_result() { return res_; }
+    ReturnType extract_result() noexcept { return res_; }
 
 private:
     int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
@@ -66,12 +66,12 @@ public:
 
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 
-    void handle_cqe(io_uring_cqe *cqe) {
+    void handle_cqe(io_uring_cqe *cqe) noexcept {
         res_ = cqe->res;
         flags_ = cqe->flags;
     }
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept {
         return std::make_pair(res_, buffers_->handle_finish(res_, flags_));
     }
 
@@ -98,14 +98,14 @@ class NVMePassthruCQEHandler {
 public:
     using ReturnType = NVMeResult;
 
-    void handle_cqe(io_uring_cqe *cqe) {
+    void handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for NVMe passthrough");
         result_.status = cqe->res;
         result_.result = cqe->big_cqe[0];
     }
 
-    ReturnType extract_result() { return result_; }
+    ReturnType extract_result() noexcept { return result_; }
 
 private:
     NVMeResult result_;
@@ -131,7 +131,7 @@ class TxTimestampCQEHandler {
 public:
     using ReturnType = TxTimestampResult;
 
-    void handle_cqe(io_uring_cqe *cqe) {
+    void handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for TX timestamp operations");
         result_.tskey = cqe->res;
@@ -141,7 +141,7 @@ public:
         result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
     }
 
-    ReturnType extract_result() { return result_; }
+    ReturnType extract_result() noexcept { return result_; }
 
 private:
     TxTimestampResult result_;

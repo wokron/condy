@@ -83,7 +83,6 @@ public:
         return {.queue_work = true, .op_finish = true};
     }
 
-    // TODO: cqe_handler_.extract_result() should also be noexcept
     ReturnType extract_result() noexcept {
         return cqe_handler_.extract_result();
     }
