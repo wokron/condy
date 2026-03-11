@@ -38,9 +38,9 @@ struct Action {
 class OpFinishHandleBase
     : public InvokerAdapter<OpFinishHandleBase, WorkInvoker> {
 public:
-    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *);
+    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
 
-    void cancel() {
+    void cancel() noexcept {
         auto *ring = detail::Context::current().ring();
         io_uring_sqe *sqe = ring->get_sqe();
         io_uring_prep_cancel(sqe, this, 0);
@@ -48,7 +48,7 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    detail::Action handle_cqe(io_uring_cqe *cqe) {
+    detail::Action handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
     }
@@ -78,15 +78,19 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
         return {.queue_work = true, .op_finish = true};
     }
 
-    ReturnType extract_result() { return cqe_handler_.extract_result(); }
+    // TODO: cqe_handler_.extract_result() should also be noexcept
+    ReturnType extract_result() noexcept {
+        return cqe_handler_.extract_result();
+    }
 
 private:
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -104,7 +108,8 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             func_(HandleBase::extract_result());
@@ -116,7 +121,8 @@ public:
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<MultiShotMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -149,7 +155,8 @@ public:
         maybe_free_();
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             return {.queue_work = true, .op_finish = false};
@@ -169,14 +176,14 @@ public:
     }
 
 private:
-    void maybe_free_() {
+    void maybe_free_() noexcept {
         if (resumed_ && notified_) {
             free_func_(notify_res_);
             delete this;
         }
     }
 
-    void notify_(int32_t res) {
+    void notify_(int32_t res) noexcept {
         assert(res != -ENOTRECOVERABLE);
         notify_res_ = res;
         notified_ = true;
@@ -188,7 +195,8 @@ private:
         self->invoke();
     }
 
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
