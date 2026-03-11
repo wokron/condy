@@ -28,9 +28,9 @@ template <OpFinishHandleLike Handle> class HandleBox {
 public:
     HandleBox(Handle h) : handle_(std::move(h)) {}
 
-    Handle &get() { return handle_; }
+    Handle &get() noexcept { return handle_; }
 
-    void maybe_release() { /* No-op */ }
+    void maybe_release() noexcept { /* No-op */ }
 
 private:
     Handle handle_;
@@ -44,9 +44,9 @@ public:
     HandleBox(const HandleBox &other) // Deep copy
         : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}
 
-    Handle &get() { return *handle_ptr_; }
+    Handle &get() noexcept { return *handle_ptr_; }
 
-    void maybe_release() { handle_ptr_.release(); }
+    void maybe_release() noexcept { handle_ptr_.release(); }
 
 private:
     std::unique_ptr<Handle> handle_ptr_;
@@ -60,9 +60,9 @@ public:
         : prep_func_(func), finish_handle_(std::move(handle)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_.get(); }
+    HandleType *get_handle() noexcept { return &finish_handle_.get(); }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int flags) noexcept {
         auto &context = detail::Context::current();
@@ -87,7 +87,7 @@ public:
         register_operation(0);
     }
 
-    auto await_resume() {
+    auto await_resume() noexcept {
         auto result = finish_handle_.get().extract_result();
         finish_handle_.maybe_release();
         return result;

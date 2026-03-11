@@ -122,7 +122,7 @@ public:
      * @brief Get the current size of the channel.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    size_t size() const noexcept {
+    size_t size() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_;
     }
@@ -131,7 +131,7 @@ public:
      * @brief Check if the channel is empty.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool empty() const noexcept {
+    bool empty() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_ == 0;
     }
@@ -140,7 +140,7 @@ public:
      * @brief Check if the channel is closed.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool is_closed() const noexcept {
+    bool is_closed() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return closed_;
     }
@@ -350,14 +350,14 @@ public:
     }
 
 public:
-    void init(Channel *channel, Runtime *runtime) {
+    void init(Channel *channel, Runtime *runtime) noexcept {
         channel_ = channel;
         runtime_ = runtime;
     }
 
-    T &get_item() { return item_; }
+    T &get_item() noexcept { return item_; }
 
-    void schedule() {
+    void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
             delete this;
@@ -367,7 +367,7 @@ public:
         }
     }
 
-    void enable_throw() { should_throw_ = true; }
+    void enable_throw() noexcept { should_throw_ = true; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -408,14 +408,14 @@ public:
     }
 
 public:
-    void init(Channel *channel, Runtime *runtime) {
+    void init(Channel *channel, Runtime *runtime) noexcept {
         channel_ = channel;
         runtime_ = runtime;
     }
 
     void set_result(T result) { result_ = std::move(result); }
 
-    void schedule() {
+    void schedule() noexcept {
         assert(runtime_ != nullptr);
         need_resume_ = true;
         runtime_->schedule(this);
@@ -446,9 +446,9 @@ public:
         : channel_(channel), finish_handle_(std::move(item)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
         auto *runtime = detail::Context::current().runtime();
@@ -491,9 +491,9 @@ public:
     PopAwaiter(Channel &channel) : channel_(channel) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
@@ -521,7 +521,7 @@ public:
         return true; // Suspend
     }
 
-    auto await_resume() { return finish_handle_.extract_result(); }
+    auto await_resume() noexcept { return finish_handle_.extract_result(); }
 
 private:
     Channel &channel_;
