@@ -206,4 +206,10 @@ private:
     std::atomic_bool lock_ = false;
 };
 
+#if __cplusplus >= 202302L
+[[noreturn]] inline void unreachable() { std::unreachable(); }
+#else
+[[noreturn]] inline void unreachable() { __builtin_unreachable(); }
+#endif
+
 } // namespace condy

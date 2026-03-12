@@ -382,7 +382,7 @@ private:
                 local_queue_.push_back(handle);
             }
         } else {
-            assert(false && "Invalid work type");
+            unreachable();
         }
     }
 
