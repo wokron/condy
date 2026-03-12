@@ -302,7 +302,8 @@ private:
             prep_msg_ring_(&sqe, work, type);
             int r = detail::sync_msg_ring(&sqe);
             if (r < 0) {
-                panic_on(std::format("io_uring_prep_msg_ring failed: {}", r));
+                panic_on(std::format("io_uring_prep_msg_ring: {}",
+                                     std::strerror(-r)));
             }
         }
     }
@@ -338,7 +339,7 @@ private:
         auto r = ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
         if (r < 0) {
-            panic_on(std::format("io_uring_peek_cqe failed: {}", r));
+            panic_on(std::format("io_uring_peek_cqe: {}", std::strerror(-r)));
         }
     }
 
@@ -346,7 +347,8 @@ private:
         auto r = ring_.reap_completions_wait(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
         if (r < 0) {
-            panic_on(std::format("io_uring_submit_and_wait failed: {}", r));
+            panic_on(std::format("io_uring_submit_and_wait: {}",
+                                 std::strerror(static_cast<int>(-r))));
         }
     }
 
@@ -374,8 +376,8 @@ private:
         } else if (type == WorkType::Schedule) {
             if (data == nullptr) {
                 if (cqe->res < 0) {
-                    panic_on(std::format("io_uring_prep_msg_ring failed: {}",
-                                         cqe->res));
+                    panic_on(std::format("io_uring_prep_msg_ring: {}",
+                                         std::strerror(-cqe->res)));
                 }
                 pending_works_--;
             } else {
