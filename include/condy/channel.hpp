@@ -62,6 +62,9 @@ public:
      */
     template <typename U> bool try_push(U &&item) {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (closed_) [[unlikely]] {
+            throw std::logic_error("Push to closed channel");
+        }
         return try_push_inner_(std::forward<U>(item));
     }
 
@@ -76,17 +79,20 @@ public:
     }
 
     template <typename U> void force_push(U &&item) noexcept {
-        try {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (try_push_inner_(std::forward<U>(item))) [[likely]] {
-                return;
-            }
-            auto *fake_handle = new PushFinishHandle(std::forward<U>(item));
-            assert(pop_awaiters_.empty());
-            push_awaiters_.push_back(fake_handle);
-        } catch (const std::exception &e) {
-            panic_on(std::format("Failed to push into channel: {}", e.what()));
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (closed_) [[unlikely]] {
+            panic_on("Push to closed channel");
         }
+        if (try_push_inner_(std::forward<U>(item))) [[likely]] {
+            return;
+        }
+        auto *fake_handle =
+            new (std::nothrow) PushFinishHandle(std::forward<U>(item));
+        if (!fake_handle) {
+            panic_on("Allocation failed for PushFinishHandle");
+        }
+        assert(pop_awaiters_.empty());
+        push_awaiters_.push_back(fake_handle);
     }
 
     struct [[nodiscard]] PushAwaiter;
@@ -167,8 +173,11 @@ private:
     class PushFinishHandle;
     class PopFinishHandle;
 
-    bool request_push_(PushFinishHandle *finish_handle) {
+    std::optional<bool> request_push_(PushFinishHandle *finish_handle) {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (closed_) [[unlikely]] {
+            return std::nullopt;
+        }
         if (try_push_inner_(std::move(finish_handle->get_item()))) {
             return true;
         }
@@ -201,10 +210,7 @@ private:
     }
 
 private:
-    template <typename U> bool try_push_inner_(U &&item) {
-        if (closed_) [[unlikely]] {
-            throw std::logic_error("Push to closed channel");
-        }
+    template <typename U> bool try_push_inner_(U &&item) noexcept {
         if (!pop_awaiters_.empty()) {
             assert(empty_inner_());
             auto *pop_handle = pop_awaiters_.pop_front();
@@ -458,7 +464,13 @@ public:
     void register_operation(unsigned int /*flags*/) {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
-        bool ok = channel_.request_push_(&finish_handle_);
+        auto result = channel_.request_push_(&finish_handle_);
+        if (!result.has_value()) [[unlikely]] {
+            finish_handle_.enable_throw();
+            runtime->schedule(&finish_handle_);
+            return;
+        }
+        bool ok = *result;
         if (ok) {
             runtime->schedule(&finish_handle_);
         }
@@ -472,7 +484,12 @@ public:
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
-        bool ok = channel_.request_push_(&finish_handle_);
+        auto result = channel_.request_push_(&finish_handle_);
+        if (!result.has_value()) [[unlikely]] {
+            finish_handle_.enable_throw();
+            return false; // Do not suspend
+        }
+        bool ok = *result;
         bool do_suspend = !ok;
         return do_suspend;
     }
