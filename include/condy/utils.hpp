@@ -40,19 +40,25 @@
 
 namespace condy {
 
-class [[nodiscard]] Defer {
+template <typename Func> class [[nodiscard]] Defer {
 public:
-    template <typename Func>
-    Defer(Func &&func) : func_(std::forward<Func>(func)) {}
-    ~Defer() { func_(); }
+    Defer(Func func) : func_(std::move(func)) {}
+    ~Defer() {
+        if (active_)
+            func_();
+    }
 
     Defer(const Defer &) = delete;
     Defer &operator=(const Defer &) = delete;
     Defer(Defer &&) = delete;
     Defer &operator=(Defer &&) = delete;
 
+public:
+    void dismiss() noexcept { active_ = false; }
+
 private:
-    std::function<void()> func_;
+    Func func_;
+    bool active_ = true;
 };
 
 /**
@@ -61,8 +67,8 @@ private:
  * @return Defer object that will execute the function when it goes out of
  * scope.
  */
-template <typename Func> Defer defer(Func &&func) {
-    return Defer(std::forward<Func>(func));
+template <typename Func> auto defer(Func &&func) {
+    return Defer<std::decay_t<Func>>(std::forward<Func>(func));
 }
 
 [[noreturn]] inline void panic_on(std::string_view msg) noexcept {
