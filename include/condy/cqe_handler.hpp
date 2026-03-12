@@ -42,6 +42,8 @@ inline bool check_cqe32([[maybe_unused]] io_uring_cqe *cqe) {
 /**
  * @brief A simple CQE handler that extracts the result from the CQE without any
  * additional processing.
+ * @return int32_t The result of the operation, which is the value of `cqe->res`
+ * for the corresponding CQE.
  */
 class SimpleCQEHandler {
 public:
@@ -59,6 +61,8 @@ private:
  * @brief A CQE handler that returns the selected buffers based on the result of
  * the CQE.
  * @tparam Br The buffer ring type
+ * @return std::pair<int, typename Br::ReturnType> A pair containing the result
+ * of the operation (the value of `cqe->res`) and the selected buffers.
  */
 template <BufferRingLike Br> class SelectBufferCQEHandler {
 public:
@@ -86,13 +90,23 @@ private:
  * of the command
  */
 struct NVMeResult {
-    int status;      // cqe->res
-    uint64_t result; // cqe->big_cqe[0]
+    /**
+     * @brief Status of this NVMe command, is the value of `cqe->res` for the
+     * corresponding CQE.
+     */
+    int status;
+
+    /**
+     * @brief Result of this NVMe command, is the value of `cqe->big_cqe[0]` for
+     * the corresponding CQE.
+     */
+    uint64_t result;
 };
 
 /**
  * @brief A CQE handler for NVMe passthrough commands that extracts the status
  * and result from the CQE.
+ * @return NVMeResult Result of the NVMe command.
  */
 class NVMePassthruCQEHandler {
 public:
@@ -117,15 +131,33 @@ private:
  * from the socket error queue
  */
 struct TxTimestampResult {
-    int tskey;      // cqe->res
-    int tstype;     // cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT
+    /**
+     * @brief The timestamp key if successful, which is the value of `cqe->res`
+     * for the corresponding CQE.
+     */
+    int tskey; // cqe->res
+
+    /**
+     * @brief The timestamp type, could be SCM_TSTAMP_SND, SCM_TSTAMP_SCHED,
+     * SCM_TSTAMP_ACK, etc.
+     */
+    int tstype; // cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT
+
+    /**
+     * @brief The timestamp value.
+     */
     io_timespec ts; // *(io_timespec *)(cqe + 1)
-    bool hwts;      // cqe->flags & IORING_CQE_F_TSTAMP_HW
+
+    /**
+     * @brief Whether this timestamp is a hardware timestamp.
+     */
+    bool hwts; // cqe->flags & IORING_CQE_F_TSTAMP_HW
 };
 
 /**
  * @brief A CQE handler for TX timestamp operations that extracts timestamp
  * information from the CQE.
+ * @return TxTimestampResult Result of the TX timestamp operation.
  */
 class TxTimestampCQEHandler {
 public:
