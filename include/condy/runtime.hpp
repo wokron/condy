@@ -50,8 +50,11 @@ inline int sync_msg_ring(io_uring_sqe *sqe_data) noexcept {
     auto *sqe = ring->get_sqe();
     *sqe = *sqe_data;
     int r;
-    [[maybe_unused]] auto n =
+    auto n =
         ring->reap_completions_wait([&](io_uring_cqe *cqe) { r = cqe->res; });
+    if (n < 0) {
+        return static_cast<int>(n);
+    }
     assert(n == 1);
     return r;
 #endif
@@ -323,14 +326,20 @@ private:
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
-    size_t flush_ring_() noexcept {
-        return ring_.reap_completions(
+    void flush_ring_() noexcept {
+        auto r = ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
+        if (r < 0) {
+            panic_on(std::format("io_uring_peek_cqe failed: {}", r));
+        }
     }
 
-    size_t flush_ring_wait_() noexcept {
-        return ring_.reap_completions_wait(
+    void flush_ring_wait_() noexcept {
+        auto r = ring_.reap_completions_wait(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
+        if (r < 0) {
+            panic_on(std::format("io_uring_submit_and_wait failed: {}", r));
+        }
     }
 
     void process_cqe_(io_uring_cqe *cqe) noexcept {
