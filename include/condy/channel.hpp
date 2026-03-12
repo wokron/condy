@@ -14,7 +14,6 @@
 #include "condy/utils.hpp"
 #include <coroutine>
 #include <cstddef>
-#include <format>
 #include <optional>
 
 namespace condy {
@@ -33,6 +32,9 @@ namespace condy {
  */
 template <typename T, size_t N = 2> class Channel {
 public:
+    static_assert(std::is_nothrow_move_constructible_v<T>,
+                  "Channel requires T to be nothrow move constructible");
+
     /**
      * @brief Construct a new Channel object
      * @param capacity Capacity of the channel. If capacity is zero, the channel
@@ -73,7 +75,7 @@ public:
      * @return std::optional<T> The popped item if successful; std::nullopt if
      * the channel is empty or closed.
      */
-    std::optional<T> try_pop() {
+    std::optional<T> try_pop() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return try_pop_inner_();
     }
@@ -109,7 +111,7 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    template <typename U> PushAwaiter push(U &&item) {
+    template <typename U> PushAwaiter push(U &&item) noexcept {
         return {*this, std::forward<U>(item)};
     }
 
@@ -122,7 +124,7 @@ public:
      * available. If the channel is closed, a default-constructed T will be
      * returned.
      */
-    PopAwaiter pop() { return {*this}; }
+    PopAwaiter pop() noexcept { return {*this}; }
 
     /**
      * @brief Get the capacity of the channel.
@@ -133,7 +135,7 @@ public:
      * @brief Get the current size of the channel.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    size_t size() const {
+    size_t size() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_;
     }
@@ -142,7 +144,7 @@ public:
      * @brief Check if the channel is empty.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool empty() const {
+    bool empty() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_ == 0;
     }
@@ -151,7 +153,7 @@ public:
      * @brief Check if the channel is closed.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool is_closed() const {
+    bool is_closed() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return closed_;
     }
@@ -164,7 +166,7 @@ public:
      * operations will throw std::logic_error.
      * @note This function is idempotent.
      */
-    void push_close() {
+    void push_close() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         push_close_inner_();
     }
@@ -173,7 +175,8 @@ private:
     class PushFinishHandle;
     class PopFinishHandle;
 
-    std::optional<bool> request_push_(PushFinishHandle *finish_handle) {
+    std::optional<bool>
+    request_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) [[unlikely]] {
             return std::nullopt;
@@ -192,7 +195,7 @@ private:
         return push_awaiters_.remove(finish_handle);
     }
 
-    std::optional<T> request_pop_(PopFinishHandle *finish_handle) {
+    std::optional<T> request_pop_(PopFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto result = try_pop_inner_();
         if (result.has_value()) {
@@ -225,7 +228,7 @@ private:
         return false;
     }
 
-    std::optional<T> try_pop_inner_() {
+    std::optional<T> try_pop_inner_() noexcept {
         if (!push_awaiters_.empty()) {
             assert(full_inner_());
             auto *push_handle = push_awaiters_.pop_front();
@@ -251,7 +254,7 @@ private:
         return std::nullopt;
     }
 
-    template <typename U> void push_inner_(U &&item) {
+    template <typename U> void push_inner_(U &&item) noexcept {
         assert(!full_inner_());
         auto mask = buffer_.capacity() - 1;
         buffer_[tail_ & mask].construct(std::forward<U>(item));
@@ -259,7 +262,7 @@ private:
         size_++;
     }
 
-    T pop_inner_() {
+    T pop_inner_() noexcept {
         assert(!empty_inner_());
         auto mask = buffer_.capacity() - 1;
         T item = std::move(buffer_[head_ & mask].get());
@@ -285,7 +288,7 @@ private:
         return size_ == buffer_.capacity();
     }
 
-    void push_close_inner_() {
+    void push_close_inner_() noexcept {
         if (closed_) {
             return;
         }
@@ -304,7 +307,7 @@ private:
         }
     }
 
-    void destruct_all_() {
+    void destruct_all_() noexcept {
         while (!empty_inner_()) {
             pop_inner_();
         }
@@ -407,7 +410,7 @@ public:
         }
     }
 
-    ReturnType extract_result() { return std::move(result_); }
+    ReturnType extract_result() noexcept { return std::move(result_); }
 
     void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
@@ -424,7 +427,7 @@ public:
         runtime_ = runtime;
     }
 
-    void set_result(T result) { result_ = std::move(result); }
+    void set_result(T result) noexcept { result_ = std::move(result); }
 
     void schedule() noexcept {
         assert(runtime_ != nullptr);
@@ -461,7 +464,7 @@ public:
 
     void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) {
+    void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto result = channel_.request_push_(&finish_handle_);
@@ -480,7 +483,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) {
+    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
@@ -517,7 +520,7 @@ public:
 
     void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) {
+    void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
@@ -531,7 +534,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) {
+    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
@@ -543,7 +546,7 @@ public:
         return true; // Suspend
     }
 
-    auto await_resume() { return finish_handle_.extract_result(); }
+    auto await_resume() noexcept { return finish_handle_.extract_result(); }
 
 private:
     Channel &channel_;
