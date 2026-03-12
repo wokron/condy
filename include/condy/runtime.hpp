@@ -35,6 +35,8 @@ public:
         params.flags |= IORING_SETUP_SINGLE_ISSUER;
         params.flags |= IORING_SETUP_SUBMIT_ALL;
         [[maybe_unused]] int r = ring_.init(8, &params);
+        // If we can construct Runtime, we should be able to construct this
+        // thread-local ring.
         assert(r == 0);
     }
 
@@ -218,13 +220,17 @@ public:
      * @details This function starts the event loop of the runtime in the
      * current thread. It will process events, schedule tasks, and handle
      * notifications until there are no pending works left.
+     * @throw std::runtime_error If the runtime is already running or has been
+     * stopped.
      * @note Once exit, the runtime cannot be restarted.
      */
-    void run() noexcept {
+    void run() {
         State expected = State::Idle;
-        [[maybe_unused]] bool success =
-            state_.compare_exchange_strong(expected, State::Running);
-        assert(success && "Runtime is already running or stopped");
+        bool success = state_.compare_exchange_strong(expected, State::Running);
+        if (!success) {
+            throw std::runtime_error(
+                "Runtime is already running or has been stopped");
+        }
         auto d1 = defer([this]() { state_.store(State::Stopped); });
 
         [[maybe_unused]] int r;
@@ -294,8 +300,10 @@ private:
         } else {
             io_uring_sqe sqe = {};
             prep_msg_ring_(&sqe, work, type);
-            [[maybe_unused]] int r = detail::sync_msg_ring(&sqe);
-            assert(r == 0);
+            int r = detail::sync_msg_ring(&sqe);
+            if (r < 0) {
+                panic_on(std::format("io_uring_prep_msg_ring failed: {}", r));
+            }
         }
     }
 
@@ -365,7 +373,10 @@ private:
             }
         } else if (type == WorkType::Schedule) {
             if (data == nullptr) {
-                assert(cqe->res == 0);
+                if (cqe->res < 0) {
+                    panic_on(std::format("io_uring_prep_msg_ring failed: {}",
+                                         cqe->res));
+                }
                 pending_works_--;
             } else {
                 auto *work = static_cast<WorkInvoker *>(data);

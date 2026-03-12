@@ -349,7 +349,9 @@ public:
              [[maybe_unused]] void *buf = nullptr,
              [[maybe_unused]] size_t buf_size = 0) noexcept {
         int r;
-        assert(!initialized_);
+        if (initialized_) {
+            return -EBUSY;
+        }
 #if !IO_URING_CHECK_VERSION(2, 5) // >= 2.5
         if (params->flags & IORING_SETUP_NO_MMAP) {
             r = io_uring_queue_init_mem(entries, &ring_, params, buf, buf_size);
