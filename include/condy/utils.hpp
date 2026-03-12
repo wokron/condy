@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -129,11 +130,11 @@ private:
     };
 };
 
-inline auto make_system_error(std::string_view msg, int ec) noexcept {
+inline auto make_system_error(std::string_view msg, int ec) {
     return std::system_error(ec, std::generic_category(), std::string(msg));
 }
 
-inline auto make_system_error(std::string_view msg) noexcept {
+inline auto make_system_error(std::string_view msg) {
     return make_system_error(msg, errno);
 }
 

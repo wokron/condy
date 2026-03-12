@@ -14,6 +14,7 @@
 #include "condy/utils.hpp"
 #include <coroutine>
 #include <cstddef>
+#include <format>
 #include <optional>
 
 namespace condy {
@@ -84,8 +85,7 @@ public:
             assert(pop_awaiters_.empty());
             push_awaiters_.push_back(fake_handle);
         } catch (const std::exception &e) {
-            auto msg = std::string("Failed to push into channel: ") + e.what();
-            panic_on(msg.c_str());
+            panic_on(std::format("Failed to push into channel: {}", e.what()));
         }
     }
 
@@ -201,9 +201,8 @@ private:
     }
 
 private:
-    template <typename U>
-    bool try_push_inner_(U &&item, bool check_closed = true) {
-        if (check_closed && closed_) [[unlikely]] {
+    template <typename U> bool try_push_inner_(U &&item) {
+        if (closed_) [[unlikely]] {
             throw std::logic_error("Push to closed channel");
         }
         if (!pop_awaiters_.empty()) {
@@ -501,7 +500,7 @@ public:
 
     void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) noexcept {
+    void register_operation(unsigned int /*flags*/) {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
@@ -515,7 +514,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
+    bool await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
@@ -527,7 +526,7 @@ public:
         return true; // Suspend
     }
 
-    auto await_resume() noexcept { return finish_handle_.extract_result(); }
+    auto await_resume() { return finish_handle_.extract_result(); }
 
 private:
     Channel &channel_;

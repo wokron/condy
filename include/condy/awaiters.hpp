@@ -208,9 +208,7 @@ public:
     }
 
 public:
-    void push(Awaiter awaiter) noexcept {
-        awaiters_.push_back(std::move(awaiter));
-    }
+    void push(Awaiter awaiter) { awaiters_.push_back(std::move(awaiter)); }
 
 protected:
     HandleType finish_handle_;
