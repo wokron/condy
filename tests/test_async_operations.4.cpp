@@ -438,7 +438,7 @@ TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
                 [&](auto r) {
                     results.push_back(r);
                     if (results.size() == 3) {
-                        chan.try_push(std::monostate{});
+                        chan.force_push(std::monostate{});
                     }
                 }) ||
             chan.pop());

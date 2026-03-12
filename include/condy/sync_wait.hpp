@@ -33,7 +33,7 @@ T sync_wait(Runtime &runtime, Coro<T, Allocator> coro) {
  * using sync_wait without specifying runtime.
  * @return RuntimeOptions& Reference to the default runtime options.
  */
-inline RuntimeOptions &default_runtime_options() {
+inline RuntimeOptions &default_runtime_options() noexcept {
     static RuntimeOptions options;
     return options;
 }

@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -20,6 +21,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 
 #if defined(__has_feature)
@@ -63,36 +65,6 @@ template <typename Func> Defer defer(Func &&func) {
     return Defer(std::forward<Func>(func));
 }
 
-template <typename BaseMutex> class MaybeMutex : public BaseMutex {
-public:
-    using Base = BaseMutex;
-    using Base::Base;
-
-    void lock() noexcept {
-        if (use_mutex_) {
-            Base::lock();
-        }
-    }
-
-    void unlock() noexcept {
-        if (use_mutex_) {
-            Base::unlock();
-        }
-    }
-
-    bool try_lock() noexcept {
-        if (use_mutex_) {
-            return Base::try_lock();
-        }
-        return true;
-    }
-
-    void set_use_mutex(bool use_mutex) noexcept { use_mutex_ = use_mutex; }
-
-private:
-    bool use_mutex_ = false;
-};
-
 [[noreturn]] inline void panic_on(std::string_view msg) noexcept {
     std::cerr << std::format("Panic: {}\n", msg);
 #ifndef CRASH_TEST
@@ -105,15 +77,19 @@ private:
 
 template <typename T> class RawStorage {
 public:
-    template <typename... Args> void construct(Args &&...args) {
+    template <typename... Args>
+    void construct(Args &&...args) noexcept(
+        std::is_nothrow_constructible_v<T, Args...>) {
         new (&storage_) T(std::forward<Args>(args)...);
     }
 
-    T &get() { return *reinterpret_cast<T *>(&storage_); }
+    T &get() noexcept { return *reinterpret_cast<T *>(&storage_); }
 
-    const T &get() const { return *reinterpret_cast<const T *>(&storage_); }
+    const T &get() const noexcept {
+        return *reinterpret_cast<const T *>(&storage_);
+    }
 
-    void destroy() { get().~T(); }
+    void destroy() noexcept { get().~T(); }
 
 private:
     alignas(T) unsigned char storage_[sizeof(T)];
@@ -133,18 +109,18 @@ public:
         }
     }
 
-    T &operator[](size_t index) {
+    T &operator[](size_t index) noexcept {
         return is_small_() ? small_[index] : large_[index];
     }
 
-    const T &operator[](size_t index) const {
+    const T &operator[](size_t index) const noexcept {
         return is_small_() ? small_[index] : large_[index];
     }
 
-    size_t capacity() const { return capacity_; }
+    size_t capacity() const noexcept { return capacity_; }
 
 private:
-    bool is_small_() const { return capacity_ <= N; }
+    bool is_small_() const noexcept { return capacity_ <= N; }
 
 private:
     size_t capacity_;
@@ -158,12 +134,18 @@ inline auto make_system_error(std::string_view msg, int ec) {
     return std::system_error(ec, std::generic_category(), std::string(msg));
 }
 
-template <typename M, typename T> constexpr ptrdiff_t offset_of(M T::*member) {
+inline auto make_system_error(std::string_view msg) {
+    return make_system_error(msg, errno);
+}
+
+template <typename M, typename T>
+constexpr ptrdiff_t offset_of(M T::*member) noexcept {
     constexpr T *dummy = nullptr;
     return reinterpret_cast<ptrdiff_t>(&(dummy->*member));
 }
 
-template <typename M, typename T> T *container_of(M T::*member, M *ptr) {
+template <typename M, typename T>
+T *container_of(M T::*member, M *ptr) noexcept {
     auto offset = offset_of(member);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
@@ -186,12 +168,12 @@ public:
         throw std::runtime_error("ID pool exhausted");
     }
 
-    void recycle(T id) {
+    void recycle(T id) noexcept {
         assert(From <= id && id < next_id_ && id < To);
         recycled_ids_.push(id);
     }
 
-    void reset() {
+    void reset() noexcept {
         next_id_ = From;
         while (!recycled_ids_.empty()) {
             recycled_ids_.pop();

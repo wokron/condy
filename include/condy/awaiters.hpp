@@ -15,6 +15,7 @@
 #include "condy/finish_handles.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/work_type.hpp"
 #include <coroutine>
 #include <cstddef>
@@ -28,9 +29,9 @@ template <OpFinishHandleLike Handle> class HandleBox {
 public:
     HandleBox(Handle h) : handle_(std::move(h)) {}
 
-    Handle &get() { return handle_; }
+    Handle &get() noexcept { return handle_; }
 
-    void maybe_release() { /* No-op */ }
+    void maybe_release() noexcept { /* No-op */ }
 
 private:
     Handle handle_;
@@ -44,9 +45,9 @@ public:
     HandleBox(const HandleBox &other) // Deep copy
         : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}
 
-    Handle &get() { return *handle_ptr_; }
+    Handle &get() noexcept { return *handle_ptr_; }
 
-    void maybe_release() { handle_ptr_.release(); }
+    void maybe_release() noexcept { handle_ptr_.release(); }
 
 private:
     std::unique_ptr<Handle> handle_ptr_;
@@ -60,9 +61,9 @@ public:
         : prep_func_(func), finish_handle_(std::move(handle)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_.get(); }
+    HandleType *get_handle() noexcept { return &finish_handle_.get(); }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int flags) noexcept {
         auto &context = detail::Context::current();
@@ -87,7 +88,7 @@ public:
         register_operation(0);
     }
 
-    auto await_resume() {
+    auto await_resume() noexcept {
         auto result = finish_handle_.get().extract_result();
         finish_handle_.maybe_release();
         return result;
@@ -147,12 +148,14 @@ public:
     using Base = Awaiter;
     FlaggedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         Base::register_operation(flags | Flags);
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         Base::init_finish_handle();
         Base::get_handle()->set_invoker(&h.promise());
         register_operation(0);
@@ -168,9 +171,9 @@ public:
         : awaiters_(std::move(awaiters)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() {
+    void init_finish_handle() noexcept {
         using ChildHandle = typename Awaiter::HandleType;
         std::vector<ChildHandle *> handles;
         handles.reserve(awaiters_.size());
@@ -181,7 +184,8 @@ public:
         finish_handle_.init(std::move(handles));
     }
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         for (auto &awaiter : awaiters_) {
             awaiter.register_operation(flags);
         }
@@ -191,13 +195,15 @@ public:
     bool await_ready() const noexcept { return awaiters_.empty(); }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
-    typename Handle::ReturnType await_resume() {
+    typename Handle::ReturnType
+    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
         return finish_handle_.extract_result();
     }
 
@@ -264,7 +270,8 @@ public:
     using Base = RangedWhenAllAwaiter<Awaiter>;
     using Base::Base;
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         auto *ring = detail::Context::current().ring();
         ring->reserve_space(Base::awaiters_.size());
         for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
@@ -274,7 +281,8 @@ public:
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
+        is_nothrow_suspendible_v<Awaiter>) {
         Base::init_finish_handle();
         Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -313,9 +321,9 @@ public:
                                    std::make_tuple(std::move(new_awaiter)))) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() {
+    void init_finish_handle() noexcept {
         auto handles = foreach_init_finish_handle_();
         static_assert(std::tuple_size<decltype(handles)>::value ==
                           sizeof...(Awaiters),
@@ -327,7 +335,8 @@ public:
             handles);
     }
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept(
+        (is_nothrow_suspendible_v<Awaiters> && ...)) {
         foreach_register_operation_(flags);
     }
 
@@ -335,18 +344,20 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
+        (is_nothrow_suspendible_v<Awaiters> && ...)) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         register_operation(0);
     }
 
-    typename Handle::ReturnType await_resume() {
+    typename Handle::ReturnType
+    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
         return finish_handle_.extract_result();
     }
 
 private:
-    template <size_t Idx = 0> auto foreach_init_finish_handle_() {
+    template <size_t Idx = 0> auto foreach_init_finish_handle_() noexcept {
         if constexpr (Idx < sizeof...(Awaiters)) {
             std::get<Idx>(awaiters_).init_finish_handle();
             return std::tuple_cat(
@@ -358,7 +369,8 @@ private:
     }
 
     template <size_t Idx = 0>
-    void foreach_register_operation_(unsigned int flags) {
+    void foreach_register_operation_(unsigned int flags) noexcept(
+        (is_nothrow_suspendible_v<Awaiters> && ...)) {
         if constexpr (Idx < sizeof...(Awaiters)) {
             std::get<Idx>(awaiters_).register_operation(flags);
             foreach_register_operation_<Idx + 1>(flags);
@@ -428,14 +440,16 @@ public:
     using Base = WhenAllAwaiter<Awaiter...>;
     using Base::Base;
 
-    void register_operation(unsigned int flags) {
+    void register_operation(unsigned int flags) noexcept(
+        (is_nothrow_suspendible_v<Awaiter> && ...)) {
         auto *ring = detail::Context::current().ring();
         ring->reserve_space(sizeof...(Awaiter));
         foreach_register_operation_(flags);
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
+        (is_nothrow_suspendible_v<Awaiter> && ...)) {
         Base::init_finish_handle();
         Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -443,7 +457,8 @@ public:
 
 private:
     template <size_t Idx = 0>
-    void foreach_register_operation_(unsigned int flags) {
+    void foreach_register_operation_(unsigned int flags) noexcept(
+        (is_nothrow_suspendible_v<Awaiter> && ...)) {
         if constexpr (Idx < sizeof...(Awaiter)) {
             std::get<Idx>(Base::awaiters_)
                 .register_operation(Idx < sizeof...(Awaiter) - 1 ? flags | Flags

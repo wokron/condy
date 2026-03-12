@@ -91,14 +91,16 @@ public:
         }
     }
 
-    Coro get_return_object() {
+    Coro get_return_object() noexcept {
         return Coro{std::coroutine_handle<PromiseType>::from_promise(
             static_cast<PromiseType &>(*this))};
     }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }
+    std::suspend_always initial_suspend() const noexcept { return {}; }
 
-    void unhandled_exception() { exception_ = std::current_exception(); }
+    void unhandled_exception() noexcept {
+        exception_ = std::current_exception();
+    }
 
     struct FinalAwaiter {
         bool await_ready() const noexcept { return false; }
@@ -130,10 +132,10 @@ public:
             return self.caller_handle_;
         }
 
-        void await_resume() noexcept {}
+        void await_resume() const noexcept {}
     };
 
-    FinalAwaiter final_suspend() noexcept { return {}; }
+    FinalAwaiter final_suspend() const noexcept { return {}; }
 
 public:
     void request_detach() noexcept {
@@ -165,12 +167,9 @@ public:
         auto_destroy_ = auto_destroy;
     }
 
-    std::exception_ptr &exception() & noexcept { return exception_; }
-    std::exception_ptr &&exception() && noexcept {
-        return std::move(exception_);
-    }
+    std::exception_ptr exception() noexcept { return std::move(exception_); }
 
-    void invoke() {
+    void invoke() noexcept {
         auto h = std::coroutine_handle<PromiseType>::from_promise(
             static_cast<PromiseType &>(*this));
         h.resume();
@@ -189,7 +188,7 @@ template <typename Allocator>
 class Promise<void, Allocator>
     : public BindAllocator<PromiseBase<Coro<void, Allocator>>, Allocator> {
 public:
-    void return_void() noexcept {}
+    void return_void() const noexcept {}
 };
 
 template <typename T, typename Allocator>
@@ -198,8 +197,7 @@ class Promise
 public:
     void return_value(T value) { value_ = std::move(value); }
 
-    T &value() & noexcept { return value_.value(); }
-    T &&value() && noexcept { return std::move(value_).value(); }
+    T value() { return std::move(value_.value()); }
 
 private:
     std::optional<T> value_;
@@ -223,12 +221,12 @@ struct CoroAwaiter
     : public CoroAwaiterBase<typename Coro<T, Allocator>::promise_type> {
     using Base = CoroAwaiterBase<typename Coro<T, Allocator>::promise_type>;
     T await_resume() {
-        auto exception = std::move(Base::handle_.promise()).exception();
+        auto exception = Base::handle_.promise().exception();
         if (exception) [[unlikely]] {
             Base::handle_.destroy();
             std::rethrow_exception(exception);
         }
-        T value = std::move(Base::handle_.promise()).value();
+        T value = Base::handle_.promise().value();
         Base::handle_.destroy();
         return value;
     }
@@ -239,7 +237,7 @@ struct CoroAwaiter<void, Allocator>
     : public CoroAwaiterBase<typename Coro<void, Allocator>::promise_type> {
     using Base = CoroAwaiterBase<typename Coro<void, Allocator>::promise_type>;
     void await_resume() {
-        auto exception = std::move(Base::handle_.promise()).exception();
+        auto exception = Base::handle_.promise().exception();
         Base::handle_.destroy();
         if (exception) [[unlikely]] {
             std::rethrow_exception(exception);

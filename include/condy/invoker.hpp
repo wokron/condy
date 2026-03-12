@@ -12,10 +12,10 @@ namespace condy {
 
 class Invoker {
 public:
-    using Func = void (*)(void *);
+    using Func = void (*)(void *) noexcept;
     Invoker(Func func) : func_(func) {}
 
-    void operator()() { func_(this); }
+    void operator()() noexcept { func_(this); }
 
 protected:
     Func func_;
@@ -27,7 +27,9 @@ public:
     InvokerAdapter() : Invoker(&InvokerAdapter::invoke_) {}
 
 private:
-    static void invoke_(void *self) { static_cast<T *>(self)->invoke(); }
+    static void invoke_(void *self) noexcept {
+        static_cast<T *>(self)->invoke();
+    }
 };
 
 class WorkInvoker : public Invoker {

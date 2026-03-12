@@ -411,6 +411,8 @@ private:
  * @note This function assumes that there is a current runtime. Calling this
  * function outside of a coroutine will lead to undefined behavior.
  */
-inline auto &current_runtime() { return *detail::Context::current().runtime(); }
+inline auto &current_runtime() noexcept {
+    return *detail::Context::current().runtime();
+}
 
 } // namespace condy

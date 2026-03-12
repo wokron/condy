@@ -32,12 +32,12 @@ public:
     /**
      * @brief Get the data of the buffer
      */
-    void *data() const { return data_; }
+    void *data() const noexcept { return data_; }
 
     /**
      * @brief Get the byte size of the buffer
      */
-    size_t size() const { return size_; }
+    size_t size() const noexcept { return size_; }
 
 private:
     void *data_ = nullptr;
@@ -62,12 +62,12 @@ public:
     /**
      * @brief Get the data of the buffer
      */
-    const void *data() const { return data_; }
+    const void *data() const noexcept { return data_; }
 
     /**
      * @brief Get the byte size of the buffer
      */
-    size_t size() const { return size_; }
+    size_t size() const noexcept { return size_; }
 
 private:
     const void *data_ = nullptr;
@@ -82,14 +82,14 @@ private:
  * convert different types of memory regions into buffer objects for use in
  * asynchronous operations.
  */
-inline MutableBuffer buffer(void *data, size_t size) {
+inline MutableBuffer buffer(void *data, size_t size) noexcept {
     return MutableBuffer(data, size);
 }
 
 /**
  * @copydoc buffer(void*, size_t)
  */
-inline ConstBuffer buffer(const void *data, size_t size) {
+inline ConstBuffer buffer(const void *data, size_t size) noexcept {
     return ConstBuffer(data, size);
 }
 
@@ -97,7 +97,7 @@ inline ConstBuffer buffer(const void *data, size_t size) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline MutableBuffer buffer(PodType (&arr)[N]) {
+inline MutableBuffer buffer(PodType (&arr)[N]) noexcept {
     return MutableBuffer(static_cast<void *>(arr), sizeof(PodType) * N);
 }
 
@@ -105,7 +105,7 @@ inline MutableBuffer buffer(PodType (&arr)[N]) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline ConstBuffer buffer(const PodType (&arr)[N]) {
+inline ConstBuffer buffer(const PodType (&arr)[N]) noexcept {
     return ConstBuffer(static_cast<const void *>(arr), sizeof(PodType) * N);
 }
 
@@ -113,7 +113,7 @@ inline ConstBuffer buffer(const PodType (&arr)[N]) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline MutableBuffer buffer(std::array<PodType, N> &arr) {
+inline MutableBuffer buffer(std::array<PodType, N> &arr) noexcept {
     return MutableBuffer(static_cast<void *>(arr.data()), sizeof(PodType) * N);
 }
 
@@ -121,7 +121,7 @@ inline MutableBuffer buffer(std::array<PodType, N> &arr) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline ConstBuffer buffer(const std::array<PodType, N> &arr) {
+inline ConstBuffer buffer(const std::array<PodType, N> &arr) noexcept {
     return ConstBuffer(static_cast<const void *>(arr.data()),
                        sizeof(PodType) * N);
 }
@@ -130,7 +130,7 @@ inline ConstBuffer buffer(const std::array<PodType, N> &arr) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType>
-inline MutableBuffer buffer(std::vector<PodType> &vec) {
+inline MutableBuffer buffer(std::vector<PodType> &vec) noexcept {
     return MutableBuffer(static_cast<void *>(vec.data()),
                          sizeof(PodType) * vec.size());
 }
@@ -139,7 +139,7 @@ inline MutableBuffer buffer(std::vector<PodType> &vec) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType>
-inline ConstBuffer buffer(const std::vector<PodType> &vec) {
+inline ConstBuffer buffer(const std::vector<PodType> &vec) noexcept {
     return ConstBuffer(static_cast<const void *>(vec.data()),
                        sizeof(PodType) * vec.size());
 }
@@ -147,28 +147,28 @@ inline ConstBuffer buffer(const std::vector<PodType> &vec) {
 /**
  * @copydoc buffer(void*, size_t)
  */
-inline MutableBuffer buffer(std::string &str) {
+inline MutableBuffer buffer(std::string &str) noexcept {
     return MutableBuffer(static_cast<void *>(str.data()), str.size());
 }
 
 /**
  * @copydoc buffer(void*, size_t)
  */
-inline ConstBuffer buffer(const std::string &str) {
+inline ConstBuffer buffer(const std::string &str) noexcept {
     return ConstBuffer(static_cast<const void *>(str.data()), str.size());
 }
 
 /**
  * @copydoc buffer(void*, size_t)
  */
-inline ConstBuffer buffer(std::string_view strv) {
+inline ConstBuffer buffer(std::string_view strv) noexcept {
     return ConstBuffer(static_cast<const void *>(strv.data()), strv.size());
 }
 
 /**
  * @copydoc buffer(void*, size_t)
  */
-inline MutableBuffer buffer(iovec &iov) {
+inline MutableBuffer buffer(iovec &iov) noexcept {
     return MutableBuffer(iov.iov_base, iov.iov_len);
 }
 
@@ -176,7 +176,7 @@ inline MutableBuffer buffer(iovec &iov) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline ConstBuffer buffer(std::span<const PodType, N> sp) {
+inline ConstBuffer buffer(std::span<const PodType, N> sp) noexcept {
     return ConstBuffer(static_cast<const void *>(sp.data()),
                        sp.size() * sizeof(PodType));
 }
@@ -185,7 +185,7 @@ inline ConstBuffer buffer(std::span<const PodType, N> sp) {
  * @copydoc buffer(void*, size_t)
  */
 template <typename PodType, size_t N>
-inline MutableBuffer buffer(std::span<PodType, N> sp) {
+inline MutableBuffer buffer(std::span<PodType, N> sp) noexcept {
     return MutableBuffer(static_cast<void *>(sp.data()),
                          sp.size() * sizeof(PodType));
 }

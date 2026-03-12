@@ -97,7 +97,7 @@ void TaskBase<T, Allocator>::wait_inner_(
     struct TaskWaiter : public InvokerAdapter<TaskWaiter> {
         TaskWaiter(std::promise<void> &p) : prom_(p) {}
 
-        void invoke() { prom_.set_value(); }
+        void invoke() noexcept { prom_.set_value(); }
 
         std::promise<void> &prom_;
     };
@@ -201,7 +201,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
         return task_handle_.promise().register_task_await(this);
     }
 
-    void invoke() {
+    void invoke() noexcept {
         assert(caller_promise_ != nullptr);
         runtime_->schedule(caller_promise_);
     }
@@ -263,7 +263,8 @@ inline auto TaskBase<T, Allocator>::operator co_await() noexcept {
  * runtime.
  */
 template <typename T, typename Allocator>
-inline Task<T, Allocator> co_spawn(Runtime &runtime, Coro<T, Allocator> coro) {
+inline Task<T, Allocator> co_spawn(Runtime &runtime,
+                                   Coro<T, Allocator> coro) noexcept {
     auto handle = coro.release();
     auto &promise = handle.promise();
     promise.set_auto_destroy(false);
@@ -314,6 +315,8 @@ struct [[nodiscard]] SwitchAwaiter {
  * run in the specified runtime. The caller coroutine will be resumed in the
  * target runtime.
  */
-inline detail::SwitchAwaiter co_switch(Runtime &runtime) { return {&runtime}; }
+inline detail::SwitchAwaiter co_switch(Runtime &runtime) noexcept {
+    return {&runtime};
+}
 
 } // namespace condy

@@ -14,6 +14,7 @@
 #include "condy/utils.hpp"
 #include <coroutine>
 #include <cstddef>
+#include <format>
 #include <optional>
 
 namespace condy {
@@ -74,14 +75,18 @@ public:
         return try_pop_inner_();
     }
 
-    template <typename U> void force_push(U &&item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (try_push_inner_(std::forward<U>(item))) [[likely]] {
-            return;
+    template <typename U> void force_push(U &&item) noexcept {
+        try {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (try_push_inner_(std::forward<U>(item))) [[likely]] {
+                return;
+            }
+            auto *fake_handle = new PushFinishHandle(std::forward<U>(item));
+            assert(pop_awaiters_.empty());
+            push_awaiters_.push_back(fake_handle);
+        } catch (const std::exception &e) {
+            panic_on(std::format("Failed to push into channel: {}", e.what()));
         }
-        auto *fake_handle = new PushFinishHandle(std::forward<U>(item));
-        assert(pop_awaiters_.empty());
-        push_awaiters_.push_back(fake_handle);
     }
 
     struct [[nodiscard]] PushAwaiter;
@@ -122,7 +127,7 @@ public:
      * @brief Get the current size of the channel.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    size_t size() const noexcept {
+    size_t size() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_;
     }
@@ -131,7 +136,7 @@ public:
      * @brief Check if the channel is empty.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool empty() const noexcept {
+    bool empty() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return size_ == 0;
     }
@@ -140,7 +145,7 @@ public:
      * @brief Check if the channel is closed.
      * @warning This function may not be accurate in multithreaded scenarios.
      */
-    bool is_closed() const noexcept {
+    bool is_closed() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return closed_;
     }
@@ -173,7 +178,7 @@ private:
         return false;
     }
 
-    bool cancel_push_(PushFinishHandle *finish_handle) {
+    bool cancel_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return push_awaiters_.remove(finish_handle);
     }
@@ -190,7 +195,7 @@ private:
         return std::nullopt;
     }
 
-    bool cancel_pop_(PopFinishHandle *finish_handle) {
+    bool cancel_pop_(PopFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return pop_awaiters_.remove(finish_handle);
     }
@@ -323,7 +328,7 @@ public:
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    void cancel() {
+    void cancel() noexcept {
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
             canceled_ = true;
@@ -340,9 +345,9 @@ public:
         return success;
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
-    void invoke() {
+    void invoke() noexcept {
         if (need_resume_) {
             runtime_->resume_work();
         }
@@ -350,14 +355,14 @@ public:
     }
 
 public:
-    void init(Channel *channel, Runtime *runtime) {
+    void init(Channel *channel, Runtime *runtime) noexcept {
         channel_ = channel;
         runtime_ = runtime;
     }
 
-    T &get_item() { return item_; }
+    T &get_item() noexcept { return item_; }
 
-    void schedule() {
+    void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
             delete this;
@@ -367,7 +372,7 @@ public:
         }
     }
 
-    void enable_throw() { should_throw_ = true; }
+    void enable_throw() noexcept { should_throw_ = true; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -388,7 +393,7 @@ class Channel<T, N>::PopFinishHandle
 public:
     using ReturnType = T;
 
-    void cancel() {
+    void cancel() noexcept {
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
             runtime_->resume_work();
@@ -398,9 +403,9 @@ public:
 
     ReturnType extract_result() { return std::move(result_); }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
-    void invoke() {
+    void invoke() noexcept {
         if (need_resume_) {
             runtime_->resume_work();
         }
@@ -408,14 +413,14 @@ public:
     }
 
 public:
-    void init(Channel *channel, Runtime *runtime) {
+    void init(Channel *channel, Runtime *runtime) noexcept {
         channel_ = channel;
         runtime_ = runtime;
     }
 
     void set_result(T result) { result_ = std::move(result); }
 
-    void schedule() {
+    void schedule() noexcept {
         assert(runtime_ != nullptr);
         need_resume_ = true;
         runtime_->schedule(this);
@@ -446,9 +451,9 @@ public:
         : channel_(channel), finish_handle_(std::move(item)) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
     void register_operation(unsigned int /*flags*/) {
         auto *runtime = detail::Context::current().runtime();
@@ -491,11 +496,11 @@ public:
     PopAwaiter(Channel &channel) : channel_(channel) {}
 
 public:
-    HandleType *get_handle() { return &finish_handle_; }
+    HandleType *get_handle() noexcept { return &finish_handle_; }
 
-    void init_finish_handle() { /* Leaf node, no-op */ }
+    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
 
-    void register_operation(unsigned int /*flags*/) noexcept {
+    void register_operation(unsigned int /*flags*/) {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
@@ -509,7 +514,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
+    bool await_suspend(std::coroutine_handle<PromiseType> h) {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());

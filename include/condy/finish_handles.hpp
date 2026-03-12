@@ -13,12 +13,14 @@
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/work_type.hpp"
 #include <array>
 #include <cerrno>
 #include <cstddef>
 #include <limits>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -38,9 +40,9 @@ struct Action {
 class OpFinishHandleBase
     : public InvokerAdapter<OpFinishHandleBase, WorkInvoker> {
 public:
-    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *);
+    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
 
-    void cancel() {
+    void cancel() noexcept {
         auto *ring = detail::Context::current().ring();
         io_uring_sqe *sqe = ring->get_sqe();
         io_uring_prep_cancel(sqe, this, 0);
@@ -48,17 +50,17 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    detail::Action handle_cqe(io_uring_cqe *cqe) {
+    detail::Action handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
     }
 
-    void invoke() {
+    void invoke() noexcept {
         assert(invoker_ != nullptr);
         (*invoker_)();
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 protected:
     OpFinishHandleBase() = default;
@@ -78,15 +80,18 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
         return {.queue_work = true, .op_finish = true};
     }
 
-    ReturnType extract_result() { return cqe_handler_.extract_result(); }
+    ReturnType extract_result() noexcept {
+        return cqe_handler_.extract_result();
+    }
 
 private:
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -104,7 +109,8 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             func_(HandleBase::extract_result());
@@ -116,7 +122,8 @@ public:
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<MultiShotMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -139,7 +146,7 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    void invoke() /* fake override */ {
+    void invoke() noexcept /* fake override */ {
         assert(this->invoker_ != nullptr);
         (*this->invoker_)();
         resumed_ = true;
@@ -149,7 +156,8 @@ public:
         maybe_free_();
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) /* fake override */ {
+    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::handle_cqe_impl(cqe);
             return {.queue_work = true, .op_finish = false};
@@ -169,26 +177,27 @@ public:
     }
 
 private:
-    void maybe_free_() {
+    void maybe_free_() noexcept {
         if (resumed_ && notified_) {
             free_func_(notify_res_);
             delete this;
         }
     }
 
-    void notify_(int32_t res) {
+    void notify_(int32_t res) noexcept {
         assert(res != -ENOTRECOVERABLE);
         notify_res_ = res;
         notified_ = true;
         maybe_free_();
     }
 
-    static void invoke_static_(void *data) {
+    static void invoke_static_(void *data) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         self->invoke();
     }
 
-    static detail::Action handle_cqe_static_(void *data, io_uring_cqe *cqe) {
+    static detail::Action handle_cqe_static_(void *data,
+                                             io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -211,7 +220,7 @@ public:
     using ReturnType =
         std::pair<std::vector<size_t>, std::vector<ChildReturnType>>;
 
-    void init(std::vector<Handle *> handles) {
+    void init(std::vector<Handle *> handles) noexcept {
         handles_ = std::move(handles);
         child_invokers_.resize(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -224,7 +233,7 @@ public:
         order_.resize(handles_.size());
     }
 
-    void cancel() {
+    void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
             for (auto &handle : handles_) {
@@ -233,7 +242,7 @@ public:
         }
     }
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(is_nothrow_extract_result_v<Handle>) {
         std::vector<ChildReturnType> result;
         result.reserve(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -242,10 +251,10 @@ public:
         return std::make_pair(std::move(order_), std::move(result));
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 private:
-    void finish_(size_t idx) {
+    void finish_(size_t idx) noexcept {
         size_t no = finished_count_++;
         order_[no] = idx;
 
@@ -269,7 +278,7 @@ private:
 
 private:
     struct FinishInvoker : public InvokerAdapter<FinishInvoker> {
-        void invoke() { self_->finish_(no_); }
+        void invoke() noexcept { self_->finish_(no_); }
         RangedParallelFinishHandle *self_;
         size_t no_;
     };
@@ -294,7 +303,7 @@ public:
     using Base = RangedParallelAllFinishHandle<Handle>;
     using ReturnType = std::vector<typename Handle::ReturnType>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -322,12 +331,12 @@ public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Handles)>,
                                  std::tuple<typename Handles::ReturnType...>>;
 
-    template <typename... HandlePtr> void init(HandlePtr... handles) {
+    template <typename... HandlePtr> void init(HandlePtr... handles) noexcept {
         handles_ = std::make_tuple(handles...);
         foreach_set_invoker_();
     }
 
-    void cancel() {
+    void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
             constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
@@ -335,7 +344,8 @@ public:
         }
     }
 
-    ReturnType extract_result() {
+    ReturnType
+    extract_result() noexcept((is_nothrow_extract_result_v<Handles> && ...)) {
         auto result = std::apply(
             [](auto *...handle_ptrs) {
                 return std::make_tuple(handle_ptrs->extract_result()...);
@@ -344,10 +354,10 @@ public:
         return std::make_pair(std::move(order_), std::move(result));
     }
 
-    void set_invoker(Invoker *invoker) { invoker_ = invoker; }
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 private:
-    template <size_t I = 0> void foreach_set_invoker_() {
+    template <size_t I = 0> void foreach_set_invoker_() noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto *handle = std::get<I>(handles_);
             auto &invoker = std::get<I>(child_invokers_);
@@ -357,7 +367,8 @@ private:
         }
     }
 
-    template <size_t SkipIdx, size_t I = 0> void foreach_call_cancel_() {
+    template <size_t SkipIdx, size_t I = 0>
+    void foreach_call_cancel_() noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto handle = std::get<I>(handles_);
             if constexpr (I != SkipIdx) {
@@ -367,7 +378,7 @@ private:
         }
     }
 
-    template <size_t Idx> void finish_() {
+    template <size_t Idx> void finish_() noexcept {
         size_t no = finished_count_++;
         order_[no] = Idx;
 
@@ -387,7 +398,7 @@ private:
 private:
     template <size_t I>
     struct FinishInvoker : public InvokerAdapter<FinishInvoker<I>> {
-        void invoke() { self_->template finish_<I>(); }
+        void invoke() noexcept { self_->template finish_<I>(); }
         ParallelFinishHandle *self_;
     };
 
@@ -425,7 +436,7 @@ public:
     using Base = ParallelAllFinishHandle<Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -437,7 +448,7 @@ public:
     using Base = ParallelAnyFinishHandle<Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         auto &[order, results] = r;
         return tuple_at_(std::move(results), order[0]);
