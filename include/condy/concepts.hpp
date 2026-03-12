@@ -61,8 +61,8 @@ concept AwaiterLike = requires(T awaiter) {
     } -> std::same_as<typename std::decay_t<T>::HandleType *>;
     { awaiter.init_finish_handle() } -> std::same_as<void>;
     { awaiter.register_operation(0) } -> std::same_as<void>;
-    { awaiter.await_ready() } -> std::same_as<bool>;
-    { awaiter.await_suspend(std::declval<std::coroutine_handle<>>()) };
+    { awaiter.await_ready() } noexcept -> std::same_as<bool>;
+    { awaiter.await_suspend(std::declval<std::coroutine_handle<>>()) } noexcept;
     {
         awaiter.await_resume()
     } -> std::same_as<typename std::decay_t<T>::HandleType::ReturnType>;

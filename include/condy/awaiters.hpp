@@ -148,14 +148,12 @@ public:
     using Base = Awaiter;
     FlaggedOpAwaiter(Awaiter awaiter) : Base(std::move(awaiter)) {}
 
-    void register_operation(unsigned int flags) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void register_operation(unsigned int flags) noexcept {
         Base::register_operation(flags | Flags);
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         Base::init_finish_handle();
         Base::get_handle()->set_invoker(&h.promise());
         register_operation(0);
@@ -184,8 +182,7 @@ public:
         finish_handle_.init(std::move(handles));
     }
 
-    void register_operation(unsigned int flags) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void register_operation(unsigned int flags) noexcept {
         for (auto &awaiter : awaiters_) {
             awaiter.register_operation(flags);
         }
@@ -195,8 +192,7 @@ public:
     bool await_ready() const noexcept { return awaiters_.empty(); }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -270,8 +266,7 @@ public:
     using Base = RangedWhenAllAwaiter<Awaiter>;
     using Base::Base;
 
-    void register_operation(unsigned int flags) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void register_operation(unsigned int flags) noexcept {
         auto *ring = detail::Context::current().ring();
         ring->reserve_space(Base::awaiters_.size());
         for (int i = 0; i < Base::awaiters_.size() - 1; ++i) {
@@ -281,8 +276,7 @@ public:
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
-        is_nothrow_suspendible_v<Awaiter>) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         Base::init_finish_handle();
         Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -335,8 +329,7 @@ public:
             handles);
     }
 
-    void register_operation(unsigned int flags) noexcept(
-        (is_nothrow_suspendible_v<Awaiters> && ...)) {
+    void register_operation(unsigned int flags) noexcept {
         foreach_register_operation_(flags);
     }
 
@@ -344,8 +337,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
-        (is_nothrow_suspendible_v<Awaiters> && ...)) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -369,8 +361,7 @@ private:
     }
 
     template <size_t Idx = 0>
-    void foreach_register_operation_(unsigned int flags) noexcept(
-        (is_nothrow_suspendible_v<Awaiters> && ...)) {
+    void foreach_register_operation_(unsigned int flags) noexcept {
         if constexpr (Idx < sizeof...(Awaiters)) {
             std::get<Idx>(awaiters_).register_operation(flags);
             foreach_register_operation_<Idx + 1>(flags);
@@ -440,16 +431,14 @@ public:
     using Base = WhenAllAwaiter<Awaiter...>;
     using Base::Base;
 
-    void register_operation(unsigned int flags) noexcept(
-        (is_nothrow_suspendible_v<Awaiter> && ...)) {
+    void register_operation(unsigned int flags) noexcept {
         auto *ring = detail::Context::current().ring();
         ring->reserve_space(sizeof...(Awaiter));
         foreach_register_operation_(flags);
     }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept(
-        (is_nothrow_suspendible_v<Awaiter> && ...)) {
+    void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
         Base::init_finish_handle();
         Base::finish_handle_.set_invoker(&h.promise());
         register_operation(0);
@@ -457,8 +446,7 @@ public:
 
 private:
     template <size_t Idx = 0>
-    void foreach_register_operation_(unsigned int flags) noexcept(
-        (is_nothrow_suspendible_v<Awaiter> && ...)) {
+    void foreach_register_operation_(unsigned int flags) noexcept {
         if constexpr (Idx < sizeof...(Awaiter)) {
             std::get<Idx>(Base::awaiters_)
                 .register_operation(Idx < sizeof...(Awaiter) - 1 ? flags | Flags

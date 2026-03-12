@@ -41,7 +41,7 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType>) {
+    void await_suspend(std::coroutine_handle<PromiseType>) noexcept {
         // Do nothing, since it will not be called in this test
     }
 
