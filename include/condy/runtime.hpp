@@ -51,7 +51,7 @@ inline int sync_msg_ring(io_uring_sqe *sqe_data) noexcept {
     auto *ring = ThreadLocalRing::current().ring();
     auto *sqe = ring->get_sqe();
     *sqe = *sqe_data;
-    int r;
+    int r = 0;
     auto n =
         ring->reap_completions_wait([&](io_uring_cqe *cqe) { r = cqe->res; });
     if (n < 0) {
@@ -339,7 +339,8 @@ private:
         auto r = ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
         if (r < 0) {
-            panic_on(std::format("io_uring_peek_cqe: {}", std::strerror(-r)));
+            panic_on(std::format("io_uring_peek_cqe: {}",
+                                 std::strerror(static_cast<int>(-r))));
         }
     }
 

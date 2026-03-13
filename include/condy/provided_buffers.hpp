@@ -71,7 +71,6 @@ public:
         reg.bgid = bgid_;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
-            munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }
 
@@ -295,7 +294,6 @@ public:
         reg.bgid = bgid_;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
-            munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }
 

@@ -15,6 +15,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <optional>
+#include <type_traits>
 
 namespace condy {
 
@@ -56,10 +57,8 @@ public:
 public:
     /**
      * @brief Try to push an item into the channel.
-     * @tparam U Type of the item to be pushed.
      * @param item The item to be pushed into the channel.
-     * @return true If the item was successfully pushed.
-     * @return false If the channel is full.
+     * @return bool If the item was successfully pushed.
      * @throws std::logic_error If the channel is closed.
      */
     template <typename U> bool try_push(U &&item) {
@@ -72,8 +71,9 @@ public:
 
     /**
      * @brief Try to pop an item from the channel.
-     * @return std::optional<T> The popped item if successful; std::nullopt if
-     * the channel is empty or closed.
+     * @return std::optional<T> The popped item if successful; A
+     * default-constructed T if the channel is closed; std::nullopt if the
+     * channel is empty.
      */
     std::optional<T> try_pop() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -100,7 +100,6 @@ public:
     struct [[nodiscard]] PushAwaiter;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
-     * @tparam U Type of the item to be pushed.
      * @param item The item to be pushed into the channel.
      * @return PushAwaiter Awaiter object for the push operation.
      * @details This function attempts to push the given item into the channel.
