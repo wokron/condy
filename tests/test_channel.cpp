@@ -43,6 +43,18 @@ TEST_CASE("test channel - try push and pop") {
     REQUIRE(channel.size() == 0);
 }
 
+TEST_CASE("test channel - try push conditonal move") {
+    condy::Channel<std::unique_ptr<int>> channel(1);
+    std::unique_ptr<int> item1 = std::make_unique<int>(42);
+    std::unique_ptr<int> item2 = std::make_unique<int>(43);
+
+    REQUIRE(channel.try_push(std::move(item1)) == true);
+    REQUIRE(item1 == nullptr); // item1 should be moved
+
+    REQUIRE(channel.try_push(std::move(item2)) == false);
+    REQUIRE(item2 != nullptr); // item2 should not be moved
+}
+
 TEST_CASE("test channel - push and pop with coroutines") {
     condy::Runtime runtime(options);
     condy::Channel<int> channel(2);
