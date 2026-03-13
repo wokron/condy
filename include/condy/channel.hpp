@@ -61,7 +61,9 @@ public:
      * @return bool If the item was successfully pushed.
      * @throws std::logic_error If the channel is closed.
      */
-    template <typename U> bool try_push(U &&item) {
+    template <typename U>
+        requires std::is_same_v<std::decay_t<U>, T>
+    bool try_push(U &&item) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) [[unlikely]] {
             throw std::logic_error("Push to closed channel");
@@ -80,16 +82,20 @@ public:
         return try_pop_inner_();
     }
 
-    template <typename U> void force_push(U &&item) noexcept {
+    void force_push(T item) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) [[unlikely]] {
             panic_on("Push to closed channel");
         }
-        if (try_push_inner_(std::forward<U>(item))) [[likely]] {
+        if (try_push_inner_(std::move(item))) [[likely]] {
             return;
         }
+        // This is safe because if try_push_inner_ returns false, the item has
+        // not been moved into the channel.
+        // NOLINTBEGIN(bugprone-use-after-move)
         auto *fake_handle =
-            new (std::nothrow) PushFinishHandle(std::forward<U>(item));
+            new (std::nothrow) PushFinishHandle(std::move(item));
+        // NOLINTEND(bugprone-use-after-move)
         if (!fake_handle) {
             panic_on("Allocation failed for PushFinishHandle");
         }
@@ -98,6 +104,7 @@ public:
     }
 
     struct [[nodiscard]] PushAwaiter;
+    // TODO: How about remove the warning and support conditional move?
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
@@ -110,9 +117,7 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    template <typename U> PushAwaiter push(U &&item) noexcept {
-        return {*this, std::forward<U>(item)};
-    }
+    PushAwaiter push(T item) noexcept { return {*this, std::move(item)}; }
 
     struct [[nodiscard]] PopAwaiter;
     /**
@@ -212,7 +217,9 @@ private:
     }
 
 private:
-    template <typename U> bool try_push_inner_(U &&item) noexcept {
+    template <typename U>
+        requires std::is_same_v<std::decay_t<U>, T>
+    bool try_push_inner_(U &&item) noexcept {
         if (!pop_awaiters_.empty()) {
             assert(empty_inner_());
             auto *pop_handle = pop_awaiters_.pop_front();
@@ -253,7 +260,9 @@ private:
         return std::nullopt;
     }
 
-    template <typename U> void push_inner_(U &&item) noexcept {
+    template <typename U>
+        requires std::is_same_v<std::decay_t<U>, T>
+    void push_inner_(U &&item) noexcept {
         assert(!full_inner_());
         auto mask = buffer_.capacity() - 1;
         buffer_[tail_ & mask].construct(std::forward<U>(item));
