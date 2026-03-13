@@ -12,8 +12,10 @@
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include "condy/utils.hpp"
+#include <bit>
 #include <coroutine>
 #include <cstddef>
+#include <new>
 #include <optional>
 #include <type_traits>
 
@@ -33,9 +35,6 @@ namespace condy {
  */
 template <typename T, size_t N = 2> class Channel {
 public:
-    static_assert(std::is_nothrow_move_constructible_v<T>,
-                  "Channel requires T to be nothrow move constructible");
-
     /**
      * @brief Construct a new Channel object
      * @param capacity Capacity of the channel. If capacity is zero, the channel
@@ -58,7 +57,7 @@ public:
     /**
      * @brief Try to push an item into the channel.
      * @param item The item to be pushed into the channel.
-     * @return bool If the item was successfully pushed.
+     * @return bool True if the item was successfully pushed.
      * @throws std::logic_error If the channel is closed.
      */
     template <typename U>
@@ -456,8 +455,8 @@ private:
 
 /**
  * @brief Awaiter for pushing an item into the channel.
- * @return True if the push operation was successful after awaiting; false if
- * the operation was cancelled.
+ * @return bool True if the push operation was successful after awaiting; false
+ * if the operation was cancelled.
  * @throws std::logic_error If the channel is closed.
  */
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {

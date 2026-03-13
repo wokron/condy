@@ -302,8 +302,7 @@ private:
             prep_msg_ring_(&sqe, work, type);
             int r = detail::sync_msg_ring(&sqe);
             if (r < 0) {
-                panic_on(std::format("io_uring_prep_msg_ring: {}",
-                                     std::strerror(-r)));
+                panic_on(std::format("sync_msg_ring: {}", std::strerror(-r)));
             }
         }
     }
