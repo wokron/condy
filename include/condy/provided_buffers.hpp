@@ -50,7 +50,6 @@ public:
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags)
         : capacity_(std::bit_ceil(capacity)) {
         auto &context = detail::Context::current();
-        auto bgid = context.next_bgid();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -58,20 +57,25 @@ public:
         if (data == MAP_FAILED) [[unlikely]] {
             throw make_system_error("mmap");
         }
+        auto d1 = defer([&]() { munmap(data, data_size); });
+
+        bgid_ = context.next_bgid();
+        auto d2 = defer([&]() { context.recycle_bgid(bgid_); });
+
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
 
         io_uring_buf_reg reg = {};
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = capacity_;
-        reg.bgid = bgid;
+        reg.bgid = bgid_;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
-            munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }
 
-        bgid_ = bgid;
+        d1.dismiss();
+        d2.dismiss();
     }
 
     ~BundledProvidedBufferQueue() {
@@ -269,7 +273,6 @@ public:
                               unsigned int flags)
         : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
         auto &context = detail::Context::current();
-        auto bgid = context.next_bgid();
 
         size_t data_size = num_buffers_ * (sizeof(io_uring_buf) + buffer_size);
         void *data = mmap(nullptr, data_size, PROT_READ | PROT_WRITE,
@@ -277,20 +280,22 @@ public:
         if (data == MAP_FAILED) [[unlikely]] {
             throw make_system_error("mmap");
         }
+        auto d1 = defer([&]() { munmap(data, data_size); });
+
+        bgid_ = context.next_bgid();
+        auto d2 = defer([&]() { context.recycle_bgid(bgid_); });
+
         br_ = reinterpret_cast<io_uring_buf_ring *>(data);
         io_uring_buf_ring_init(br_);
 
         io_uring_buf_reg reg = {};
         reg.ring_addr = reinterpret_cast<uint64_t>(br_);
         reg.ring_entries = num_buffers_;
-        reg.bgid = bgid;
+        reg.bgid = bgid_;
         int r = io_uring_register_buf_ring(context.ring()->ring(), &reg, flags);
         if (r != 0) [[unlikely]] {
-            munmap(data, data_size);
             throw make_system_error("io_uring_register_buf_ring", -r);
         }
-
-        bgid_ = bgid;
 
         char *buffer_base =
             static_cast<char *>(data) + sizeof(io_uring_buf) * num_buffers_;
@@ -301,6 +306,9 @@ public:
                                   static_cast<int>(bid));
         }
         io_uring_buf_ring_advance(br_, static_cast<int>(num_buffers_));
+
+        d1.dismiss();
+        d2.dismiss();
     }
 
     ~BundledProvidedBufferPool() {

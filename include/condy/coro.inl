@@ -86,8 +86,15 @@ public:
     using PromiseType = typename Coro::promise_type;
 
     ~PromiseBase() {
-        if (exception_) {
-            panic_on("Unhandled exception in detached coroutine!!!");
+        if (exception_) [[unlikely]] {
+            try {
+                std::rethrow_exception(exception_);
+            } catch (const std::exception &e) {
+                panic_on(std::format(
+                    "Unhandled exception in detached coroutine: {}", e.what()));
+            } catch (...) {
+                panic_on("Unhandled unknown exception in detached coroutine");
+            }
         }
     }
 

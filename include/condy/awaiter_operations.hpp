@@ -97,6 +97,9 @@ auto make_op_awaiter128(Func &&func, Args &&...args) {
     auto prep_func = [func = std::forward<Func>(func),
                       ... args = std::forward<Args>(args)](Ring *ring) {
         auto *sqe = ring->get_sqe128();
+        if (!sqe) {
+            panic_on("SQE128 not enabled in the ring");
+        }
         func(sqe, args...);
         return sqe;
     };

@@ -801,7 +801,7 @@ TEST_CASE("test async_operations - test recv - bundled multishot") {
 
         auto [n2, bufs2] = co_await condy::async_recv_multishot(
             sv[0], condy::bundled(pool), 0, [&](auto) {
-                assert(false); // Should not be called
+                REQUIRE(false); // Should not be called
             });
         REQUIRE(n2 == 512);
         REQUIRE(bufs2.size() == 2);
