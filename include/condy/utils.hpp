@@ -14,7 +14,6 @@
 #include <cstring>
 #include <exception>
 #include <format>
-#include <functional>
 #include <iostream>
 #include <limits>
 #include <stack>

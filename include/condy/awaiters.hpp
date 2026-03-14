@@ -19,7 +19,6 @@
 #include "condy/work_type.hpp"
 #include <coroutine>
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <tuple>
 
@@ -73,9 +72,9 @@ public:
 
         io_uring_sqe *sqe = prep_func_(ring);
         assert(sqe && "prep_func must return a valid sqe");
-        sqe->flags |= static_cast<uint8_t>(flags);
-        io_uring_sqe_set_data(
-            sqe, encode_work(&finish_handle_.get(), WorkType::Common));
+        io_uring_sqe_set_flags(sqe, sqe->flags | flags);
+        auto *work = encode_work(&finish_handle_.get(), WorkType::Common);
+        io_uring_sqe_set_data(sqe, work);
     }
 
 public:
