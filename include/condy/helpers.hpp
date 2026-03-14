@@ -10,6 +10,7 @@
 
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
+#include "condy/context.hpp"
 #include <type_traits>
 
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
