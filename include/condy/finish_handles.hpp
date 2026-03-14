@@ -13,7 +13,6 @@
 #include "condy/context.hpp"
 #include "condy/invoker.hpp"
 #include "condy/ring.hpp"
-#include "condy/type_traits.hpp"
 #include "condy/work_type.hpp"
 #include <array>
 #include <cerrno>
@@ -212,6 +211,10 @@ protected:
 template <CQEHandlerLike CQEHandler, typename FreeFunc>
 using ZeroCopyOpFinishHandle =
     ZeroCopyMixin<FreeFunc, OpFinishHandle<CQEHandler>>;
+
+template <typename T>
+constexpr bool is_nothrow_extract_result_v =
+    noexcept(std::declval<T>().extract_result());
 
 template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
 public:

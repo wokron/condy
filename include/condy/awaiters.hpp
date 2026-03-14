@@ -15,7 +15,6 @@
 #include "condy/finish_handles.hpp"
 #include "condy/ring.hpp"
 #include "condy/runtime.hpp"
-#include "condy/type_traits.hpp"
 #include "condy/work_type.hpp"
 #include <coroutine>
 #include <cstddef>
