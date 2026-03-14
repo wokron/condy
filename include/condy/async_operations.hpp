@@ -997,28 +997,6 @@ inline auto async_fixed_fd_install(int fixed_fd, unsigned int flags) {
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
-/**
- * @brief See io_uring_prep_msg_ring_fd
- * @deprecated This operation is deprecated and will be removed in a future
- * version.
- */
-[[deprecated("async_fixed_fd_send is deprecated and will be removed in a "
-             "future version")]]
-inline auto async_fixed_fd_send(FdTable &dst, int source_fd, int target_fd,
-                                unsigned int flags) {
-    void *payload = nullptr;
-    if (static_cast<unsigned int>(target_fd) != CONDY_FILE_INDEX_ALLOC) {
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        payload = reinterpret_cast<void *>((target_fd + 1) << 3);
-    }
-    return detail::make_op_awaiter(
-        io_uring_prep_msg_ring_fd, dst.ring_.ring_fd, source_fd, target_fd,
-        reinterpret_cast<uint64_t>(encode_work(payload, WorkType::SendFd)),
-        flags);
-}
-#endif
-
 #if !IO_URING_CHECK_VERSION(2, 6) // >= 2.6
 /**
  * @brief See io_uring_prep_ftruncate

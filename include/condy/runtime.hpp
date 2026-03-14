@@ -359,20 +359,6 @@ private:
         if (type == WorkType::Ignore) {
             // No-op
             assert(cqe->res != -EINVAL); // If EINVAL, something is wrong
-        } else if (type == WorkType::SendFd) {
-            auto &fd_table = ring_.fd_table();
-            if (fd_table.fd_accepter_ == nullptr) [[unlikely]] {
-                std::cerr << "[Deprecated Warning] Received a file "
-                             "descriptor but no accepter is set.\n";
-            } else {
-                uint64_t payload = reinterpret_cast<uint64_t>(data) >> 3;
-                if (payload == 0) { // Auto-allocate
-                    fd_table.fd_accepter_(cqe->res);
-                } else {
-                    int target_fd = static_cast<int>(payload - 1);
-                    fd_table.fd_accepter_(target_fd);
-                }
-            }
         } else if (type == WorkType::Schedule) {
             if (data == nullptr) {
                 if (cqe->res < 0) {
