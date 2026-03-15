@@ -14,7 +14,7 @@ Make sure `liburing` (≥2.3) is installed on your system.
 Compile your code:
 
 ```bash
-clang++ main.cpp \
+c++ main.cpp \
     -std=c++20 \        # Enable C++20 for coroutine support
     -luring \           # Link against liburing
     -I/path/to/condy    # Specify Condy include path
@@ -52,8 +52,6 @@ cmake -B build -S . \
     -DBUILD_EXAMPLES=ON \
     -DBUILD_BENCHMARKS=ON \
     -DBUILD_TESTS=ON \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 ```
