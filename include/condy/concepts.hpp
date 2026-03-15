@@ -17,8 +17,6 @@ namespace detail {
 
 struct FixedFd;
 struct Action;
-class BundledProvidedBufferPool;
-class BundledProvidedBufferQueue;
 
 } // namespace detail
 
@@ -82,18 +80,13 @@ concept BufferRingLike = requires(T br) {
 };
 
 template <typename T>
-concept BundledBufferRing =
-    std::same_as<std::decay_t<T>, detail::BundledProvidedBufferPool> ||
-    std::same_as<std::decay_t<T>, detail::BundledProvidedBufferQueue>;
-
-template <typename T>
-concept NotBundledBufferRing = BufferRingLike<T> && !BundledBufferRing<T>;
-
-template <typename T>
 concept BufferLike = std::derived_from<std::decay_t<T>, BufferBase>;
 
 template <typename T>
 concept FdLike = std::same_as<std::decay_t<T>, int> ||
                  std::same_as<std::decay_t<T>, detail::FixedFd>;
+
+template <typename T, typename... Us>
+concept AnySameAs = (std::same_as<std::decay_t<T>, std::decay_t<Us>> || ...);
 
 } // namespace condy
