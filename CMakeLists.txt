@@ -24,6 +24,7 @@ target_include_directories(condy INTERFACE include)
 target_compile_features(condy INTERFACE cxx_std_20)
 
 if(BUILD_EXAMPLES OR BUILD_BENCHMARKS OR BUILD_TESTS OR LINK_LIBURING)
+    enable_language(C)
     # liburing
     set(LIBURING_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/liburing)
     message(STATUS "Configuring liburing in ${LIBURING_SOURCE_DIR}")
