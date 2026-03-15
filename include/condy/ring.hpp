@@ -12,7 +12,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <functional>
 
 namespace condy {
 
