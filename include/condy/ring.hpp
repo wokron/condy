@@ -70,24 +70,6 @@ public:
     }
 
     /**
-     * @brief Set the accepter function for incoming file descriptors
-     * @details User can use @ref async_fixed_fd_send() to send a fixed fd to
-     * the fd table of another Runtime. This function sets the accepter function
-     * that will be called when such an operation is performed.
-     * @tparam Func The type of the accepter function
-     * @param accepter The accepter function to set, which accepts an int32_t
-     * parameter representing the fixed file descriptor index being received.
-     * @deprecated This function is deprecated and will be removed in a future
-     * version.
-     */
-    template <typename Func>
-    [[deprecated("set_fd_accepter is deprecated and will be removed in a "
-                 "future version")]]
-    void set_fd_accepter(Func &&accepter) {
-        fd_accepter_ = std::forward<Func>(accepter);
-    }
-
-    /**
      * @brief Set the file allocation range for the fd table
      * @param offset The starting offset of the file allocation range
      * @param size The size of the file allocation range
@@ -98,12 +80,9 @@ public:
     }
 
 private:
-    std::function<void(int32_t)> fd_accepter_ = nullptr;
     io_uring &ring_;
 
     friend class Runtime;
-    friend auto async_fixed_fd_send(FdTable &dst, int source_fd, int target_fd,
-                                    unsigned int flags);
 };
 
 /**

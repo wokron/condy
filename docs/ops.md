@@ -67,7 +67,6 @@ These are fundamental asynchronous operations. Many of them are asynchronous ver
 - `condy::async_futex_wait()`
 - `condy::async_futex_waitv()`
 - `condy::async_fixed_fd_install()`
-- `condy::async_fixed_fd_send()`
 - `condy::async_ftruncate()`
 - `condy::async_cmd_discard()`
 - `condy::async_bind()`
