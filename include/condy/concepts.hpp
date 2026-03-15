@@ -4,14 +4,21 @@
 
 #pragma once
 
-#include "condy/buffers.hpp"
-#include "condy/condy_uring.hpp"
-#include "condy/invoker.hpp"
+#include <concepts>
 #include <coroutine>
+#include <cstdint>
+#include <ranges>
+#include <type_traits>
+#include <utility>
+
+struct io_uring_cqe;
+struct io_uring_sqe;
 
 namespace condy {
 
 class Ring;
+class Invoker;
+class BufferBase;
 
 namespace detail {
 

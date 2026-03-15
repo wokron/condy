@@ -464,4 +464,27 @@ public:
     }
 };
 
+/**
+ * @brief Get the bundled variant of a provided buffer pool. This will
+ * enable buffer bundling feature of io_uring.
+ * @param buffer The provided buffer pool.
+ * @return auto& The bundled variant of the provided buffer.
+ * @note When using bundled provided buffer pool, the return type of async
+ * operations will be a vector of @ref ProvidedBuffer instead of a single
+ * buffer.
+ */
+inline auto &bundled(ProvidedBufferPool &buffer) {
+    return static_cast<detail::BundledProvidedBufferPool &>(buffer);
+}
+
+/**
+ * @brief Get the bundled variant of a provided buffer queue. This will
+ * enable buffer bundling feature of io_uring.
+ * @param buffer The provided buffer queue.
+ * @return auto& The bundled variant of the provided buffer.
+ */
+inline auto &bundled(ProvidedBufferQueue &buffer) {
+    return static_cast<detail::BundledProvidedBufferQueue &>(buffer);
+}
+
 } // namespace condy
