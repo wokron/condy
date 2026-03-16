@@ -10,7 +10,7 @@
 
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
-#include "condy/provided_buffers.hpp"
+#include "condy/context.hpp"
 #include <type_traits>
 
 #if !IO_URING_CHECK_VERSION(2, 4) // >= 2.4
@@ -135,29 +135,6 @@ inline auto fixed(int buf_index, const struct iovec *iov) {
  */
 inline auto fixed(int buf_index, const struct msghdr *msg) {
     return detail::FixedBuffer<const msghdr *>{msg, buf_index};
-}
-
-/**
- * @brief Get the bundled variant of a provided buffer pool. This will
- * enable buffer bundling feature of io_uring.
- * @param buffer The provided buffer pool.
- * @return auto& The bundled variant of the provided buffer.
- * @note When using bundled provided buffer pool, the return type of async
- * operations will be a vector of @ref ProvidedBuffer instead of a single
- * buffer.
- */
-inline auto &bundled(ProvidedBufferPool &buffer) {
-    return static_cast<detail::BundledProvidedBufferPool &>(buffer);
-}
-
-/**
- * @brief Get the bundled variant of a provided buffer queue. This will
- * enable buffer bundling feature of io_uring.
- * @param buffer The provided buffer queue.
- * @return auto& The bundled variant of the provided buffer.
- */
-inline auto &bundled(ProvidedBufferQueue &buffer) {
-    return static_cast<detail::BundledProvidedBufferQueue &>(buffer);
 }
 
 } // namespace condy

@@ -103,7 +103,6 @@ public:
     }
 
     struct [[nodiscard]] PushAwaiter;
-    // TODO: How about remove the warning and support conditional move?
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.

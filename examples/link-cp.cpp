@@ -3,8 +3,6 @@
  * @brief Example of file copy using linked read and write
  */
 
-#include "condy/async_operations.hpp"
-#include "condy/runtime.hpp"
 #include <condy.hpp>
 #include <cstdio>
 #include <cstring>

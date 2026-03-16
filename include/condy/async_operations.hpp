@@ -11,11 +11,12 @@
 #include "condy/awaiter_operations.hpp"
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
-#include "condy/cqe_handler.hpp"
 #include "condy/helpers.hpp"
-#include "condy/provided_buffers.hpp"
 
 namespace condy {
+
+class ProvidedBufferQueue;
+class ProvidedBufferPool;
 
 namespace detail {
 
