@@ -20,6 +20,9 @@ class ProvidedBufferPool;
 
 namespace detail {
 
+class BundledProvidedBufferQueue;
+class BundledProvidedBufferPool;
+
 template <AwaiterLike Awaiter>
 auto maybe_flag_fixed_fd(Awaiter &&op, const FixedFd &) {
     return flag<IOSQE_FIXED_FILE>(std::forward<Awaiter>(op));
@@ -124,7 +127,8 @@ inline auto async_recvmsg(Fd fd, struct msghdr *msg, unsigned flags) {
 /**
  * @brief See io_uring_prep_recvmsg_multishot
  */
-template <FdLike Fd, typename MultiShotFunc, NotBundledBufferRing Buffer>
+template <FdLike Fd, typename MultiShotFunc,
+          AnySameAs<ProvidedBufferQueue, ProvidedBufferPool> Buffer>
 inline auto async_recvmsg_multishot(Fd fd, struct msghdr *msg, unsigned flags,
                                     Buffer &buf, MultiShotFunc &&func) {
     auto op = detail::make_multishot_select_buffer_op_awaiter(
@@ -376,7 +380,7 @@ inline auto async_read(Fd fd, detail::FixedBuffer<Buffer> buf, __u64 offset) {
 /**
  * @brief See io_uring_prep_read
  */
-template <FdLike Fd, NotBundledBufferRing Buffer>
+template <FdLike Fd, AnySameAs<ProvidedBufferQueue, ProvidedBufferPool> Buffer>
 inline auto async_read(Fd fd, Buffer &buf, __u64 offset) {
     auto op = detail::make_select_buffer_op_awaiter(&buf, io_uring_prep_read,
                                                     fd, nullptr, 0, offset);
@@ -387,7 +391,8 @@ inline auto async_read(Fd fd, Buffer &buf, __u64 offset) {
 /**
  * @brief See io_uring_prep_read_multishot
  */
-template <FdLike Fd, NotBundledBufferRing Buffer, typename MultiShotFunc>
+template <FdLike Fd, AnySameAs<ProvidedBufferQueue, ProvidedBufferPool> Buffer,
+          typename MultiShotFunc>
 inline auto async_read_multishot(Fd fd, Buffer &buf, __u64 offset,
                                  MultiShotFunc &&func) {
     auto op = detail::make_multishot_select_buffer_op_awaiter(
@@ -644,7 +649,7 @@ inline auto async_recv(Fd sockfd, Buffer &&buf, int flags) {
 /**
  * @brief See io_uring_prep_recv
  */
-template <FdLike Fd, NotBundledBufferRing Buffer>
+template <FdLike Fd, AnySameAs<ProvidedBufferQueue, ProvidedBufferPool> Buffer>
 inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
     auto op = detail::make_select_buffer_op_awaiter(&buf, io_uring_prep_recv,
                                                     sockfd, nullptr, 0, flags);
@@ -655,7 +660,9 @@ inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
 /**
  * @brief See io_uring_prep_recv
  */
-template <FdLike Fd, BundledBufferRing Buffer>
+template <FdLike Fd, AnySameAs<detail::BundledProvidedBufferQueue,
+                               detail::BundledProvidedBufferPool>
+                         Buffer>
 inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
     auto op = detail::make_bundle_select_buffer_op_awaiter(
         &buf, io_uring_prep_recv, sockfd, nullptr, 0, flags);
@@ -666,7 +673,8 @@ inline auto async_recv(Fd sockfd, Buffer &buf, int flags) {
 /**
  * @brief See io_uring_prep_recv_multishot
  */
-template <FdLike Fd, NotBundledBufferRing Buffer, typename MultiShotFunc>
+template <FdLike Fd, AnySameAs<ProvidedBufferQueue, ProvidedBufferPool> Buffer,
+          typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
                                  MultiShotFunc &&func) {
     auto op = detail::make_multishot_select_buffer_op_awaiter(
@@ -679,7 +687,11 @@ inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
 /**
  * @brief See io_uring_prep_recv_multishot
  */
-template <FdLike Fd, BundledBufferRing Buffer, typename MultiShotFunc>
+template <FdLike Fd,
+          AnySameAs<detail::BundledProvidedBufferQueue,
+                    detail::BundledProvidedBufferPool>
+              Buffer,
+          typename MultiShotFunc>
 inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
                                  MultiShotFunc &&func) {
     auto op = detail::make_multishot_bundle_select_buffer_op_awaiter(
