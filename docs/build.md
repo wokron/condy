@@ -14,10 +14,7 @@ Make sure `liburing` (≥2.3) is installed on your system.
 Compile your code:
 
 ```bash
-c++ main.cpp \
-    -std=c++20 \        # Enable C++20 for coroutine support
-    -luring \           # Link against liburing
-    -I/path/to/condy    # Specify Condy include path
+c++ main.cpp -std=c++20 -luring -I/path/to/condy    
 ```
 
 ## Using Condy as a Submodule (Recommended)
