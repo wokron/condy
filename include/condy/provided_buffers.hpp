@@ -48,7 +48,7 @@ public:
     using ReturnType = BufferInfo;
 
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags)
-        : capacity_(std::bit_ceil(capacity)) {
+        : capacity_(std::bit_ceil(capacity)), buf_lens_(capacity_, 0) {
         auto &context = detail::Context::current();
 
         size_t data_size = capacity_ * sizeof(io_uring_buf);
@@ -126,6 +126,7 @@ public:
         auto mask = io_uring_buf_ring_mask(capacity_);
         uint16_t bid = br_->tail & mask;
         io_uring_buf_ring_add(br_, buffer.data(), buffer.size(), bid, mask, 0);
+        buf_lens_[bid] = buffer.size();
         io_uring_buf_ring_advance(br_, 1);
         size_++;
 
@@ -149,18 +150,21 @@ public:
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
         if (flags & IORING_CQE_F_BUF_MORE) {
+            assert(buf_lens_[result.bid] > 0);
+            buf_lens_[result.bid] -= res;
             return result;
         }
 #endif
 
+        auto mask = io_uring_buf_ring_mask(capacity_);
         uint16_t curr_bid = result.bid;
-        auto bytes = res;
+        int64_t bytes = res;
         while (bytes > 0) {
-            auto &buf = br_->bufs[curr_bid];
-            assert(buf.bid == curr_bid);
-            uint32_t buf_size = buf.len;
-            bytes -= static_cast<int32_t>(buf_size);
+            uint32_t buf_len = std::exchange(buf_lens_[curr_bid], 0);
+            assert(buf_len > 0);
+            bytes -= buf_len;
             result.num_buffers++;
+            curr_bid = (curr_bid + 1) & mask;
         }
         assert(size_ >= result.num_buffers);
         size_ -= result.num_buffers;
@@ -173,6 +177,7 @@ private:
     uint32_t size_ = 0;
     uint32_t capacity_;
     uint16_t bgid_;
+    std::vector<uint32_t> buf_lens_;
 };
 
 } // namespace detail
