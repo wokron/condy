@@ -8,6 +8,7 @@
 #pragma once
 
 #include "condy/buffers.hpp"
+#include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
@@ -118,7 +119,7 @@ public:
      * from 0 and incrementing by 1 for each buffer pushed into the queue,
      * wrapping around when reaching the queue's capacity.
      */
-    template <typename Buffer> uint16_t push(Buffer &&buffer) {
+    template <BufferLike Buffer> uint16_t push(const Buffer &buffer) {
         if (size_ >= capacity_) [[unlikely]] {
             throw std::logic_error("Capacity exceeded");
         }
