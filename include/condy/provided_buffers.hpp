@@ -352,20 +352,22 @@ public:
 
         assert(res >= 0);
 
+        uint16_t bid = flags >> IORING_CQE_BUFFER_SHIFT;
+
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
         if (flags & IORING_CQE_F_BUF_MORE) {
-            uint16_t bid = flags >> IORING_CQE_BUFFER_SHIFT;
             char *data = get_buffer_(bid) + partial_size_;
             buffers.emplace_back(data, res, nullptr);
             partial_size_ += res;
             return buffers;
         }
 #endif
+        assert(bid == curr_io_uring_buf_()->bid);
 
         int32_t bytes = res;
         while (bytes > 0) {
             auto *buf_ptr = curr_io_uring_buf_();
-            uint16_t bid = buf_ptr->bid;
+            bid = buf_ptr->bid;
             uint32_t curr_buffer_size = buffer_size_ - partial_size_;
             char *data = get_buffer_(bid) + partial_size_;
             buffers.emplace_back(data, curr_buffer_size, this);
