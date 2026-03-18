@@ -30,7 +30,7 @@ int main() { condy::sync_wait(co_main()); }
 ```bash
 # Make sure liburing (>=2.3) is installed on your system
 # On Ubuntu: sudo apt install liburing-dev
-clang++ hello.cpp -o hello -std=c++20 -luring -I./include
+c++ hello.cpp -o hello -std=c++20 -luring -I./include
 ./hello
 # Hello, Condy!
 ```

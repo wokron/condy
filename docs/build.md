@@ -14,10 +14,7 @@ Make sure `liburing` (≥2.3) is installed on your system.
 Compile your code:
 
 ```bash
-clang++ main.cpp \
-    -std=c++20 \        # Enable C++20 for coroutine support
-    -luring \           # Link against liburing
-    -I/path/to/condy    # Specify Condy include path
+c++ main.cpp -std=c++20 -luring -I/path/to/condy    
 ```
 
 ## Using Condy as a Submodule (Recommended)
@@ -38,8 +35,9 @@ target_link_libraries(my_app PRIVATE condy)
 ```
 
 > [!NOTE]
-> - C++20 is required for coroutine support.  
-> - Condy depends on **liburing ≥ 2.3**.  
+> - C++20 is required for coroutine support.
+> - Condy depends on **liburing ≥ 2.3**.
+> - Both **GCC** and **Clang** compilers are supported.
 > - By default, Condy builds and links the bundled liburing in `third_party/liburing` (`LINK_LIBURING=ON`). If you need a specific version of liburing, you can manually check out the desired commit in that directory before building.
 > - To link against the system liburing, set `LINK_LIBURING=OFF` and install liburing manually.
 
@@ -52,8 +50,6 @@ cmake -B build -S . \
     -DBUILD_EXAMPLES=ON \
     -DBUILD_BENCHMARKS=ON \
     -DBUILD_TESTS=ON \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 ```
