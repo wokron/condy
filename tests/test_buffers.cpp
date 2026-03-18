@@ -162,6 +162,156 @@ TEST_CASE("test buffers - provided buffer queue usage") {
     REQUIRE(std::memcmp(buf1, "test", 4) == 0);
 }
 
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test buffers - provided buffer queue usage incr") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::ProvidedBufferQueue queue(4, IOU_PBUF_RING_INC);
+    char buf[4][16];
+    for (int i = 0; i < 4; ++i) {
+        REQUIRE(queue.push(condy::buffer(buf[i])) == i);
+        REQUIRE(queue.size() == static_cast<size_t>(i + 1));
+    }
+
+    io_uring_cqe cqe;
+
+    // 1. n = 9
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 0);
+    REQUIRE(ret.num_buffers == 0);
+    REQUIRE(queue.size() == 4);
+
+    // 2. n = 16 (7, first half)
+    cqe = {};
+    cqe.res = 7;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 0);
+    REQUIRE(ret.num_buffers == 1);
+    REQUIRE(queue.size() == 3);
+
+    // 3. n = 16 (9, second half)
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 1);
+    REQUIRE(ret.num_buffers == 0);
+    REQUIRE(queue.size() == 3);
+
+    // 4. n = 1
+    cqe = {};
+    cqe.res = 1;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 1);
+    REQUIRE(ret.num_buffers == 0);
+    REQUIRE(queue.size() == 3);
+
+    REQUIRE(queue.push(condy::buffer(buf[1])) == 0);
+}
+#endif
+
+TEST_CASE("test buffers - provided buffer queue usage bundle") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::detail::BundledProvidedBufferQueue queue(4, 0);
+    char buf[4][16];
+    for (int i = 0; i < 4; ++i) {
+        REQUIRE(queue.push(condy::buffer(buf[i])) == i);
+        REQUIRE(queue.size() == static_cast<size_t>(i + 1));
+    }
+
+    io_uring_cqe cqe;
+
+    // n = 40 (32, bundle)
+    cqe = {};
+    cqe.res = 32;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 0);
+    REQUIRE(ret.num_buffers == 2);
+    REQUIRE(queue.size() == 2);
+
+    REQUIRE(queue.push(condy::buffer(buf[0])) == 0);
+    REQUIRE(queue.push(condy::buffer(buf[1])) == 1);
+
+    // n = 8 + 17
+    cqe = {};
+    cqe.res = 25;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 2 << IORING_CQE_BUFFER_SHIFT; // bid = 2
+    ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 2);
+    REQUIRE(ret.num_buffers == 2);
+    REQUIRE(queue.size() == 2);
+}
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test buffers - provided buffer queue usage bundle incr") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::detail::BundledProvidedBufferQueue queue(4, IOU_PBUF_RING_INC);
+    char buf[4][16];
+    for (int i = 0; i < 4; ++i) {
+        REQUIRE(queue.push(condy::buffer(buf[i])) == i);
+        REQUIRE(queue.size() == static_cast<size_t>(i + 1));
+    }
+
+    io_uring_cqe cqe;
+
+    // n = 9 (incr)
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.bid == 0);
+    REQUIRE(ret.num_buffers == 0);
+    REQUIRE(queue.size() == 4);
+
+    // n = 21 (bundle)
+    cqe = {};
+    cqe.res = 21;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    auto ret2 = queue.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret2.bid == 0);
+    REQUIRE(ret2.num_buffers == 2);
+    REQUIRE(queue.size() == 2);
+}
+#endif
+
 TEST_CASE("test buffers - provided buffer pool init") {
     auto func = []() -> condy::Coro<void> {
         condy::ProvidedBufferPool pool(16, 16);
@@ -218,6 +368,145 @@ TEST_CASE("test buffers - provided buffer pool usage") {
 
     REQUIRE(std::memcmp(ret.data(), "test", 4) == 0);
 }
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test buffers - provided buffer pool usage incr") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::ProvidedBufferPool pool(4, 16, IOU_PBUF_RING_INC);
+    REQUIRE(pool.capacity() == (1 << 2));
+    REQUIRE(pool.buffer_size() == 16);
+
+    io_uring_cqe cqe;
+
+    // 1. n = 9
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.owns_buffer() == false);
+    REQUIRE(ret.size() == 9);
+
+    // 2. n = 16 (7, first half)
+    cqe = {};
+    cqe.res = 7;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.owns_buffer() == true);
+    REQUIRE(ret.size() == 7);
+
+    // 3. n = 16 (9, second half)
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.owns_buffer() == false);
+    REQUIRE(ret.size() == 9);
+
+    // 4. n = 1
+    cqe = {};
+    cqe.res = 1;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.owns_buffer() == false);
+    REQUIRE(ret.size() == 1);
+}
+#endif
+
+TEST_CASE("test buffers - provided buffer pool usage bundle") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::detail::BundledProvidedBufferPool pool(4, 16, 0);
+    REQUIRE(pool.capacity() == (1 << 2));
+    REQUIRE(pool.buffer_size() == 16);
+
+    io_uring_cqe cqe;
+
+    // n = 40 (32, bundle)
+    cqe = {};
+    cqe.res = 32;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.size() == 2);
+    for (size_t i = 0; i < ret.size(); ++i) {
+        REQUIRE(ret[i].owns_buffer() == true);
+        REQUIRE(ret[i].size() == 16);
+    }
+
+    // n = 8 + 17
+    cqe = {};
+    cqe.res = 25;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 2 << IORING_CQE_BUFFER_SHIFT; // bid = 2
+    auto ret2 = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret2.size() == 2);
+    for (size_t i = 0; i < ret2.size(); ++i) {
+        REQUIRE(ret2[i].owns_buffer() == true);
+        REQUIRE(ret2[i].size() == 16);
+    }
+}
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test buffers - provided buffer pool usage bundle incr") {
+    condy::Runtime runtime;
+    condy::Ring ring;
+    io_uring_params params = {};
+    ring.init(8, &params);
+
+    condy::detail::Context::current().init(&ring, &runtime);
+    auto d = condy::defer([]() { condy::detail::Context::current().reset(); });
+
+    condy::detail::BundledProvidedBufferPool pool(4, 16, IOU_PBUF_RING_INC);
+    REQUIRE(pool.capacity() == (1 << 2));
+    REQUIRE(pool.buffer_size() == 16);
+
+    io_uring_cqe cqe;
+
+    // n = 9 (incr)
+    cqe = {};
+    cqe.res = 9;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    cqe.flags |= IORING_CQE_F_BUF_MORE;
+    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret.size() == 1);
+    REQUIRE(ret[0].owns_buffer() == false);
+    REQUIRE(ret[0].size() == 9);
+
+    // n = 21
+    cqe = {};
+    cqe.res = 21;
+    cqe.flags |= IORING_CQE_F_BUFFER;
+    cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
+    auto ret2 = pool.handle_finish(cqe.res, cqe.flags);
+    REQUIRE(ret2.size() == 2);
+    REQUIRE(ret2[0].owns_buffer() == true);
+    REQUIRE(ret2[0].size() == 7);
+    REQUIRE(static_cast<char *>(ret[0].data()) + 9 == ret2[0].data());
+    REQUIRE(ret2[1].owns_buffer() == true);
+    REQUIRE(ret2[1].size() == 16);
+}
+#endif
 
 TEST_CASE("test buffers - provided buffer is also buffer") {
     condy::ProvidedBuffer buf;
