@@ -203,6 +203,12 @@ public:
      */
     ProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
         : BundledProvidedBufferQueue(capacity, flags) {}
+
+    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
+        auto result = BundledProvidedBufferQueue::handle_finish(res, flags);
+        assert(result.num_buffers <= 1);
+        return result;
+    }
 };
 
 namespace detail {
