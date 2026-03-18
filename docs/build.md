@@ -35,8 +35,9 @@ target_link_libraries(my_app PRIVATE condy)
 ```
 
 > [!NOTE]
-> - C++20 is required for coroutine support.  
-> - Condy depends on **liburing ≥ 2.3**.  
+> - C++20 is required for coroutine support.
+> - Condy depends on **liburing ≥ 2.3**.
+> - Both **GCC** and **Clang** compilers are supported.
 > - By default, Condy builds and links the bundled liburing in `third_party/liburing` (`LINK_LIBURING=ON`). If you need a specific version of liburing, you can manually check out the desired commit in that directory before building.
 > - To link against the system liburing, set `LINK_LIBURING=OFF` and install liburing manually.
 
