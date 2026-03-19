@@ -142,7 +142,7 @@ public:
             return ReturnType{0, 0};
         }
 
-        assert(res >= 0);
+        assert(res > 0);
 
         ReturnType result = {
             .bid = static_cast<uint16_t>(flags >> IORING_CQE_BUFFER_SHIFT),
@@ -151,7 +151,7 @@ public:
 
 #if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
         if (flags & IORING_CQE_F_BUF_MORE) {
-            assert(buf_lens_[result.bid] > 0);
+            assert(buf_lens_[result.bid] > static_cast<uint32_t>(res));
             buf_lens_[result.bid] -= res;
             return result;
         }
@@ -362,7 +362,7 @@ public:
             return buffers;
         }
 
-        assert(res >= 0);
+        assert(res > 0);
 
         uint16_t bid = flags >> IORING_CQE_BUFFER_SHIFT;
 
@@ -371,6 +371,7 @@ public:
             char *data = get_buffer_(bid) + partial_size_;
             buffers.emplace_back(data, res, nullptr);
             partial_size_ += res;
+            assert(partial_size_ < buffer_size_);
             return buffers;
         }
 #endif
