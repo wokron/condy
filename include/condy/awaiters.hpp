@@ -308,9 +308,11 @@ public:
     ParallelAwaiterBase(Awaiters... awaiters)
         : awaiters_(std::move(awaiters)...) {}
     template <typename ParallelAwaiter, AwaiterLike New>
-    ParallelAwaiterBase(ParallelAwaiter &&aws, New new_awaiter)
-        : awaiters_(std::tuple_cat(std::move(aws.awaiters_),
-                                   std::make_tuple(std::move(new_awaiter)))) {}
+    ParallelAwaiterBase(ParallelAwaiter &&aws, New &&new_awaiter)
+        : awaiters_(
+              std::tuple_cat(std::move(aws.awaiters_),
+                             std::make_tuple(std::forward<New>(new_awaiter)))) {
+    }
 
 public:
     HandleType *get_handle() noexcept { return &finish_handle_; }
