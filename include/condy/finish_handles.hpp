@@ -17,7 +17,6 @@
 #include <array>
 #include <cerrno>
 #include <cstddef>
-#include <limits>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -342,8 +341,8 @@ public:
     void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
-            constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
-            foreach_call_cancel_<SkipIdx>();
+            std::apply([](auto *...handles) { (handles->cancel(), ...); },
+                       handles_);
         }
     }
 
