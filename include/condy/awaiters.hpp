@@ -430,7 +430,7 @@ private:
     void foreach_register_operation_(unsigned int flags) noexcept {
         if constexpr (Idx < sizeof...(Awaiter)) {
             auto &awaiter = std::get<Idx>(Base::awaiters_);
-            if constexpr (Idx + 1 < sizeof...(Awaiter)) {
+            if constexpr (Idx < sizeof...(Awaiter) - 1) {
                 awaiter.register_operation(flags | Flags);
             } else {
                 awaiter.register_operation(flags);
