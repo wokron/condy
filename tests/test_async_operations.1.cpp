@@ -263,6 +263,289 @@ TEST_CASE("test async_operations - read incr provided buffer") {
 }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - provided buffer queue check - incr") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(9);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        char buf_storage[4][16];
+        condy::ProvidedBufferQueue buf_queue(4, IOU_PBUF_RING_INC);
+        REQUIRE(buf_queue.capacity() == 4);
+        for (size_t i = 0; i < 4; ++i) {
+            auto bid = buf_queue.push(condy::buffer(buf_storage[i]));
+            REQUIRE(bid == i);
+        }
+
+        auto [n, buf] = co_await condy::async_recv(sv[0], buf_queue, 0);
+        REQUIRE(n == 9);
+        REQUIRE(buf.bid == 0);
+        REQUIRE(buf.num_buffers == 0);
+        REQUIRE(std::memcmp(buf_storage[0], msg.data(), msg.size()) == 0);
+
+        auto msg2 = generate_data(16);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 16);
+        auto [n2, buf2] = co_await condy::async_recv(sv[0], buf_queue, 0);
+        REQUIRE(n2 == 7);
+        REQUIRE(buf2.bid == 0);
+        REQUIRE(buf2.num_buffers == 1);
+        REQUIRE(std::memcmp(buf_storage[0] + n, msg2.data(), 7) == 0);
+
+        auto [n3, buf3] = co_await condy::async_recv(sv[0], buf_queue, 0);
+        REQUIRE(n3 == 9);
+        REQUIRE(buf3.bid == 1);
+        REQUIRE(buf3.num_buffers == 0);
+        REQUIRE(std::memcmp(buf_storage[1], msg2.data() + 7, 9) == 0);
+
+        auto msg3 = generate_data(1);
+        r = ::send(sv[1], msg3.data(), msg3.size(), 0);
+        REQUIRE(r == 1);
+
+        auto [n4, buf4] = co_await condy::async_recv(sv[0], buf_queue, 0);
+        REQUIRE(n4 == 1);
+        REQUIRE(buf4.bid == 1);
+        REQUIRE(buf4.num_buffers == 0);
+        REQUIRE(std::memcmp(buf_storage[1] + 9, msg3.data(), 1) == 0);
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+TEST_CASE("test async_operations - provided buffer queue check - bundle") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(40);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        char buf_storage[4][16];
+        condy::ProvidedBufferQueue buf_queue(4);
+        REQUIRE(buf_queue.capacity() == 4);
+        for (size_t i = 0; i < 4; ++i) {
+            auto bid = buf_queue.push(condy::buffer(buf_storage[i]));
+            REQUIRE(bid == i);
+        }
+
+        auto [n, bufs] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_queue), 0);
+        REQUIRE(n == 32);
+        REQUIRE(bufs.bid == 0);
+        REQUIRE(bufs.num_buffers == 2);
+        REQUIRE(buf_queue.size() == 2);
+
+        auto msg2 = generate_data(17);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 17);
+
+        auto [n2, bufs2] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_queue), 0);
+        REQUIRE(n2 == 25);
+        REQUIRE(bufs2.bid == 2);
+        REQUIRE(bufs2.num_buffers == 2);
+
+        REQUIRE(buf_queue.size() == 0);
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - provided buffer queue check - bundle incr") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(9);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        char buf_storage[4][16];
+        condy::ProvidedBufferQueue buf_queue(4, IOU_PBUF_RING_INC);
+        REQUIRE(buf_queue.capacity() == 4);
+        for (size_t i = 0; i < 4; ++i) {
+            auto bid = buf_queue.push(condy::buffer(buf_storage[i]));
+            REQUIRE(bid == i);
+        }
+
+        auto [n, bufs] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_queue), 0);
+        REQUIRE(n == 9);
+        REQUIRE(bufs.bid == 0);
+        REQUIRE(bufs.num_buffers == 0);
+
+        auto msg2 = generate_data(21);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 21);
+        auto [n2, bufs2] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_queue), 0);
+        REQUIRE(n2 == 21);
+        REQUIRE(bufs2.bid == 0);
+        REQUIRE(bufs2.num_buffers == 2);
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - provided buffer pool check - incr") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(9);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        condy::ProvidedBufferPool buf_pool(4, 16, IOU_PBUF_RING_INC);
+        REQUIRE(buf_pool.capacity() == 4);
+        REQUIRE(buf_pool.buffer_size() == 16);
+
+        auto [n, buf] = co_await condy::async_recv(sv[0], buf_pool, 0);
+        REQUIRE(n == 9);
+        REQUIRE(buf.owns_buffer() == false);
+        REQUIRE(buf.size() == 9);
+        REQUIRE(std::memcmp(buf.data(), msg.data(), msg.size()) == 0);
+
+        auto msg2 = generate_data(16);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 16);
+        auto [n2, buf2] = co_await condy::async_recv(sv[0], buf_pool, 0);
+        REQUIRE(n2 == 7);
+        REQUIRE(buf2.owns_buffer() == true);
+        REQUIRE(buf2.size() == 7);
+        REQUIRE(std::memcmp(buf2.data(), msg2.data(), 7) == 0);
+
+        auto [n3, buf3] = co_await condy::async_recv(sv[0], buf_pool, 0);
+        REQUIRE(n3 == 9);
+        REQUIRE(buf3.owns_buffer() == false);
+        REQUIRE(buf3.size() == 9);
+        REQUIRE(std::memcmp(buf3.data(),
+                            static_cast<const char *>(buf2.data()) + 7,
+                            9) == 0);
+
+        auto msg3 = generate_data(1);
+        r = ::send(sv[1], msg3.data(), msg3.size(), 0);
+        REQUIRE(r == 1);
+
+        auto [n4, buf4] = co_await condy::async_recv(sv[0], buf_pool, 0);
+        REQUIRE(n4 == 1);
+        REQUIRE(buf4.owns_buffer() == false);
+        REQUIRE(buf4.size() == 1);
+        REQUIRE(std::memcmp(buf4.data(), msg3.data(), 1) == 0);
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
+TEST_CASE("test async_operations - provided buffer pool check - bundle") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(40);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        condy::ProvidedBufferPool buf_pool(4, 16);
+        REQUIRE(buf_pool.capacity() == 4);
+        REQUIRE(buf_pool.buffer_size() == 16);
+
+        auto [n, bufs] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
+        REQUIRE(n == 32);
+        REQUIRE(bufs.size() == 2);
+        for (size_t i = 0; i < bufs.size(); ++i) {
+            REQUIRE(bufs[i].owns_buffer() == true);
+            REQUIRE(bufs[i].size() == 16);
+        }
+
+        auto msg2 = generate_data(17);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 17);
+
+        auto [n2, bufs2] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
+        REQUIRE(n2 == 25);
+        REQUIRE(bufs2.size() == 2);
+        for (size_t i = 0; i < bufs2.size(); ++i) {
+            REQUIRE(bufs2[i].owns_buffer() == true);
+            REQUIRE(bufs2[i].size() == 16);
+        }
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 8) // >= 2.8
+TEST_CASE("test async_operations - provided buffer pool check - bundle incr") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    auto msg = generate_data(9);
+    ssize_t r = ::send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+
+    auto func = [&]() -> condy::Coro<void> {
+        condy::ProvidedBufferPool buf_pool(4, 16, IOU_PBUF_RING_INC);
+        REQUIRE(buf_pool.capacity() == 4);
+        REQUIRE(buf_pool.buffer_size() == 16);
+
+        auto [n, bufs] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
+        REQUIRE(n == 9);
+        REQUIRE(bufs.size() == 1);
+        REQUIRE(bufs[0].owns_buffer() == false);
+        REQUIRE(bufs[0].size() == 9);
+        REQUIRE(std::string_view(static_cast<const char *>(bufs[0].data()),
+                                 bufs[0].size()) == msg);
+
+        auto msg2 = generate_data(21);
+        r = ::send(sv[1], msg2.data(), msg2.size(), 0);
+        REQUIRE(r == 21);
+        auto [n2, bufs2] =
+            co_await condy::async_recv(sv[0], condy::bundled(buf_pool), 0);
+        REQUIRE(n2 == 21);
+        REQUIRE(bufs2.size() == 2);
+        REQUIRE(bufs2[0].owns_buffer() == true);
+        REQUIRE(bufs2[0].size() == 7);
+        REQUIRE(bufs2[1].owns_buffer() == true);
+        REQUIRE(bufs2[1].size() == 16);
+        std::string result;
+        result.append(static_cast<const char *>(bufs2[0].data()), 7);
+        result.append(static_cast<const char *>(bufs2[1].data()), 14);
+        REQUIRE(result == msg2);
+    };
+    condy::sync_wait(func());
+
+    close(sv[0]);
+    close(sv[1]);
+}
+#endif
+
 #if !IO_URING_CHECK_VERSION(2, 7) // >= 2.7
 TEST_CASE("test async_operations - recv bundle provided buffer") {
     int sv[2];
