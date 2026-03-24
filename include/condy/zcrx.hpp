@@ -77,53 +77,17 @@ struct ZeroCopyRxDMABufArea {
 class ZeroCopyRxBufferPool {
 public:
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
-                         const ZeroCopyRxDMABufArea &area) {
-        area_size_ = 0;
-        area_ptr_ = nullptr;
-
-        io_uring_zcrx_area_reg area_reg = {};
-        area_reg.addr = area.offset;
-        area_reg.len = area.area_size;
-        area_reg.flags = IORING_ZCRX_AREA_DMABUF;
-
-        register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
-                      sysconf(_SC_PAGESIZE));
-    }
-
+                         const ZeroCopyRxArea &area)
+        : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
-                         const ZeroCopyRxArea &area) {
-        const size_t page_size = sysconf(_SC_PAGESIZE);
+                         const ZeroCopyRxDMABufArea &area)
+        : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
 
-        if (area.area_addr == nullptr) {
-            area_size_ = align_up(area.area_size, page_size);
-            area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
-                             MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
-            if (area_ptr_ == MAP_FAILED) {
-                throw make_system_error("mmap");
-            }
-            auto d = defer([&]() { munmap(area_ptr_, area_size_); });
-
-            io_uring_zcrx_area_reg area_reg = {};
-            area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
-            area_reg.len = area_size_;
-            area_reg.flags = 0;
-
-            register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size);
-
-            d.dismiss();
-        } else {
-            // Not owned, so we don't track the size for unmapping
-            area_size_ = 0;
-            area_ptr_ = area.area_addr;
-
-            io_uring_zcrx_area_reg area_reg = {};
-            area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
-            area_reg.len = area.area_size;
-            area_reg.flags = 0;
-
-            register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size);
-        }
-    }
+    // Device-less constructor, DO NOT use this in production code if you don't know what you are doing.
+    ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxArea &area)
+        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
+    ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxDMABufArea &area)
+        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
 
     ~ZeroCopyRxBufferPool() {
         [[maybe_unused]] int r;
@@ -142,6 +106,58 @@ public:
     ZeroCopyRxBufferPool &operator=(const ZeroCopyRxBufferPool &) = delete;
     ZeroCopyRxBufferPool(ZeroCopyRxBufferPool &&) = delete;
     ZeroCopyRxBufferPool &operator=(ZeroCopyRxBufferPool &&) = delete;
+
+private:
+    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
+                         const ZeroCopyRxArea &area, uint32_t flags) {
+        const size_t page_size = sysconf(_SC_PAGESIZE);
+
+        if (area.area_addr == nullptr) {
+            area_size_ = align_up(area.area_size, page_size);
+            area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
+                             MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+            if (area_ptr_ == MAP_FAILED) {
+                throw make_system_error("mmap");
+            }
+            auto d = defer([&]() { munmap(area_ptr_, area_size_); });
+
+            io_uring_zcrx_area_reg area_reg = {};
+            area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
+            area_reg.len = area_size_;
+            area_reg.flags = 0;
+
+            register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size,
+                          flags);
+
+            d.dismiss();
+        } else {
+            // Not owned, so we don't track the size for unmapping
+            area_size_ = 0;
+            area_ptr_ = area.area_addr;
+
+            io_uring_zcrx_area_reg area_reg = {};
+            area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
+            area_reg.len = area.area_size;
+            area_reg.flags = 0;
+
+            register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size,
+                          flags);
+        }
+    }
+
+    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
+                         const ZeroCopyRxDMABufArea &area, uint32_t flags) {
+        area_size_ = 0;
+        area_ptr_ = nullptr;
+
+        io_uring_zcrx_area_reg area_reg = {};
+        area_reg.addr = area.offset;
+        area_reg.len = area.area_size;
+        area_reg.flags = IORING_ZCRX_AREA_DMABUF;
+
+        register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
+                      sysconf(_SC_PAGESIZE), flags);
+    }
 
 public:
     uint32_t zcrx_id() const noexcept { return zcrx_id_; }
@@ -181,7 +197,8 @@ public:
 
 private:
     void register_ifq_(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
-                       io_uring_zcrx_area_reg &area_reg, size_t page_size) {
+                       io_uring_zcrx_area_reg &area_reg, size_t page_size,
+                       uint32_t flags) {
         io_uring_region_desc region_reg = {};
         ring_size_ = get_refill_ring_size_(rq_entries, page_size);
         region_reg.user_addr = 0;
@@ -194,6 +211,7 @@ private:
         reg.rq_entries = rq_entries;
         reg.area_ptr = reinterpret_cast<uint64_t>(&area_reg);
         reg.region_ptr = reinterpret_cast<uint64_t>(&region_reg);
+        reg.flags = flags;
 
         register_ifq_(&reg);
     }
