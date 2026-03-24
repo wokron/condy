@@ -83,7 +83,8 @@ public:
                          const ZeroCopyRxDMABufArea &area)
         : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
 
-    // Device-less constructor, DO NOT use this in production code if you don't know what you are doing.
+    // Device-less constructor, DO NOT use this in production code if you don't
+    // know what you are doing.
     ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxArea &area)
         : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
     ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxDMABufArea &area)
@@ -213,19 +214,8 @@ private:
         reg.region_ptr = reinterpret_cast<uint64_t>(&region_reg);
         reg.flags = flags;
 
-        register_ifq_(&reg);
-    }
-
-    void register_ifq_(io_uring_zcrx_ifq_reg *reg) {
-        // NOLINTBEGIN(performance-no-int-to-ptr)
-        auto *region_reg =
-            reinterpret_cast<io_uring_region_desc *>(reg->region_ptr);
-        auto *area_reg =
-            reinterpret_cast<io_uring_zcrx_area_reg *>(reg->area_ptr);
-        // NOLINTEND(performance-no-int-to-ptr)
-
         auto *ring = detail::Context::current().ring();
-        int r = io_uring_register_ifq(ring->ring(), reg);
+        int r = io_uring_register_ifq(ring->ring(), &reg);
         if (r != 0) {
             throw make_system_error("io_uring_register_ifq", -r);
         }
@@ -233,21 +223,19 @@ private:
 
         ring_ptr_ = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
                          MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
-                         static_cast<off_t>(region_reg->mmap_offset));
+                         static_cast<off_t>(region_reg.mmap_offset));
         if (ring_ptr_ == MAP_FAILED) {
             throw make_system_error("mmap");
         }
-        rq_ring_.khead =
-            (unsigned int *)((char *)ring_ptr_ + reg->offsets.head);
-        rq_ring_.ktail =
-            (unsigned int *)((char *)ring_ptr_ + reg->offsets.tail);
+        rq_ring_.khead = (unsigned int *)((char *)ring_ptr_ + reg.offsets.head);
+        rq_ring_.ktail = (unsigned int *)((char *)ring_ptr_ + reg.offsets.tail);
         rq_ring_.rqes =
-            (struct io_uring_zcrx_rqe *)((char *)ring_ptr_ + reg->offsets.rqes);
+            (struct io_uring_zcrx_rqe *)((char *)ring_ptr_ + reg.offsets.rqes);
         rq_ring_.rq_tail = 0;
-        rq_ring_.ring_entries = reg->rq_entries;
+        rq_ring_.ring_entries = reg.rq_entries;
 
-        zcrx_id_ = reg->zcrx_id;
-        area_token_ = area_reg->rq_area_token;
+        zcrx_id_ = reg.zcrx_id;
+        area_token_ = area_reg.rq_area_token;
     }
 
     static size_t get_refill_ring_size_(uint32_t rq_entries,
