@@ -17,7 +17,6 @@
 #include <array>
 #include <cerrno>
 #include <cstddef>
-#include <limits>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -342,8 +341,8 @@ public:
     void cancel() noexcept {
         if (!canceled_) {
             canceled_ = true;
-            constexpr size_t SkipIdx = std::numeric_limits<size_t>::max();
-            foreach_call_cancel_<SkipIdx>();
+            std::apply([](auto *...handles) { (handles->cancel(), ...); },
+                       handles_);
         }
     }
 
@@ -454,27 +453,26 @@ public:
     ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
         auto r = Base::extract_result();
         auto &[order, results] = r;
-        return tuple_at_(std::move(results), order[0]);
+        return tuple_at_(results, order[0]);
     }
 
 private:
     template <size_t Idx = 0>
-    static std::variant<typename Handles::ReturnType...>
-    tuple_at_(std::tuple<typename Handles::ReturnType...> results, size_t idx) {
+    static auto tuple_at_(std::tuple<typename Handles::ReturnType...> &results,
+                          size_t idx) {
         if constexpr (Idx < sizeof...(Handles)) {
             if (idx == Idx) {
-                return std::variant<typename Handles::ReturnType...>{
-                    std::in_place_index<Idx>,
-                    std::move(std::get<Idx>(results))};
+                return ReturnType{std::in_place_index<Idx>,
+                                  std::move(std::get<Idx>(results))};
             } else {
-                return tuple_at_<Idx + 1>(std::move(results), idx);
+                return tuple_at_<Idx + 1>(results, idx);
             }
         } else {
             // Should not reach here, but we need to make compiler happy.
             // Throwing an exception will lead to wrong optimization.
             assert(false && "Index out of bounds");
-            return std::variant<typename Handles::ReturnType...>{
-                std::in_place_index<0>, std::move(std::get<0>(results))};
+            return ReturnType{std::in_place_index<0>,
+                              std::move(std::get<0>(results))};
         }
     }
 };

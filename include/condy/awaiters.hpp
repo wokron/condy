@@ -308,27 +308,30 @@ public:
     ParallelAwaiterBase(Awaiters... awaiters)
         : awaiters_(std::move(awaiters)...) {}
     template <typename ParallelAwaiter, AwaiterLike New>
-    ParallelAwaiterBase(ParallelAwaiter &&aws, New new_awaiter)
-        : awaiters_(std::tuple_cat(std::move(aws.awaiters_),
-                                   std::make_tuple(std::move(new_awaiter)))) {}
+    ParallelAwaiterBase(ParallelAwaiter &&aws, New &&new_awaiter)
+        : awaiters_(
+              std::tuple_cat(std::move(aws.awaiters_),
+                             std::make_tuple(std::forward<New>(new_awaiter)))) {
+    }
 
 public:
     HandleType *get_handle() noexcept { return &finish_handle_; }
 
     void init_finish_handle() noexcept {
-        auto handles = foreach_init_finish_handle_();
-        static_assert(std::tuple_size<decltype(handles)>::value ==
-                          sizeof...(Awaiters),
-                      "Number of handles must match number of awaiters");
         std::apply(
-            [this](auto &&...handle_ptrs) {
-                finish_handle_.init(handle_ptrs...);
+            [this](auto &&...awaiters) {
+                (awaiters.init_finish_handle(), ...);
+                finish_handle_.init(awaiters.get_handle()...);
             },
-            handles);
+            awaiters_);
     }
 
     void register_operation(unsigned int flags) noexcept {
-        foreach_register_operation_(flags);
+        std::apply(
+            [flags](auto &&...awaiters) {
+                (awaiters.register_operation(flags), ...);
+            },
+            awaiters_);
     }
 
 public:
@@ -344,26 +347,6 @@ public:
     typename Handle::ReturnType
     await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
         return finish_handle_.extract_result();
-    }
-
-private:
-    template <size_t Idx = 0> auto foreach_init_finish_handle_() noexcept {
-        if constexpr (Idx < sizeof...(Awaiters)) {
-            std::get<Idx>(awaiters_).init_finish_handle();
-            return std::tuple_cat(
-                std::make_tuple(std::get<Idx>(awaiters_).get_handle()),
-                foreach_init_finish_handle_<Idx + 1>());
-        } else {
-            return std::tuple<>();
-        }
-    }
-
-    template <size_t Idx = 0>
-    void foreach_register_operation_(unsigned int flags) noexcept {
-        if constexpr (Idx < sizeof...(Awaiters)) {
-            std::get<Idx>(awaiters_).register_operation(flags);
-            foreach_register_operation_<Idx + 1>(flags);
-        }
     }
 
 protected:
@@ -446,9 +429,12 @@ private:
     template <size_t Idx = 0>
     void foreach_register_operation_(unsigned int flags) noexcept {
         if constexpr (Idx < sizeof...(Awaiter)) {
-            std::get<Idx>(Base::awaiters_)
-                .register_operation(Idx < sizeof...(Awaiter) - 1 ? flags | Flags
-                                                                 : flags);
+            auto &awaiter = std::get<Idx>(Base::awaiters_);
+            if constexpr (Idx < sizeof...(Awaiter) - 1) {
+                awaiter.register_operation(flags | Flags);
+            } else {
+                awaiter.register_operation(flags);
+            }
             foreach_register_operation_<Idx + 1>(flags);
         }
     }
