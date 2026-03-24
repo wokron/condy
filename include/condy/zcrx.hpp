@@ -40,22 +40,22 @@ public:
     /**
      * @brief Get the data pointer of the buffer
      */
-    void *data() const { return data_; }
+    void *data() const noexcept { return data_; }
 
     /** *
      * @brief Get the size of the buffer
      */
-    size_t size() const { return size_; }
+    size_t size() const noexcept { return size_; }
 
     /**
      * @brief Reset the buffer, returning it to the pool if owned
      */
-    void reset();
+    void reset() noexcept;
 
     /**
      * @brief Check if the buffer owns a buffer from a pool.
      */
-    bool owns_buffer() const { return pool_ != nullptr; }
+    bool owns_buffer() const noexcept { return pool_ != nullptr; }
 
 private:
     void *data_ = nullptr;
@@ -68,9 +68,9 @@ public:
     // TODO: support different area types
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          size_t area_size) {
-        // TODO: align to system page size
-        area_size_ = std::bit_ceil(area_size);
-        ring_size_ = get_refill_ring_size_(rq_entries);
+        const size_t page_size = sysconf(_SC_PAGESIZE);
+        area_size_ = align_up(area_size, page_size);
+        ring_size_ = get_refill_ring_size_(rq_entries, page_size);
 
         area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
                          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
@@ -183,11 +183,11 @@ private:
         area_token_ = area_reg->rq_area_token;
     }
 
-    static size_t get_refill_ring_size_(uint32_t rq_entries) noexcept {
-        constexpr size_t page_size = 4096; // TODO: get system page size
+    static size_t get_refill_ring_size_(uint32_t rq_entries,
+                                        size_t page_size) noexcept {
         size_t ring_size = rq_entries * sizeof(io_uring_zcrx_rqe);
         ring_size += page_size;
-        ring_size = std::bit_ceil(ring_size);
+        ring_size = align_up(ring_size, page_size);
         return ring_size;
     }
 
@@ -218,7 +218,7 @@ private:
     uint64_t area_token_;
 };
 
-inline void ZeroCopyRxBuffer::reset() {
+inline void ZeroCopyRxBuffer::reset() noexcept {
     if (pool_ != nullptr) {
         pool_->add_buffer_back(data_, size_);
     }
