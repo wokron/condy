@@ -4,6 +4,7 @@
 #include "condy/condy_uring.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
+#include "condy/utils.hpp"
 #include <utility>
 
 namespace condy {
@@ -67,13 +68,14 @@ public:
     // TODO: support different area types
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          size_t area_size) {
-        area_size_ = area_size;
+        // TODO: align to system page size
+        area_size_ = std::bit_ceil(area_size);
         ring_size_ = get_refill_ring_size_(rq_entries);
 
         area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
                          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (area_ptr_ == MAP_FAILED) {
-            throw std::bad_alloc();
+            throw make_system_error("mmap");
         }
 
         io_uring_region_desc region_reg = {};
@@ -112,9 +114,9 @@ public:
     ZeroCopyRxBufferPool &operator=(ZeroCopyRxBufferPool &&) = delete;
 
 public:
-    uint32_t zcrx_id() const { return zcrx_id_; }
+    uint32_t zcrx_id() const noexcept { return zcrx_id_; }
 
-    ZeroCopyRxBuffer handle_finish(io_uring_cqe *cqe) {
+    ZeroCopyRxBuffer handle_finish(io_uring_cqe *cqe) noexcept {
         if (cqe->res < 0) {
             return ZeroCopyRxBuffer();
         }
@@ -126,8 +128,18 @@ public:
         return ZeroCopyRxBuffer(data, size, this);
     }
 
-    void add_buffer_back(void *ptr, size_t size) {
-        // TODO: check refill queue full
+    void add_buffer_back(void *ptr, size_t size) noexcept {
+        if (rq_nr_queued_() == rq_ring_.ring_entries) {
+            // Flush the refill queue
+            auto *ring = detail::Context::current().ring();
+            zcrx_ctrl ctrl = {};
+            ctrl.zcrx_id = zcrx_id_;
+            ctrl.op = ZCRX_CTRL_FLUSH_RQ;
+            [[maybe_unused]] int r =
+                io_uring_register_zcrx_ctrl_(ring->ring(), &ctrl);
+            assert(r == 0);
+        }
+        assert(rq_nr_queued_() < rq_ring_.ring_entries);
         io_uring_zcrx_rqe *rqe;
         unsigned rq_mask = rq_ring_.ring_entries - 1;
         rqe = &rq_ring_.rqes[rq_ring_.rq_tail & rq_mask];
@@ -156,7 +168,7 @@ private:
                          MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
                          static_cast<off_t>(region_reg->mmap_offset));
         if (ring_ptr_ == MAP_FAILED) {
-            throw std::bad_alloc();
+            throw make_system_error("mmap");
         }
         rq_ring_.khead =
             (unsigned int *)((char *)ring_ptr_ + reg->offsets.head);
@@ -171,12 +183,29 @@ private:
         area_token_ = area_reg->rq_area_token;
     }
 
-    static size_t get_refill_ring_size_(uint32_t rq_entries) {
+    static size_t get_refill_ring_size_(uint32_t rq_entries) noexcept {
         constexpr size_t page_size = 4096; // TODO: get system page size
         size_t ring_size = rq_entries * sizeof(io_uring_zcrx_rqe);
         ring_size += page_size;
         ring_size = std::bit_ceil(ring_size);
         return ring_size;
+    }
+
+    size_t rq_nr_queued_() const noexcept {
+        return rq_ring_.rq_tail - io_uring_smp_load_acquire(rq_ring_.khead);
+    }
+
+    static int io_uring_register_zcrx_ctrl_(struct io_uring *ring,
+                                            struct zcrx_ctrl *ctrl) noexcept {
+        unsigned int opcode = IORING_REGISTER_ZCRX_CTRL;
+        int fd;
+        if (ring->int_flags & 1) {
+            opcode |= IORING_REGISTER_USE_REGISTERED_RING;
+            fd = ring->enter_ring_fd;
+        } else {
+            fd = ring->ring_fd;
+        }
+        return io_uring_register(fd, opcode, ctrl, 0);
     }
 
 private:
