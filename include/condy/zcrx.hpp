@@ -63,45 +63,57 @@ private:
     ZeroCopyRxBufferPool *pool_ = nullptr;
 };
 
+struct ZeroCopyRxDMABufArea {
+    int dmabuf_fd;
+    size_t offset;
+    size_t area_size;
+};
+
 class ZeroCopyRxBufferPool {
 public:
-    // TODO: support different area types
+    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
+                         const ZeroCopyRxDMABufArea &area) {
+        area_size_ = 0;
+        area_ptr_ = nullptr;
+
+        io_uring_zcrx_area_reg area_reg = {};
+        area_reg.addr = area.offset;
+        area_reg.len = area.area_size;
+        area_reg.flags = IORING_ZCRX_AREA_DMABUF;
+
+        register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
+                      sysconf(_SC_PAGESIZE));
+    }
+
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          size_t area_size) {
         const size_t page_size = sysconf(_SC_PAGESIZE);
-        area_size_ = align_up(area_size, page_size);
-        ring_size_ = get_refill_ring_size_(rq_entries, page_size);
 
+        area_size_ = align_up(area_size, page_size);
         area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
                          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (area_ptr_ == MAP_FAILED) {
             throw make_system_error("mmap");
         }
+        auto d = defer([&]() { munmap(area_ptr_, area_size_); });
 
-        io_uring_region_desc region_reg = {};
-        region_reg.user_addr = 0;
-        region_reg.size = ring_size_;
-        region_reg.flags = 0;
         io_uring_zcrx_area_reg area_reg = {};
         area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
         area_reg.len = area_size_;
         area_reg.flags = 0;
 
-        io_uring_zcrx_ifq_reg reg = {};
-        reg.if_idx = if_idx;
-        reg.if_rxq = if_rxq;
-        reg.rq_entries = rq_entries;
-        reg.area_ptr = reinterpret_cast<uint64_t>(&area_reg);
-        reg.region_ptr = reinterpret_cast<uint64_t>(&region_reg);
+        register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size);
 
-        register_ifq_(&reg);
+        d.dismiss();
     }
 
     ~ZeroCopyRxBufferPool() {
         [[maybe_unused]] int r;
-        assert(area_ptr_ != nullptr);
-        r = munmap(area_ptr_, area_size_);
-        assert(r == 0);
+        if (area_size_ > 0) {
+            assert(area_ptr_ != nullptr);
+            r = munmap(area_ptr_, area_size_);
+            assert(r == 0);
+        }
         assert(ring_ptr_ != nullptr);
         r = munmap(ring_ptr_, ring_size_);
         assert(r == 0);
@@ -123,7 +135,7 @@ public:
         io_uring_zcrx_cqe *rcqe =
             reinterpret_cast<io_uring_zcrx_cqe *>(cqe + 1);
         void *data = static_cast<char *>(area_ptr_) +
-                     (rcqe->off & ~~IORING_ZCRX_AREA_MASK);
+                     (rcqe->off & ~IORING_ZCRX_AREA_MASK);
         size_t size = static_cast<size_t>(cqe->res);
         return ZeroCopyRxBuffer(data, size, this);
     }
@@ -150,6 +162,24 @@ public:
     }
 
 private:
+    void register_ifq_(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
+                       io_uring_zcrx_area_reg &area_reg, size_t page_size) {
+        io_uring_region_desc region_reg = {};
+        ring_size_ = get_refill_ring_size_(rq_entries, page_size);
+        region_reg.user_addr = 0;
+        region_reg.size = ring_size_;
+        region_reg.flags = 0;
+
+        io_uring_zcrx_ifq_reg reg = {};
+        reg.if_idx = if_idx;
+        reg.if_rxq = if_rxq;
+        reg.rq_entries = rq_entries;
+        reg.area_ptr = reinterpret_cast<uint64_t>(&area_reg);
+        reg.region_ptr = reinterpret_cast<uint64_t>(&region_reg);
+
+        register_ifq_(&reg);
+    }
+
     void register_ifq_(io_uring_zcrx_ifq_reg *reg) {
         // NOLINTBEGIN(performance-no-int-to-ptr)
         auto *region_reg =
@@ -163,6 +193,7 @@ private:
         if (r != 0) {
             throw make_system_error("io_uring_register_ifq", -r);
         }
+        // TODO: unregister ifq if any exception
 
         ring_ptr_ = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
                          MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
