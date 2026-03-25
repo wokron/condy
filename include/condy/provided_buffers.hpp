@@ -236,6 +236,7 @@ public:
           pool_(std::exchange(other.pool_, nullptr)) {}
     ProvidedBuffer &operator=(ProvidedBuffer &&other) noexcept {
         if (this != &other) {
+            reset();
             data_ = std::exchange(other.data_, nullptr);
             size_ = std::exchange(other.size_, 0);
             pool_ = std::exchange(other.pool_, nullptr);
