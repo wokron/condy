@@ -64,14 +64,14 @@ private:
 };
 
 struct ZeroCopyRxArea {
-    void *area_addr = nullptr;
-    size_t area_size;
+    void *addr = nullptr;
+    size_t size;
 };
 
 struct ZeroCopyRxDMABufArea {
     int dmabuf_fd;
     size_t offset;
-    size_t area_size;
+    size_t size;
 };
 
 class ZeroCopyRxBufferPool {
@@ -92,7 +92,7 @@ public:
 
         io_uring_zcrx_area_reg area_reg = {};
         area_reg.addr = area.offset;
-        area_reg.len = area.area_size;
+        area_reg.len = area.size;
         area_reg.flags = IORING_ZCRX_AREA_DMABUF;
 
         register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
@@ -122,8 +122,8 @@ private:
                          const ZeroCopyRxArea &area, uint32_t flags) {
         const size_t page_size = sysconf(_SC_PAGESIZE);
 
-        if (area.area_addr == nullptr) {
-            area_size_ = align_up(area.area_size, page_size);
+        if (area.addr == nullptr) {
+            area_size_ = align_up(area.size, page_size);
             area_ptr_ = mmap(nullptr, area_size_, PROT_READ | PROT_WRITE,
                              MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
             if (area_ptr_ == MAP_FAILED) {
@@ -143,11 +143,11 @@ private:
         } else {
             // Not owned, so we don't track the size for unmapping
             area_size_ = 0;
-            area_ptr_ = area.area_addr;
+            area_ptr_ = area.addr;
 
             io_uring_zcrx_area_reg area_reg = {};
             area_reg.addr = reinterpret_cast<uint64_t>(area_ptr_);
-            area_reg.len = area.area_size;
+            area_reg.len = area.size;
             area_reg.flags = 0;
 
             register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size,
@@ -216,9 +216,9 @@ private:
         }
         // TODO: unregister ifq if any exception
 
-        void* ring_ptr = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
-                         MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
-                         static_cast<off_t>(region_reg.mmap_offset));
+        void *ring_ptr = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
+                              static_cast<off_t>(region_reg.mmap_offset));
         if (ring_ptr == MAP_FAILED) {
             throw make_system_error("mmap");
         }
