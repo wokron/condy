@@ -195,6 +195,7 @@ private:
     void register_ifq_(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                        io_uring_zcrx_area_reg &area_reg, size_t page_size,
                        uint32_t flags) {
+        rq_entries = std::bit_ceil(rq_entries);
         io_uring_region_desc region_reg = {};
         ring_size_ = get_refill_ring_size_(rq_entries, page_size);
         region_reg.user_addr = 0;
