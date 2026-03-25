@@ -79,16 +79,25 @@ public:
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          const ZeroCopyRxArea &area)
         : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
-    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
-                         const ZeroCopyRxDMABufArea &area)
-        : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
 
     // Device-less constructor, DO NOT use this in production code if you don't
     // know what you are doing.
     ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxArea &area)
         : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
-    ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxDMABufArea &area)
-        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
+
+    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
+                         const ZeroCopyRxDMABufArea &area) {
+        area_size_ = 0;
+        area_ptr_ = nullptr;
+
+        io_uring_zcrx_area_reg area_reg = {};
+        area_reg.addr = area.offset;
+        area_reg.len = area.area_size;
+        area_reg.flags = IORING_ZCRX_AREA_DMABUF;
+
+        register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
+                      sysconf(_SC_PAGESIZE), 0);
+    }
 
     ~ZeroCopyRxBufferPool() {
         [[maybe_unused]] int r;
@@ -144,20 +153,6 @@ private:
             register_ifq_(if_idx, if_rxq, rq_entries, area_reg, page_size,
                           flags);
         }
-    }
-
-    ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
-                         const ZeroCopyRxDMABufArea &area, uint32_t flags) {
-        area_size_ = 0;
-        area_ptr_ = nullptr;
-
-        io_uring_zcrx_area_reg area_reg = {};
-        area_reg.addr = area.offset;
-        area_reg.len = area.area_size;
-        area_reg.flags = IORING_ZCRX_AREA_DMABUF;
-
-        register_ifq_(if_idx, if_rxq, rq_entries, area_reg,
-                      sysconf(_SC_PAGESIZE), flags);
     }
 
 public:
