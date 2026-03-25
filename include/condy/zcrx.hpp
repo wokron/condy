@@ -176,19 +176,13 @@ public:
     }
 
     void add_buffer_back(void *ptr, size_t size) noexcept {
-        if (rq_nr_queued_() == rq_ring_.ring_entries) {
-            // Flush the refill queue
-            flush_rq_();
-        }
-        assert(rq_nr_queued_() < rq_ring_.ring_entries);
-        io_uring_zcrx_rqe *rqe;
-        unsigned rq_mask = rq_ring_.ring_entries - 1;
-        rqe = &rq_ring_.rqes[rq_ring_.rq_tail & rq_mask];
-        rqe->off = (static_cast<char *>(ptr) - static_cast<char *>(area_ptr_)) |
-                   area_token_;
-        rqe->len = static_cast<uint32_t>(size);
-        io_uring_smp_store_release(rq_ring_.ktail, ++rq_ring_.rq_tail);
-        if (device_less_) [[unlikely]] {
+        if (!device_less_) [[likely]] {
+            if (rq_nr_queued_() == rq_ring_.ring_entries) {
+                flush_rq_();
+            }
+            rq_enqueue_(ptr, size);
+        } else {
+            rq_enqueue_(ptr, size);
             flush_rq_();
         }
     }
@@ -260,6 +254,17 @@ private:
             fd = ring->ring_fd;
         }
         return io_uring_register(fd, opcode, ctrl, 0);
+    }
+
+    void rq_enqueue_(void *ptr, size_t size) noexcept {
+        assert(rq_nr_queued_() < rq_ring_.ring_entries);
+        io_uring_zcrx_rqe *rqe;
+        unsigned rq_mask = rq_ring_.ring_entries - 1;
+        rqe = &rq_ring_.rqes[rq_ring_.rq_tail & rq_mask];
+        rqe->off = (static_cast<char *>(ptr) - static_cast<char *>(area_ptr_)) |
+                   area_token_;
+        rqe->len = static_cast<uint32_t>(size);
+        io_uring_smp_store_release(rq_ring_.ktail, ++rq_ring_.rq_tail);
     }
 
     void flush_rq_() noexcept {
