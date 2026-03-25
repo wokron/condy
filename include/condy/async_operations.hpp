@@ -706,9 +706,9 @@ inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
 
 namespace detail {
 
-inline void prep_recv_zc_multishot(io_uring_sqe *sqe, int fd, size_t len,
+inline void prep_recv_zc_multishot(io_uring_sqe *sqe, int fd,
                                    uint32_t zcrx_id) {
-    io_uring_prep_rw(IORING_OP_RECV_ZC, sqe, fd, nullptr, len, 0);
+    io_uring_prep_rw(IORING_OP_RECV_ZC, sqe, fd, nullptr, 0, 0);
     sqe->ioprio |= IORING_RECV_MULTISHOT;
     sqe->zcrx_ifq_idx = zcrx_id;
 }
@@ -717,13 +717,13 @@ inline void prep_recv_zc_multishot(io_uring_sqe *sqe, int fd, size_t len,
 
 // TODO: Consider the function signature later...
 template <FdLike Fd, typename MultiShotFunc>
-inline auto async_recv_zc_multishot(Fd fd, size_t len,
-                                    ZeroCopyRxBufferPool &pool,
-                                    MultiShotFunc &&func) {
+inline auto async_recv_multishot(Fd fd, ZeroCopyRxBufferPool &pool,
+                                 [[maybe_unused]] int flags,
+                                 MultiShotFunc &&func) {
     auto zcrx_id = pool.zcrx_id();
     auto prep_func = [=](Ring *ring) {
         auto *sqe = ring->get_sqe();
-        detail::prep_recv_zc_multishot(sqe, fd, len, zcrx_id);
+        detail::prep_recv_zc_multishot(sqe, fd, zcrx_id);
         return sqe;
     };
     auto op = build_multishot_op_awaiter<ZeroCopyRxCQEHandler>(

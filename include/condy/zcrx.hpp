@@ -9,6 +9,7 @@
 
 namespace condy {
 
+// TODO: Maybe we need greater version requirements here
 #if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
 
 class ZeroCopyRxBufferPool;
@@ -24,6 +25,7 @@ public:
           pool_(std::exchange(other.pool_, nullptr)) {}
     ZeroCopyRxBuffer &operator=(ZeroCopyRxBuffer &&other) noexcept {
         if (this != &other) {
+            reset();
             data_ = std::exchange(other.data_, nullptr);
             size_ = std::exchange(other.size_, 0);
             pool_ = std::exchange(other.pool_, nullptr);
@@ -83,7 +85,10 @@ public:
     // Device-less constructor, DO NOT use this in production code if you don't
     // know what you are doing.
     ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxArea &area)
-        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {}
+        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {
+        // TODO: flags should be an enum class
+        device_less_ = true;
+    }
 
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          const ZeroCopyRxDMABufArea &area) {
@@ -173,13 +178,7 @@ public:
     void add_buffer_back(void *ptr, size_t size) noexcept {
         if (rq_nr_queued_() == rq_ring_.ring_entries) {
             // Flush the refill queue
-            auto *ring = detail::Context::current().ring();
-            zcrx_ctrl ctrl = {};
-            ctrl.zcrx_id = zcrx_id_;
-            ctrl.op = ZCRX_CTRL_FLUSH_RQ;
-            [[maybe_unused]] int r =
-                io_uring_register_zcrx_ctrl_(ring->ring(), &ctrl);
-            assert(r == 0);
+            flush_rq_();
         }
         assert(rq_nr_queued_() < rq_ring_.ring_entries);
         io_uring_zcrx_rqe *rqe;
@@ -189,6 +188,9 @@ public:
                    area_token_;
         rqe->len = static_cast<uint32_t>(size);
         io_uring_smp_store_release(rq_ring_.ktail, ++rq_ring_.rq_tail);
+        if (device_less_) [[unlikely]] {
+            flush_rq_();
+        }
     }
 
 private:
@@ -260,6 +262,16 @@ private:
         return io_uring_register(fd, opcode, ctrl, 0);
     }
 
+    void flush_rq_() noexcept {
+        auto *ring = detail::Context::current().ring();
+        zcrx_ctrl ctrl = {};
+        ctrl.zcrx_id = zcrx_id_;
+        ctrl.op = ZCRX_CTRL_FLUSH_RQ;
+        [[maybe_unused]] int r =
+            io_uring_register_zcrx_ctrl_(ring->ring(), &ctrl);
+        assert(r == 0);
+    }
+
 private:
     void *area_ptr_;
     size_t area_size_;
@@ -267,6 +279,7 @@ private:
     io_uring_zcrx_rq rq_ring_;
     uint32_t zcrx_id_;
     uint64_t area_token_;
+    bool device_less_ = false;
 };
 
 inline void ZeroCopyRxBuffer::reset() noexcept {

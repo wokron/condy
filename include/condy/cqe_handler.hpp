@@ -133,14 +133,14 @@ public:
 
     ZeroCopyRxCQEHandler(ZeroCopyRxBufferPool *pool) : pool_(pool) {}
 
-    void handle_cqe(io_uring_cqe *cqe) {
+    void handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for zero-copy RX operations");
         result_.first = cqe->res;
         result_.second = pool_->handle_finish(cqe);
     }
 
-    ReturnType extract_result() { return std::move(result_); }
+    ReturnType extract_result() noexcept { return std::move(result_); }
 
 private:
     ReturnType result_;
