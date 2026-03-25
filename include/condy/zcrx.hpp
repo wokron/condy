@@ -106,8 +106,8 @@ public:
             r = munmap(area_ptr_, area_size_);
             assert(r == 0);
         }
-        assert(ring_ptr_ != nullptr);
-        r = munmap(ring_ptr_, ring_size_);
+        assert(rq_ring_.ring_ptr != nullptr);
+        r = munmap(rq_ring_.ring_ptr, ring_size_);
         assert(r == 0);
         // TODO: Unregister ifq
     }
@@ -216,18 +216,19 @@ private:
         }
         // TODO: unregister ifq if any exception
 
-        ring_ptr_ = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
+        void* ring_ptr = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE,
                          MAP_SHARED | MAP_POPULATE, ring->ring()->ring_fd,
                          static_cast<off_t>(region_reg.mmap_offset));
-        if (ring_ptr_ == MAP_FAILED) {
+        if (ring_ptr == MAP_FAILED) {
             throw make_system_error("mmap");
         }
-        rq_ring_.khead = (unsigned int *)((char *)ring_ptr_ + reg.offsets.head);
-        rq_ring_.ktail = (unsigned int *)((char *)ring_ptr_ + reg.offsets.tail);
+        rq_ring_.khead = (unsigned int *)((char *)ring_ptr + reg.offsets.head);
+        rq_ring_.ktail = (unsigned int *)((char *)ring_ptr + reg.offsets.tail);
         rq_ring_.rqes =
-            (struct io_uring_zcrx_rqe *)((char *)ring_ptr_ + reg.offsets.rqes);
+            (struct io_uring_zcrx_rqe *)((char *)ring_ptr + reg.offsets.rqes);
         rq_ring_.rq_tail = 0;
         rq_ring_.ring_entries = reg.rq_entries;
+        rq_ring_.ring_ptr = ring_ptr;
 
         zcrx_id_ = reg.zcrx_id;
         area_token_ = area_reg.rq_area_token;
@@ -261,7 +262,6 @@ private:
 private:
     void *area_ptr_;
     size_t area_size_;
-    void *ring_ptr_;
     size_t ring_size_;
     io_uring_zcrx_rq rq_ring_;
     uint32_t zcrx_id_;
