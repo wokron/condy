@@ -16,7 +16,7 @@ condy::Coro<void> producer_task(condy::Channel<int> &channel,
 condy::Coro<void> consumer_task(condy::Channel<int> &channel,
                                 size_t num_messages) {
     for (size_t i = 0; i < num_messages; ++i) {
-        auto value = co_await channel.pop();
+        auto [r, value] = co_await channel.pop();
         if (value != static_cast<int>(i)) {
             std::cerr << "Data corruption detected!\n";
         }

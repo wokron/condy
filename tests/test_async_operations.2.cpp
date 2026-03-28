@@ -827,9 +827,9 @@ TEST_CASE("test async_operations - test read - multishot") {
         REQUIRE(n == -ENOBUFS);
         REQUIRE(count == 2);
 
-        auto tmp = co_await channel.pop();
+        auto [r, tmp] = co_await channel.pop();
         tmp.reset(); // Release the buffer back to the pool
-        tmp = co_await channel.pop();
+        std::tie(r, tmp) = co_await channel.pop();
         tmp.reset(); // Release the buffer back to the pool
 
         auto [n2, buf2] = co_await condy::async_read_multishot(
