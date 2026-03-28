@@ -21,13 +21,13 @@ TEST_CASE("test channel - try push and pop") {
     REQUIRE(channel.capacity() == 2);
     REQUIRE(channel.size() == 0);
 
-    REQUIRE(channel.try_push(1) == true);
+    REQUIRE(channel.try_push(1) == 0);
     REQUIRE(channel.size() == 1);
 
-    REQUIRE(channel.try_push(2) == true);
+    REQUIRE(channel.try_push(2) == 0);
     REQUIRE(channel.size() == 2);
 
-    REQUIRE(channel.try_push(3) == false);
+    REQUIRE(channel.try_push(3) == -EAGAIN);
     REQUIRE(channel.size() == 2);
 
     auto item1 = channel.try_pop();
@@ -48,10 +48,10 @@ TEST_CASE("test channel - try push conditonal move") {
     std::unique_ptr<int> item1 = std::make_unique<int>(42);
     std::unique_ptr<int> item2 = std::make_unique<int>(43);
 
-    REQUIRE(channel.try_push(std::move(item1)) == true);
+    REQUIRE(channel.try_push(std::move(item1)) == 0);
     REQUIRE(item1 == nullptr); // item1 should be moved
 
-    REQUIRE(channel.try_push(std::move(item2)) == false);
+    REQUIRE(channel.try_push(std::move(item2)) == -EAGAIN);
     REQUIRE(item2 != nullptr); // item2 should not be moved
 }
 
@@ -198,10 +198,10 @@ TEST_CASE("test channel - wait two channel") {
 
     REQUIRE(!finished);
 
-    REQUIRE(ch1.try_push(42));
+    REQUIRE(ch1.try_push(42) == 0);
     REQUIRE(!finished);
 
-    REQUIRE(ch2.try_push(84));
+    REQUIRE(ch2.try_push(84) == 0);
     t.join();
     REQUIRE(finished);
 }
@@ -234,7 +234,7 @@ TEST_CASE("test channel - channel cancel pop") {
     });
 
     REQUIRE(!finished);
-    REQUIRE(ch2.try_push(42));
+    REQUIRE(ch2.try_push(42) == 0);
 
     t.join();
     REQUIRE(finished);
@@ -268,8 +268,8 @@ TEST_CASE("test channel - channel cancel push") {
 TEST_CASE("test channel - move only type") {
     condy::Channel<std::unique_ptr<int>> channel(2);
 
-    REQUIRE(channel.try_push(std::make_unique<int>(42)));
-    REQUIRE(channel.try_push(std::make_unique<int>(43)));
+    REQUIRE(channel.try_push(std::make_unique<int>(42)) == 0);
+    REQUIRE(channel.try_push(std::make_unique<int>(43)) == 0);
 
     auto item = channel.try_pop();
     REQUIRE((item.has_value() && **item == 42));
@@ -418,10 +418,10 @@ TEST_CASE("test channel - push to closed channel") {
 
     channel.push_close();
 
-    REQUIRE_THROWS(channel.try_push(42));
+    REQUIRE(channel.try_push(42) == -EPIPE);
 
     auto func = [&]() -> condy::Coro<void> {
-        REQUIRE_THROWS(co_await channel.push(42));
+        REQUIRE(co_await channel.push(42) == -EPIPE);
     };
 
     auto task = condy::co_spawn(runtime, func());
@@ -446,7 +446,7 @@ TEST_CASE("test channel - push to closed channel with awaiters") {
 
         auto task = condy::co_spawn(close_func());
 
-        REQUIRE_THROWS(co_await channel.push(2));
+        REQUIRE(co_await channel.push(2) == -EPIPE);
 
         co_await std::move(task);
     };
@@ -477,7 +477,7 @@ TEST_CASE("test channel - destruct items") {
 
         for (size_t i = 0; i < 5; ++i) {
             REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
-                new int(static_cast<int>(i)))));
+                        new int(static_cast<int>(i)))) == 0);
         }
 
         REQUIRE(int_deleter::counter == 0);
@@ -492,7 +492,7 @@ TEST_CASE("test channel - destruct items after close") {
 
         for (size_t i = 0; i < 5; ++i) {
             REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
-                new int(static_cast<int>(i + 1)))));
+                        new int(static_cast<int>(i + 1)))) == 0);
         }
 
         channel.push_close();
@@ -597,9 +597,9 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
 TEST_CASE("test channel - force push") {
     condy::Channel<int> channel(2);
 
-    REQUIRE(channel.try_push(1) == true);
-    REQUIRE(channel.try_push(2) == true);
-    REQUIRE(channel.try_push(3) == false);
+    REQUIRE(channel.try_push(1) == 0);
+    REQUIRE(channel.try_push(2) == 0);
+    REQUIRE(channel.try_push(3) == -EAGAIN);
 
     for (size_t i = 0; i < 10; i++) {
         channel.force_push(static_cast<int>(i + 3));

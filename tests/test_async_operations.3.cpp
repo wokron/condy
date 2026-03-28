@@ -733,7 +733,7 @@ TEST_CASE("test async_operations - test recv - multishot") {
                 REQUIRE(n == 256);
                 actual.append(static_cast<char *>(buf.data()), n);
                 count++;
-                REQUIRE(channel.try_push(std::move(buf)));
+                REQUIRE(channel.try_push(std::move(buf)) == 0);
             });
         REQUIRE(n == -ENOBUFS);
         REQUIRE(count == 2);
