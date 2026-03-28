@@ -77,7 +77,8 @@ public:
     /**
      * @brief Try to pop an item from the channel.
      * @return std::pair<int, T> 0 and the popped item if successful; -EPIPE if
-     * the channel is closed; -EAGAIN if the channel is empty.
+     * the channel is closed and no more items can be popped; -EAGAIN if the
+     * channel is empty.
      */
     std::pair<int, T> try_pop() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -175,8 +176,9 @@ public:
     /**
      * @brief Close the channel.
      * @details This function closes the channel. After the channel is closed,
-     * no more items can be pushed into the channel. All pending and future
-     * push/pop operations will return -EPIPE.
+     * no more items can be pushed into the channel. All pending and future push
+     * operations will fail with -EPIPE. All pending pop operations will fail
+     * with -EPIPE if there are no more items to pop.
      * @note This function is idempotent.
      */
     void push_close() noexcept {
@@ -514,8 +516,9 @@ private:
 
 /**
  * @brief Awaiter for popping an item from the channel.
- * @return The popped item after awaiting. If the channel is closed, a
- * default-constructed T will be returned.
+ * @return std::pair<int, T> The result of the pop operation. 0 and the popped
+ * item if successful; -EPIPE if the channel is closed; -ECANCELED if the pop
+ * operation was cancelled.
  */
 template <typename T, size_t N> struct Channel<T, N>::PopAwaiter {
 public:
