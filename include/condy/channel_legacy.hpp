@@ -1,6 +1,7 @@
 /**
- * @file channel.hpp
+ * @file channel_legacy.hpp
  * @brief Thread-safe channel type for communication and synchronization.
+ * (Legacy version with different error handling)
  * @details This file defines a thread-safe channel type, which can be used for
  * communication and synchronization across different Runtimes.
  */
@@ -13,7 +14,6 @@
 #include "condy/runtime.hpp"
 #include "condy/utils.hpp"
 #include <bit>
-#include <cerrno>
 #include <coroutine>
 #include <cstddef>
 #include <new>
@@ -22,8 +22,11 @@
 
 namespace condy {
 
+namespace legacy {
+
 /**
- * @brief Thread-safe bounded channel for communication and synchronization.
+ * @brief [Deprecated] Thread-safe bounded channel for communication and
+ * synchronization.
  * @tparam T Type of the items transmitted through the channel.
  * @tparam N When the capacity is less than or equal to N, the channel uses
  * stack storage for buffering; otherwise, it uses heap storage.
@@ -33,11 +36,11 @@ namespace condy {
  * operations that can be awaited in coroutines. The internal implementation
  * utilizes msg_ring operations of io_uring for efficient cross-runtime
  * notifications.
- * @note Legacy version with different error handling is available in
- * condy::legacy::Channel, which is deprecated and will be removed in future
- * versions.
+ * @deprecated This class is deprecated. Please use condy::Channel instead,
+ * which has a more consistent error handling strategy.
  */
-template <typename T, size_t N = 2> class Channel {
+template <typename T, size_t N = 2>
+class [[deprecated("Use condy::Channel instead")]] Channel {
 public:
     /**
      * @brief Construct a new Channel object
@@ -61,38 +64,28 @@ public:
     /**
      * @brief Try to push an item into the channel.
      * @param item The item to be pushed into the channel.
-     * @return int 0 if the item was successfully pushed; -EPIPE if the channel
-     * is closed; -EAGAIN if the channel is full.
+     * @return bool True if the item was successfully pushed.
+     * @throws std::logic_error If the channel is closed.
      */
     template <typename U>
         requires std::is_same_v<std::decay_t<U>, T>
-    int try_push(U &&item) noexcept {
+    bool try_push(U &&item) {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (closed_) {
-            return -EPIPE;
+        if (closed_) [[unlikely]] {
+            throw std::logic_error("Push to closed channel");
         }
-        if (try_push_inner_(std::forward<U>(item))) {
-            return 0;
-        }
-        return -EAGAIN;
+        return try_push_inner_(std::forward<U>(item));
     }
 
     /**
      * @brief Try to pop an item from the channel.
-     * @return std::pair<int, T> 0 and the popped item if successful; -EPIPE if
-     * the channel is closed and no more items can be popped; -EAGAIN if the
+     * @return std::optional<T> The popped item if successful; A
+     * default-constructed T if the channel is closed; std::nullopt if the
      * channel is empty.
      */
-    std::pair<int, T> try_pop() noexcept {
+    std::optional<T> try_pop() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto item = try_pop_inner_();
-        if (item.has_value()) {
-            return {0, std::move(item.value())};
-        } else if (closed_) {
-            return {-EPIPE, T{}};
-        } else {
-            return {-EAGAIN, T{}};
-        }
+        return try_pop_inner_();
     }
 
     void force_push(T item) noexcept {
@@ -123,9 +116,8 @@ public:
      * @return PushAwaiter Awaiter object for the push operation.
      * @details This function attempts to push the given item into the channel.
      * If the channel is full, the coroutine will be suspended until space
-     * becomes available. If the channel is closed, the push operation will
-     * return -EPIPE. If this operation is cancelled while waiting, it will
-     * return -ECANCELED.
+     * becomes available. If the channel is closed, a std::logic_error will be
+     * thrown.
      * @warning The item will be moved during the push operation. If the push
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
@@ -138,9 +130,8 @@ public:
      * @return PopAwaiter Awaiter object for the pop operation.
      * @details This function attempts to pop an item from the channel. If the
      * channel is empty, the coroutine will be suspended until an item becomes
-     * available. If the channel is closed, the pop operation will return
-     * -EPIPE. If this operation is cancelled while waiting, it will return
-     * -ECANCELED.
+     * available. If the channel is closed, a default-constructed T will be
+     * returned.
      */
     PopAwaiter pop() noexcept { return {*this}; }
 
@@ -179,9 +170,9 @@ public:
     /**
      * @brief Close the channel.
      * @details This function closes the channel. After the channel is closed,
-     * no more items can be pushed into the channel. All pending and future push
-     * operations will fail with -EPIPE. All pending pop operations will fail
-     * with -EPIPE if there are no more items to pop.
+     * no more items can be pushed into the channel. All pending and future pop
+     * operations will return default-constructed T values. All pending push
+     * operations will throw std::logic_error.
      * @note This function is idempotent.
      */
     void push_close() noexcept {
@@ -193,18 +184,19 @@ private:
     class PushFinishHandle;
     class PopFinishHandle;
 
-    int request_push_(PushFinishHandle *finish_handle) noexcept {
+    std::optional<bool>
+    request_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (closed_) {
-            return -EPIPE;
+        if (closed_) [[unlikely]] {
+            return std::nullopt;
         }
         if (try_push_inner_(std::move(finish_handle->get_item()))) {
-            return 0;
+            return true;
         }
         assert(pop_awaiters_.empty());
         push_awaiters_.push_back(finish_handle);
         detail::Context::current().runtime()->pend_work();
-        return -EAGAIN;
+        return false;
     }
 
     bool cancel_push_(PushFinishHandle *finish_handle) noexcept {
@@ -212,19 +204,16 @@ private:
         return push_awaiters_.remove(finish_handle);
     }
 
-    std::pair<int, T> request_pop_(PopFinishHandle *finish_handle) noexcept {
+    std::optional<T> request_pop_(PopFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto result = try_pop_inner_();
         if (result.has_value()) {
-            return {0, std::move(result.value())};
+            return result;
         }
         assert(push_awaiters_.empty());
-        if (closed_) {
-            return {-EPIPE, T{}};
-        }
         pop_awaiters_.push_back(finish_handle);
         detail::Context::current().runtime()->pend_work();
-        return {-EAGAIN, T{}};
+        return std::nullopt;
     }
 
     bool cancel_pop_(PopFinishHandle *finish_handle) noexcept {
@@ -239,7 +228,7 @@ private:
         if (!pop_awaiters_.empty()) {
             assert(empty_inner_());
             auto *pop_handle = pop_awaiters_.pop_front();
-            pop_handle->set_result({0, std::forward<U>(item)});
+            pop_handle->set_result(std::forward<U>(item));
             pop_handle->schedule();
             return true;
         }
@@ -255,25 +244,25 @@ private:
             assert(full_inner_());
             auto *push_handle = push_awaiters_.pop_front();
             T item = std::move(push_handle->get_item());
-            push_handle->set_result(0);
             push_handle->schedule();
-            return pop_and_push_(std::move(item));
+            if (no_buffer_()) {
+                return item;
+            } else {
+                T result = pop_inner_();
+                push_inner_(std::move(item));
+                return result;
+            }
         }
         if (!empty_inner_()) {
             T result = pop_inner_();
             return result;
         }
-        return std::nullopt;
-    }
-
-    T pop_and_push_(T item) noexcept {
-        if (no_buffer_()) {
-            return item;
-        } else {
-            T result = pop_inner_();
-            push_inner_(std::move(item));
-            return result;
+        if (closed_) [[unlikely]] {
+            // Default indicates closed channel
+            T return_value = {};
+            return return_value;
         }
+        return std::nullopt;
     }
 
     template <typename U>
@@ -321,14 +310,12 @@ private:
         PopFinishHandle *pop_handle = nullptr;
         while ((pop_handle = pop_awaiters_.pop_front()) != nullptr) {
             assert(empty_inner_());
-            pop_handle->set_result({-EPIPE, T{}});
             pop_handle->schedule();
         }
         // Throw exception to all pending push awaiters
         PushFinishHandle *push_handle = nullptr;
         while ((push_handle = push_awaiters_.pop_front()) != nullptr) {
-            assert(full_inner_());
-            push_handle->set_result(-EPIPE);
+            push_handle->enable_throw();
             push_handle->schedule();
         }
     }
@@ -359,21 +346,26 @@ template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandle
     : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = int;
+    using ReturnType = bool;
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
     void cancel() noexcept {
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
-            assert(result_ == -ENOTRECOVERABLE);
-            result_ = -ECANCELED;
+            canceled_ = true;
             runtime_->resume_work();
             runtime_->schedule(this);
         }
     }
 
-    ReturnType extract_result() noexcept { return result_; }
+    ReturnType extract_result() {
+        if (should_throw_) [[unlikely]] {
+            throw std::logic_error("Push to closed channel");
+        }
+        bool success = !canceled_;
+        return success;
+    }
 
     void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
@@ -402,7 +394,7 @@ public:
         }
     }
 
-    void set_result(int result) noexcept { result_ = result; }
+    void enable_throw() noexcept { should_throw_ = true; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -413,20 +405,19 @@ private:
     Runtime *runtime_ = nullptr;
     T item_;
     bool need_resume_ = false;
-    int result_ = -ENOTRECOVERABLE; // Internal error if not set
+    bool should_throw_ = false;
+    bool canceled_ = false;
 };
 
 template <typename T, size_t N>
 class Channel<T, N>::PopFinishHandle
     : public InvokerAdapter<PopFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = std::pair<int, T>;
+    using ReturnType = T;
 
     void cancel() noexcept {
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
-            assert(result_.first == -ENOTRECOVERABLE);
-            result_.first = -ECANCELED;
             runtime_->resume_work();
             runtime_->schedule(this);
         }
@@ -449,7 +440,7 @@ public:
         runtime_ = runtime;
     }
 
-    void set_result(ReturnType result) noexcept { result_ = std::move(result); }
+    void set_result(T result) noexcept { result_ = std::move(result); }
 
     void schedule() noexcept {
         assert(runtime_ != nullptr);
@@ -464,15 +455,15 @@ private:
     Invoker *invoker_ = nullptr;
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
-    ReturnType result_ = {-ENOTRECOVERABLE, T{}}; // Internal error if not set
+    T result_ = {};
     bool need_resume_ = false;
 };
 
 /**
  * @brief Awaiter for pushing an item into the channel.
- * @return int The result of the push operation. 0 if the item was successfully
- * pushed; -EPIPE if the channel is closed; -ECANCELED if the push operation was
- * cancelled.
+ * @return bool True if the push operation was successful after awaiting; false
+ * if the operation was cancelled.
+ * @throws std::logic_error If the channel is closed.
  */
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {
 public:
@@ -489,10 +480,14 @@ public:
     void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
-        int r = channel_.request_push_(&finish_handle_);
-        if (r != -EAGAIN) {
-            // Operation completed immediately
-            finish_handle_.set_result(r);
+        auto result = channel_.request_push_(&finish_handle_);
+        if (!result.has_value()) [[unlikely]] {
+            finish_handle_.enable_throw();
+            runtime->schedule(&finish_handle_);
+            return;
+        }
+        bool ok = *result;
+        if (ok) {
             runtime->schedule(&finish_handle_);
         }
     }
@@ -505,16 +500,17 @@ public:
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
-        int r = channel_.request_push_(&finish_handle_);
-        if (r != -EAGAIN) {
-            // Operation completed immediately
-            finish_handle_.set_result(r);
+        auto result = channel_.request_push_(&finish_handle_);
+        if (!result.has_value()) [[unlikely]] {
+            finish_handle_.enable_throw();
             return false; // Do not suspend
         }
-        return true; // Suspend
+        bool ok = *result;
+        bool do_suspend = !ok;
+        return do_suspend;
     }
 
-    auto await_resume() noexcept { return finish_handle_.extract_result(); }
+    auto await_resume() { return finish_handle_.extract_result(); }
 
 private:
     Channel &channel_;
@@ -523,9 +519,8 @@ private:
 
 /**
  * @brief Awaiter for popping an item from the channel.
- * @return std::pair<int, T> The result of the pop operation. 0 and the popped
- * item if successful; -EPIPE if the channel is closed; -ECANCELED if the pop
- * operation was cancelled.
+ * @return The popped item after awaiting. If the channel is closed, a
+ * default-constructed T will be returned.
  */
 template <typename T, size_t N> struct Channel<T, N>::PopAwaiter {
 public:
@@ -542,9 +537,8 @@ public:
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
         auto item = channel_.request_pop_(&finish_handle_);
-        auto r = item.first;
-        if (r != -EAGAIN) {
-            finish_handle_.set_result(std::move(item));
+        if (item.has_value()) {
+            finish_handle_.set_result(std::move(item.value()));
             runtime->schedule(&finish_handle_);
         }
     }
@@ -558,9 +552,8 @@ public:
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
         auto item = channel_.request_pop_(&finish_handle_);
-        auto r = item.first;
-        if (r != -EAGAIN) {
-            finish_handle_.set_result(std::move(item));
+        if (item.has_value()) {
+            finish_handle_.set_result(std::move(item.value()));
             return false; // Do not suspend
         }
         return true; // Suspend
@@ -573,7 +566,6 @@ private:
     PopFinishHandle finish_handle_;
 };
 
-} // namespace condy
+} // namespace legacy
 
-// TODO: Remove the legacy version in future
-#include "condy/channel_legacy.hpp" // IWYU pragma: export
+} // namespace condy
