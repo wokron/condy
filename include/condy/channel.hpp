@@ -254,19 +254,23 @@ private:
             T item = std::move(push_handle->get_item());
             push_handle->set_result(0);
             push_handle->schedule();
-            if (no_buffer_()) {
-                return item;
-            } else {
-                T result = pop_inner_();
-                push_inner_(std::move(item));
-                return result;
-            }
+            return pop_and_push_(std::move(item));
         }
         if (!empty_inner_()) {
             T result = pop_inner_();
             return result;
         }
         return std::nullopt;
+    }
+
+    T pop_and_push_(T item) noexcept {
+        if (no_buffer_()) {
+            return item;
+        } else {
+            T result = pop_inner_();
+            push_inner_(std::move(item));
+            return result;
+        }
     }
 
     template <typename U>
