@@ -89,9 +89,9 @@ public:
         if (item.has_value()) {
             return {0, std::move(item.value())};
         } else if (closed_) {
-            return {-EPIPE, T{}};
+            return {-EPIPE, T()};
         } else {
-            return {-EAGAIN, T{}};
+            return {-EAGAIN, T()};
         }
     }
 
@@ -220,11 +220,11 @@ private:
         }
         assert(push_awaiters_.empty());
         if (closed_) {
-            return {-EPIPE, T{}};
+            return {-EPIPE, T()};
         }
         pop_awaiters_.push_back(finish_handle);
         detail::Context::current().runtime()->pend_work();
-        return {-EAGAIN, T{}};
+        return {-EAGAIN, T()};
     }
 
     bool cancel_pop_(PopFinishHandle *finish_handle) noexcept {
@@ -321,7 +321,7 @@ private:
         PopFinishHandle *pop_handle = nullptr;
         while ((pop_handle = pop_awaiters_.pop_front()) != nullptr) {
             assert(empty_inner_());
-            pop_handle->set_result({-EPIPE, T{}});
+            pop_handle->set_result({-EPIPE, T()});
             pop_handle->schedule();
         }
         // Cancel all pending push awaiters
@@ -464,7 +464,7 @@ private:
     Invoker *invoker_ = nullptr;
     Channel *channel_ = nullptr;
     Runtime *runtime_ = nullptr;
-    ReturnType result_ = {-ENOTRECOVERABLE, T{}}; // Internal error if not set
+    ReturnType result_ = {-ENOTRECOVERABLE, T()}; // Internal error if not set
     bool need_resume_ = false;
 };
 
