@@ -177,7 +177,7 @@ Condy introduces the `condy::Channel` type, which is a thread-safe, bounded, buf
 
 `condy::Channel` supports both synchronous (`condy::Channel::try_push()`/`condy::Channel::try_pop()`) and asynchronous (`condy::Channel::push()`/`condy::Channel::pop()`) operations. For asynchronous operations, `push()` and `pop()` return awaitable objects, which you can submit and wait for using `co_await`. This is similar to the `condy::async_*()` functions.
 
-You can also close a channel using the `condy::Channel::push_close()` function. After closing, any subsequent `try_push()` or `push()` operations are invalid.
+You can also close a channel using the `condy::Channel::push_close()` function. After closing, any subsequent `try_push()` or `push()` operations will fail with `-EPIPE`.
 
 The following example creates a producer task and a consumer task.
 
@@ -703,9 +703,10 @@ handle_buffers(condy::Channel<std::pair<int, condy::ProvidedBuffer>> &ch,
                int session_fd) {
     while (true) {
         auto [r, data] = co_await ch.pop(); // Asynchronously pop data
-        if (r != 0) {
+        if (r == -EPIPE) {
             break; // Termination signal
         }
+        assert(r == 0); // Ensure no errors
         auto &[n, buffer] = data;
         co_await condy::async_write(session_fd, condy::buffer(buffer.data(), n),
                                     0);

@@ -324,7 +324,7 @@ private:
             pop_handle->set_result({-EPIPE, T{}});
             pop_handle->schedule();
         }
-        // Throw exception to all pending push awaiters
+        // Cancel all pending push awaiters
         PushFinishHandle *push_handle = nullptr;
         while ((push_handle = push_awaiters_.pop_front()) != nullptr) {
             assert(full_inner_());
@@ -574,6 +574,3 @@ private:
 };
 
 } // namespace condy
-
-// TODO: Remove the legacy version in future
-#include "condy/channel_legacy.hpp" // IWYU pragma: export
