@@ -24,6 +24,9 @@ namespace condy {
 
 namespace legacy {
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 /**
  * @brief [Deprecated] Thread-safe bounded channel for communication and
  * synchronization.
@@ -565,6 +568,8 @@ private:
     Channel &channel_;
     PopFinishHandle finish_handle_;
 };
+
+#pragma GCC diagnostic pop
 
 } // namespace legacy
 
