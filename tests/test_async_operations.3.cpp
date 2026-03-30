@@ -733,14 +733,16 @@ TEST_CASE("test async_operations - test recv - multishot") {
                 REQUIRE(n == 256);
                 actual.append(static_cast<char *>(buf.data()), n);
                 count++;
-                REQUIRE(channel.try_push(std::move(buf)));
+                REQUIRE(channel.try_push(std::move(buf)) == 0);
             });
         REQUIRE(n == -ENOBUFS);
         REQUIRE(count == 2);
 
-        auto tmp = co_await channel.pop();
+        auto [r, tmp] = co_await channel.pop();
+        REQUIRE(r == 0);
         tmp.reset(); // Release the buffer back to the pool
-        tmp = co_await channel.pop();
+        std::tie(r, tmp) = co_await channel.pop();
+        REQUIRE(r == 0);
         tmp.reset(); // Release the buffer back to the pool
 
         auto [n2, buf2] =

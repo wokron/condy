@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <chrono>
 #include <condy.hpp>
 #include <cstddef>
@@ -10,18 +11,28 @@ condy::Coro<void> producer_task(condy::Channel<int> &channel,
     for (size_t i = 0; i < num_messages; ++i) {
         co_await channel.push(static_cast<int>(i));
     }
+    channel.push_close();
     co_return;
 }
 
 condy::Coro<void> consumer_task(condy::Channel<int> &channel,
                                 size_t num_messages) {
-    for (size_t i = 0; i < num_messages; ++i) {
-        auto value = co_await channel.pop();
+    size_t i = 0;
+    while (true) {
+        auto [r, value] = co_await channel.pop();
+        if (r == -EPIPE) {
+            break; // Channel closed
+        }
+        assert(r == 0);
         if (value != static_cast<int>(i)) {
             std::cerr << "Data corruption detected!\n";
         }
+        i++;
     }
-    co_return;
+    if (i != num_messages) {
+        std::cerr << std::format("Expected {} messages, but got {}\n",
+                                 num_messages, i);
+    }
 }
 
 condy::Coro<void>

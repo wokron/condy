@@ -175,9 +175,9 @@ Condy is not just a simple wrapper around liburing functions. Through carefully 
 
 Condy introduces the `condy::Channel` type, which is a thread-safe, bounded, buffered or unbuffered queue. `condy::Channel` is a building block for many advanced features in Condy.
 
-`condy::Channel` supports both synchronous (`condy::Channel::try_push()`/`condy::Channel::try_pop()`) and asynchronous (`condy::Channel::push()`/`condy::Channel::pop()`) operations. For asynchronous operations, `condy::Channel::push()` and `condy::Channel::pop()` return awaitable objects, which you can submit and wait for using `co_await`. This is similar to the `condy::async_*()` functions.
+`condy::Channel` supports both synchronous (`condy::Channel::try_push()`/`condy::Channel::try_pop()`) and asynchronous (`condy::Channel::push()`/`condy::Channel::pop()`) operations. For asynchronous operations, `push()` and `pop()` return awaitable objects, which you can submit and wait for using `co_await`. This is similar to the `condy::async_*()` functions.
 
-You can also close a channel using the `condy::Channel::push_close()` function. After closing, any subsequent `condy::Channel::try_push()` or `condy::Channel::push()` operations are invalid.
+You can also close a channel using the `condy::Channel::push_close()` function. After closing, any subsequent `try_push()` or `push()` operations will fail with `-EPIPE`.
 
 The following example creates a producer task and a consumer task.
 
@@ -191,15 +191,17 @@ condy::Coro<void> producer(condy::Channel<int> &ch) {
         std::cout << std::format("Producing: {}\n", i);
         co_await ch.push(i);
     }
-    co_return;
+    ch.push_close();
 }
 
 condy::Coro<void> consumer(condy::Channel<int> &ch) {
-    for (int i = 0; i < 10; ++i) {
-        int value = co_await ch.pop();
+    while (true) {
+        auto [r, value] = co_await ch.pop();
+        if (r != 0) { // -EPIPE
+            break;
+        }
         std::cout << std::format("Consumed: {}\n", value);
     }
-    co_return;
 }
 
 int main() {
@@ -700,11 +702,13 @@ condy::Coro<void>
 handle_buffers(condy::Channel<std::pair<int, condy::ProvidedBuffer>> &ch,
                int session_fd) {
     while (true) {
-        auto [r, buffer] = co_await ch.pop(); // Asynchronously pop data
-        if (r == 0) {
+        auto [r, data] = co_await ch.pop(); // Asynchronously pop data
+        if (r == -EPIPE) {
             break; // Termination signal
         }
-        co_await condy::async_write(session_fd, condy::buffer(buffer.data(), r),
+        assert(r == 0); // Ensure no errors
+        auto &[n, buffer] = data;
+        co_await condy::async_write(session_fd, condy::buffer(buffer.data(), n),
                                     0);
     }
 }

@@ -6,6 +6,7 @@
 #include "condy/sync_wait.hpp"
 #include "condy/task.hpp"
 #include <atomic>
+#include <cerrno>
 #include <cstddef>
 #include <doctest/doctest.h>
 
@@ -21,25 +22,27 @@ TEST_CASE("test channel - try push and pop") {
     REQUIRE(channel.capacity() == 2);
     REQUIRE(channel.size() == 0);
 
-    REQUIRE(channel.try_push(1) == true);
+    REQUIRE(channel.try_push(1) == 0);
     REQUIRE(channel.size() == 1);
 
-    REQUIRE(channel.try_push(2) == true);
+    REQUIRE(channel.try_push(2) == 0);
     REQUIRE(channel.size() == 2);
 
-    REQUIRE(channel.try_push(3) == false);
+    REQUIRE(channel.try_push(3) == -EAGAIN);
     REQUIRE(channel.size() == 2);
 
-    auto item1 = channel.try_pop();
-    REQUIRE((item1.has_value() && item1.value() == 1));
+    auto [r, item1] = channel.try_pop();
+    REQUIRE(r == 0);
+    REQUIRE(item1 == 1);
     REQUIRE(channel.size() == 1);
 
-    auto item2 = channel.try_pop();
-    REQUIRE((item2.has_value() && item2.value() == 2));
+    auto [r2, item2] = channel.try_pop();
+    REQUIRE(r2 == 0);
+    REQUIRE(item2 == 2);
     REQUIRE(channel.size() == 0);
 
-    auto item3 = channel.try_pop();
-    REQUIRE(!item3.has_value());
+    auto [r3, item3] = channel.try_pop();
+    REQUIRE(r3 == -EAGAIN);
     REQUIRE(channel.size() == 0);
 }
 
@@ -48,10 +51,10 @@ TEST_CASE("test channel - try push conditonal move") {
     std::unique_ptr<int> item1 = std::make_unique<int>(42);
     std::unique_ptr<int> item2 = std::make_unique<int>(43);
 
-    REQUIRE(channel.try_push(std::move(item1)) == true);
+    REQUIRE(channel.try_push(std::move(item1)) == 0);
     REQUIRE(item1 == nullptr); // item1 should be moved
 
-    REQUIRE(channel.try_push(std::move(item2)) == false);
+    REQUIRE(channel.try_push(std::move(item2)) == -EAGAIN);
     REQUIRE(item2 != nullptr); // item2 should not be moved
 }
 
@@ -71,7 +74,8 @@ TEST_CASE("test channel - push and pop with coroutines") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 1; i <= max_items; ++i) {
-            int item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item == i);
         }
         finished++;
@@ -105,7 +109,8 @@ TEST_CASE("test channel - unbuffered channel") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 1; i <= max_items; ++i) {
-            int item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item == i);
         }
         finished++;
@@ -143,7 +148,8 @@ TEST_CASE("test channel - multi producer and consumer") {
         assert((num_producers * items_per_producer) % num_consumers == 0);
         for (size_t i = 0;
              i < (num_producers * items_per_producer) / num_consumers; ++i) {
-            int item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item != 0); // Basic check to ensure item is received
         }
         finished++;
@@ -184,8 +190,10 @@ TEST_CASE("test channel - wait two channel") {
 
     auto func = [&]() -> condy::Coro<void> {
         auto [item1, item2] = co_await (ch1.pop() && ch2.pop());
-        REQUIRE(item1 == 42);
-        REQUIRE(item2 == 84);
+        REQUIRE(item1.first == 0);
+        REQUIRE(item1.second == 42);
+        REQUIRE(item2.first == 0);
+        REQUIRE(item2.second == 84);
         finished = true;
     };
 
@@ -198,10 +206,10 @@ TEST_CASE("test channel - wait two channel") {
 
     REQUIRE(!finished);
 
-    REQUIRE(ch1.try_push(42));
+    REQUIRE(ch1.try_push(42) == 0);
     REQUIRE(!finished);
 
-    REQUIRE(ch2.try_push(84));
+    REQUIRE(ch2.try_push(84) == 0);
     t.join();
     REQUIRE(finished);
 }
@@ -222,7 +230,8 @@ TEST_CASE("test channel - channel cancel pop") {
         auto r = co_await (ch1.pop() || ch2.pop() ||
                            condy::async_timeout(&ts, 0, 0));
         REQUIRE(r.index() == 1);
-        REQUIRE(std::get<1>(r) == 42);
+        REQUIRE(std::get<1>(r).first == 0);
+        REQUIRE(std::get<1>(r).second == 42);
         finished = true;
     };
 
@@ -234,7 +243,7 @@ TEST_CASE("test channel - channel cancel pop") {
     });
 
     REQUIRE(!finished);
-    REQUIRE(ch2.try_push(42));
+    REQUIRE(ch2.try_push(42) == 0);
 
     t.join();
     REQUIRE(finished);
@@ -268,14 +277,18 @@ TEST_CASE("test channel - channel cancel push") {
 TEST_CASE("test channel - move only type") {
     condy::Channel<std::unique_ptr<int>> channel(2);
 
-    REQUIRE(channel.try_push(std::make_unique<int>(42)));
-    REQUIRE(channel.try_push(std::make_unique<int>(43)));
+    REQUIRE(channel.try_push(std::make_unique<int>(42)) == 0);
+    REQUIRE(channel.try_push(std::make_unique<int>(43)) == 0);
 
-    auto item = channel.try_pop();
-    REQUIRE((item.has_value() && **item == 42));
+    auto [r, item] = channel.try_pop();
+    REQUIRE(r == 0);
+    REQUIRE(item != nullptr);
+    REQUIRE(*item == 42);
 
-    item = channel.try_pop();
-    REQUIRE((item.has_value() && **item == 43));
+    auto [r2, item2] = channel.try_pop();
+    REQUIRE(r2 == 0);
+    REQUIRE(item2 != nullptr);
+    REQUIRE(*item2 == 43);
 }
 
 TEST_CASE("test channel - move only in coroutine") {
@@ -286,7 +299,8 @@ TEST_CASE("test channel - move only in coroutine") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < max_items; ++i) {
-            auto item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item != nullptr);
             REQUIRE(*item == static_cast<int>(i));
         }
@@ -324,8 +338,9 @@ TEST_CASE("test channel - no default constructor") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < max_items; ++i) {
-            auto item = *co_await channel.pop();
-            REQUIRE(item.value == static_cast<int>(i));
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
+            REQUIRE(item->value == static_cast<int>(i));
         }
         co_return;
     };
@@ -354,10 +369,12 @@ TEST_CASE("test channel - close") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < 2 * max_items; ++i) {
-            auto item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
             if (i < max_items) {
+                REQUIRE(r == 0);
                 REQUIRE(item == static_cast<int>(i + 1));
             } else {
+                REQUIRE(r == -EPIPE);
                 REQUIRE(item == 0); // Default indicates closed channel
             }
         }
@@ -418,10 +435,10 @@ TEST_CASE("test channel - push to closed channel") {
 
     channel.push_close();
 
-    REQUIRE_THROWS(channel.try_push(42));
+    REQUIRE(channel.try_push(42) == -EPIPE);
 
     auto func = [&]() -> condy::Coro<void> {
-        REQUIRE_THROWS(co_await channel.push(42));
+        REQUIRE(co_await channel.push(42) == -EPIPE);
     };
 
     auto task = condy::co_spawn(runtime, func());
@@ -446,7 +463,7 @@ TEST_CASE("test channel - push to closed channel with awaiters") {
 
         auto task = condy::co_spawn(close_func());
 
-        REQUIRE_THROWS(co_await channel.push(2));
+        REQUIRE(co_await channel.push(2) == -EPIPE);
 
         co_await std::move(task);
     };
@@ -477,7 +494,7 @@ TEST_CASE("test channel - destruct items") {
 
         for (size_t i = 0; i < 5; ++i) {
             REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
-                new int(static_cast<int>(i)))));
+                        new int(static_cast<int>(i)))) == 0);
         }
 
         REQUIRE(int_deleter::counter == 0);
@@ -492,7 +509,7 @@ TEST_CASE("test channel - destruct items after close") {
 
         for (size_t i = 0; i < 5; ++i) {
             REQUIRE(channel.try_push(std::unique_ptr<int, int_deleter>(
-                new int(static_cast<int>(i + 1)))));
+                        new int(static_cast<int>(i + 1)))) == 0);
         }
 
         channel.push_close();
@@ -500,8 +517,10 @@ TEST_CASE("test channel - destruct items after close") {
         // Close should not destruct items yet, since we can still pop them
         REQUIRE(int_deleter::counter == 0);
 
-        auto item = channel.try_pop();
-        REQUIRE((item.has_value() && **item == 1));
+        auto [r, item] = channel.try_pop();
+        REQUIRE(r == 0);
+        REQUIRE(item != nullptr);
+        REQUIRE(*item == 1);
     }
     REQUIRE(int_deleter::counter == 5);
 }
@@ -523,7 +542,8 @@ TEST_CASE("test channel - cross runtimes") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < max_items; ++i) {
-            int item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item == static_cast<int>(i));
         }
         finished++;
@@ -567,7 +587,8 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
 
     auto consumer = [&]() -> condy::Coro<void> {
         for (size_t i = 0; i < max_items; ++i) {
-            int item = co_await channel.pop();
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
             REQUIRE(item == static_cast<int>(i));
         }
         finished++;
@@ -597,9 +618,9 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
 TEST_CASE("test channel - force push") {
     condy::Channel<int> channel(2);
 
-    REQUIRE(channel.try_push(1) == true);
-    REQUIRE(channel.try_push(2) == true);
-    REQUIRE(channel.try_push(3) == false);
+    REQUIRE(channel.try_push(1) == 0);
+    REQUIRE(channel.try_push(2) == 0);
+    REQUIRE(channel.try_push(3) == -EAGAIN);
 
     for (size_t i = 0; i < 10; i++) {
         channel.force_push(static_cast<int>(i + 3));
@@ -609,8 +630,9 @@ TEST_CASE("test channel - force push") {
     REQUIRE(channel.size() == 2);
 
     for (size_t i = 0; i < 12; i++) {
-        auto item = channel.try_pop();
-        REQUIRE((item.has_value() && item.value() == static_cast<int>(i + 1)));
+        auto [r, item] = channel.try_pop();
+        REQUIRE(r == 0);
+        REQUIRE(item == static_cast<int>(i + 1));
     }
 
     REQUIRE(channel.size() == 0);
@@ -632,7 +654,8 @@ condy::Coro<void> producer_task(condy::Channel<int> &channel,
 condy::Coro<void> consumer_task(condy::Channel<int> &channel,
                                 size_t num_messages) {
     for (size_t i = 0; i < num_messages; ++i) {
-        auto value = co_await channel.pop();
+        auto [r, value] = co_await channel.pop();
+        REQUIRE(r == 0);
         REQUIRE(value == static_cast<int>(i));
     }
     co_return;

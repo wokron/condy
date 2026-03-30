@@ -93,7 +93,9 @@ TEST_CASE("test async_operations - recvmsg multishot") {
         REQUIRE(channel.size() == 4);
 
         for (size_t i = 0; i < 4; ++i) {
-            auto [n, buf] = co_await channel.pop();
+            auto [r, result] = co_await channel.pop();
+            REQUIRE(r == 0);
+            auto &[n, buf] = result;
             auto *out = io_uring_recvmsg_validate(buf.data(), n, &msg_hdr);
             REQUIRE(n > msg_len);
             void *payload = io_uring_recvmsg_payload(out, &msg_hdr);
