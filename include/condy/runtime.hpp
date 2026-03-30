@@ -369,7 +369,7 @@ private:
             } else {
                 auto *work = static_cast<WorkInvoker *>(data);
                 tsan_acquire(data);
-                local_queue_.push_back(work);
+                (*work)();
             }
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandleBase *>(data);
@@ -378,7 +378,7 @@ private:
                 pending_works_--;
             }
             if (action.queue_work) {
-                local_queue_.push_back(handle);
+                (*handle)();
             }
         } else {
             unreachable();
