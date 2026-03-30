@@ -147,11 +147,6 @@ public:
     void invoke() noexcept /* fake override */ {
         assert(this->invoker_ != nullptr);
         (*this->invoker_)();
-        resumed_ = true;
-        // Invocation of free_func_ should be delayed until the operation is
-        // finished since user may adjust the behavior of free_func_ based on
-        // the result of the operation.
-        maybe_free_();
     }
 
     detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
@@ -175,18 +170,11 @@ public:
     }
 
 private:
-    void maybe_free_() noexcept {
-        if (resumed_ && notified_) {
-            free_func_(notify_res_);
-            delete this;
-        }
-    }
-
     void notify_(int32_t res) noexcept {
         assert(res != -ENOTRECOVERABLE);
         notify_res_ = res;
-        notified_ = true;
-        maybe_free_();
+        free_func_(notify_res_);
+        delete this;
     }
 
     static void invoke_static_(void *data) noexcept {
@@ -203,9 +191,6 @@ private:
 protected:
     Func free_func_;
     int32_t notify_res_ = -ENOTRECOVERABLE;
-    // Use these flags to handle race between invoke and notify
-    bool resumed_ = false;
-    bool notified_ = false;
 };
 
 template <CQEHandlerLike CQEHandler, typename FreeFunc>
