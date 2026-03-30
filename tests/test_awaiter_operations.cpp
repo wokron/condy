@@ -91,24 +91,6 @@ TEST_CASE("test awaiter_operations - test ranged when_all") {
     REQUIRE(unfinished == 0);
 }
 
-TEST_CASE("test awaiter_operations - test when_all with empty range") {
-    size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro<void> {
-        using OpAwaiter =
-            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
-        std::vector<OpAwaiter> awaiters;
-        auto r = co_await condy::when_all(std::move(awaiters));
-        REQUIRE(r.empty());
-        --unfinished;
-    };
-
-    auto coro = func();
-    REQUIRE(unfinished == 1);
-
-    condy::sync_wait(std::move(coro));
-    REQUIRE(unfinished == 0);
-}
-
 TEST_CASE("test awaiter_operations - test ranged when_any") {
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -132,24 +114,6 @@ TEST_CASE("test awaiter_operations - test ranged when_any") {
         awaiters.emplace_back(aw3);
         auto [idx, r] = co_await condy::when_any(std::move(awaiters));
         REQUIRE(idx == 1);
-        --unfinished;
-    };
-
-    auto coro = func();
-    REQUIRE(unfinished == 1);
-
-    condy::sync_wait(std::move(coro));
-    REQUIRE(unfinished == 0);
-}
-
-TEST_CASE("test awaiter_operations - test when_any with empty range") {
-    size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro<void> {
-        using OpAwaiter =
-            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
-        std::vector<OpAwaiter> awaiters;
-        REQUIRE_THROWS_AS(co_await condy::when_any(std::move(awaiters)),
-                          std::out_of_range);
         --unfinished;
     };
 

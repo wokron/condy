@@ -158,7 +158,13 @@ public:
     }
 
 public:
-    bool await_ready() const noexcept { return awaiters_.empty(); }
+    bool await_ready() const noexcept {
+        if (awaiters_.empty()) [[unlikely]] {
+            // TODO: Better way to handle this case?
+            panic_on("Cannot await on an empty range of operations");
+        }
+        return false;
+    }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
@@ -167,8 +173,7 @@ public:
         register_operation(0);
     }
 
-    typename Handle::ReturnType
-    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
+    typename Handle::ReturnType await_resume() noexcept {
         return finish_handle_.extract_result();
     }
 
@@ -315,8 +320,7 @@ public:
         register_operation(0);
     }
 
-    typename Handle::ReturnType
-    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
+    typename Handle::ReturnType await_resume() noexcept {
         return finish_handle_.extract_result();
     }
 
