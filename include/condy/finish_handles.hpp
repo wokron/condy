@@ -35,7 +35,7 @@ struct Action {
 
 } // namespace detail
 
-class OpFinishHandleBase : public InvokerAdapter<OpFinishHandleBase> {
+class OpFinishHandleBase {
 public:
     using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
 
@@ -50,11 +50,6 @@ public:
     detail::Action handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
-    }
-
-    void invoke() noexcept {
-        assert(invoker_ != nullptr);
-        (*invoker_)();
     }
 
     void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
@@ -141,13 +136,7 @@ public:
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
-        this->func_ = invoke_static_;
         this->handle_func_ = handle_cqe_static_;
-    }
-
-    void invoke() noexcept /* fake override */ {
-        assert(this->invoker_ != nullptr);
-        (*this->invoker_)();
     }
 
     detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
@@ -178,11 +167,6 @@ private:
         notify_res_ = res;
         free_func_(notify_res_);
         delete this;
-    }
-
-    static void invoke_static_(void *data) noexcept {
-        auto *self = static_cast<ZeroCopyMixin *>(data);
-        self->invoke();
     }
 
     static detail::Action handle_cqe_static_(void *data,
