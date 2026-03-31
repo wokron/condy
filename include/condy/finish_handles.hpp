@@ -28,7 +28,7 @@ class Ring;
 
 class OpFinishHandleBase {
 public:
-    using HandleCQEFunc = bool (*)(void *, io_uring_cqe *) noexcept;
+    using HandleFunc = bool (*)(void *, io_uring_cqe *) noexcept;
 
     void cancel() noexcept {
         auto *ring = detail::Context::current().ring();
@@ -49,7 +49,7 @@ protected:
     OpFinishHandleBase() = default;
 
 protected:
-    HandleCQEFunc handle_func_ = nullptr;
+    HandleFunc handle_func_ = nullptr;
     Invoker *invoker_ = nullptr;
 };
 
@@ -60,7 +60,7 @@ public:
 
     template <typename... Args>
     OpFinishHandle(Args &&...args) : cqe_handler_(std::forward<Args>(args)...) {
-        this->handle_func_ = handle_cqe_static_;
+        this->handle_func_ = handle_static_;
     }
 
     ReturnType extract_result() noexcept {
@@ -68,12 +68,12 @@ public:
     }
 
 private:
-    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
-        return self->handle_cqe_impl_(cqe);
+        return self->handle_impl_(cqe);
     }
 
-    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept {
+    bool handle_impl_(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
         (*invoker_)();
         return true;
@@ -89,16 +89,16 @@ public:
     template <typename... Args>
     MultiShotMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
-        this->handle_func_ = handle_cqe_static_;
+        this->handle_func_ = handle_static_;
     }
 
 private:
-    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<MultiShotMixin *>(data);
-        return self->handle_cqe_impl_(cqe);
+        return self->handle_impl_(cqe);
     }
 
-    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept
+    bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
@@ -125,7 +125,7 @@ public:
     template <typename... Args>
     ZeroCopyMixin(Func func, Args &&...args)
         : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
-        this->handle_func_ = handle_cqe_static_;
+        this->handle_func_ = handle_static_;
     }
 
 private:
@@ -136,12 +136,12 @@ private:
         delete this;
     }
 
-    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
-        return self->handle_cqe_impl_(cqe);
+        return self->handle_impl_(cqe);
     }
 
-    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept
+    bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
