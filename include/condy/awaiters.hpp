@@ -35,10 +35,10 @@ private:
     Handle handle_;
 };
 
-template <typename Func, OpFinishHandleLike HandleBase>
-class HandleBox<ZeroCopyMixin<Func, HandleBase>> {
+template <CQEHandlerLike CQEHandler, typename Func>
+class HandleBox<ZeroCopyOpFinishHandle<CQEHandler, Func>> {
 public:
-    using Handle = ZeroCopyMixin<Func, HandleBase>;
+    using Handle = ZeroCopyOpFinishHandle<CQEHandler, Func>;
     HandleBox(Handle h) : handle_ptr_(std::make_unique<Handle>(std::move(h))) {}
     HandleBox(const HandleBox &other) // Deep copy
         : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}

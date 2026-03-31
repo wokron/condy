@@ -84,31 +84,32 @@ protected:
     CQEHandler cqe_handler_;
 };
 
-template <typename Func, OpFinishHandleLike HandleBase>
-class MultiShotMixin : public HandleBase {
+template <CQEHandlerLike CQEHandler, typename Func>
+class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler> {
 public:
     template <typename... Args>
-    MultiShotMixin(Func func, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
+    MultiShotOpFinishHandle(Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+          func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
 
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<MultiShotMixin *>(data);
+        auto *self = static_cast<MultiShotOpFinishHandle *>(data);
         return self->handle_impl_(cqe);
     }
 
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::cqe_handler_.handle_cqe(cqe);
-            func_(HandleBase::cqe_handler_.extract_result());
+            this->cqe_handler_.handle_cqe(cqe);
+            func_(this->cqe_handler_.extract_result());
             return false;
         } else {
-            HandleBase::cqe_handler_.handle_cqe(cqe);
-            assert(HandleBase::invoker_ != nullptr);
-            (*HandleBase::invoker_)();
+            this->cqe_handler_.handle_cqe(cqe);
+            assert(this->invoker_ != nullptr);
+            (*this->invoker_)();
             return true;
         }
     }
@@ -117,16 +118,13 @@ protected:
     Func func_;
 };
 
-template <CQEHandlerLike CQEHandler, typename MultiShotFunc>
-using MultiShotOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, OpFinishHandle<CQEHandler>>;
-
-template <typename Func, OpFinishHandleLike HandleBase>
-class ZeroCopyMixin : public HandleBase {
+template <CQEHandlerLike CQEHandler, typename Func>
+class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler> {
 public:
     template <typename... Args>
-    ZeroCopyMixin(Func func, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
+    ZeroCopyOpFinishHandle(Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+          free_func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
 
@@ -139,16 +137,16 @@ private:
     }
 
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<ZeroCopyMixin *>(data);
+        auto *self = static_cast<ZeroCopyOpFinishHandle *>(data);
         return self->handle_impl_(cqe);
     }
 
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::cqe_handler_.handle_cqe(cqe);
-            assert(HandleBase::invoker_ != nullptr);
-            (*HandleBase::invoker_)();
+            this->cqe_handler_.handle_cqe(cqe);
+            assert(this->invoker_ != nullptr);
+            (*this->invoker_)();
             return false;
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
@@ -158,9 +156,9 @@ private:
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
-                HandleBase::cqe_handler_.handle_cqe(cqe);
-                assert(HandleBase::invoker_ != nullptr);
-                (*HandleBase::invoker_)();
+                this->cqe_handler_.handle_cqe(cqe);
+                assert(this->invoker_ != nullptr);
+                (*this->invoker_)();
                 notify_(0);
                 return true;
             }
@@ -171,10 +169,6 @@ protected:
     Func free_func_;
     int32_t notify_res_ = -ENOTRECOVERABLE;
 };
-
-template <CQEHandlerLike CQEHandler, typename FreeFunc>
-using ZeroCopyOpFinishHandle =
-    ZeroCopyMixin<FreeFunc, OpFinishHandle<CQEHandler>>;
 
 template <typename T>
 constexpr bool is_nothrow_extract_result_v =

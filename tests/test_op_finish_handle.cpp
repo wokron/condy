@@ -166,8 +166,7 @@ TEST_CASE("test op_finish_handle - multishot op") {
         invoker();
     };
 
-    condy::MultiShotMixin<decltype(func),
-                          condy::OpFinishHandle<condy::SimpleCQEHandler>>
+    condy::MultiShotOpFinishHandle<condy::SimpleCQEHandler, decltype(func)>
         handle(func);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};
@@ -185,8 +184,8 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     int res = -1;
     auto func = [&](int r) { res = r; };
 
-    auto *handle = new condy::ZeroCopyMixin<
-        decltype(func), condy::OpFinishHandle<condy::SimpleCQEHandler>>(func);
+    auto *handle = new condy::ZeroCopyOpFinishHandle<condy::SimpleCQEHandler,
+                                                     decltype(func)>(func);
     handle->set_invoker(&invoker);
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};
