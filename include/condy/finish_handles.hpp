@@ -26,19 +26,9 @@ namespace condy {
 
 class Ring;
 
-namespace detail {
-
-struct Action {
-    bool queue_work;
-    bool op_finish;
-};
-
-} // namespace detail
-
-class OpFinishHandleBase
-    : public InvokerAdapter<OpFinishHandleBase, WorkInvoker> {
+class OpFinishHandleBase {
 public:
-    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
+    using HandleFunc = bool (*)(void *, io_uring_cqe *) noexcept;
 
     void cancel() noexcept {
         auto *ring = detail::Context::current().ring();
@@ -48,14 +38,9 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    detail::Action handle_cqe(io_uring_cqe *cqe) noexcept {
+    bool handle(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
-    }
-
-    void invoke() noexcept {
-        assert(invoker_ != nullptr);
-        (*invoker_)();
     }
 
     void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
@@ -64,7 +49,7 @@ protected:
     OpFinishHandleBase() = default;
 
 protected:
-    HandleCQEFunc handle_func_ = nullptr;
+    HandleFunc handle_func_ = nullptr;
     Invoker *invoker_ = nullptr;
 };
 
@@ -75,12 +60,7 @@ public:
 
     template <typename... Args>
     OpFinishHandle(Args &&...args) : cqe_handler_(std::forward<Args>(args)...) {
-        this->handle_func_ = handle_cqe_static_;
-    }
-
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept {
-        cqe_handler_.handle_cqe(cqe);
-        return {.queue_work = true, .op_finish = true};
+        this->handle_func_ = handle_static_;
     }
 
     ReturnType extract_result() noexcept {
@@ -88,129 +68,104 @@ public:
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
-        return self->handle_cqe_impl(cqe);
+        return self->handle_impl_(cqe);
+    }
+
+    bool handle_impl_(io_uring_cqe *cqe) noexcept {
+        cqe_handler_.handle_cqe(cqe);
+        assert(invoker_ != nullptr);
+        (*invoker_)();
+        return true;
     }
 
 protected:
     CQEHandler cqe_handler_;
 };
 
-template <typename Func, OpFinishHandleLike HandleBase>
-class MultiShotMixin : public HandleBase {
+template <CQEHandlerLike CQEHandler, typename Func>
+class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler> {
 public:
     template <typename... Args>
-    MultiShotMixin(Func func, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...), func_(std::move(func)) {
-        this->handle_func_ = handle_cqe_static_;
-    }
-
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
-    /* fake override */ {
-        if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::handle_cqe_impl(cqe);
-            func_(HandleBase::extract_result());
-            return {.queue_work = false, .op_finish = false};
-        } else {
-            HandleBase::handle_cqe_impl(cqe);
-            return {.queue_work = true, .op_finish = true};
-        }
+    MultiShotOpFinishHandle(Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+          func_(std::move(func)) {
+        this->handle_func_ = handle_static_;
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<MultiShotMixin *>(data);
-        return self->handle_cqe_impl(cqe);
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
+        auto *self = static_cast<MultiShotOpFinishHandle *>(data);
+        return self->handle_impl_(cqe);
+    }
+
+    bool handle_impl_(io_uring_cqe *cqe) noexcept
+    /* fake override */ {
+        if (cqe->flags & IORING_CQE_F_MORE) {
+            this->cqe_handler_.handle_cqe(cqe);
+            func_(this->cqe_handler_.extract_result());
+            return false;
+        } else {
+            this->cqe_handler_.handle_cqe(cqe);
+            assert(this->invoker_ != nullptr);
+            (*this->invoker_)();
+            return true;
+        }
     }
 
 protected:
     Func func_;
 };
 
-template <CQEHandlerLike CQEHandler, typename MultiShotFunc>
-using MultiShotOpFinishHandle =
-    MultiShotMixin<MultiShotFunc, OpFinishHandle<CQEHandler>>;
-
-template <typename Func, OpFinishHandleLike HandleBase>
-class ZeroCopyMixin : public HandleBase {
+template <CQEHandlerLike CQEHandler, typename Func>
+class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler> {
 public:
     template <typename... Args>
-    ZeroCopyMixin(Func func, Args &&...args)
-        : HandleBase(std::forward<Args>(args)...), free_func_(std::move(func)) {
-        this->func_ = invoke_static_;
-        this->handle_func_ = handle_cqe_static_;
+    ZeroCopyOpFinishHandle(Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+          free_func_(std::move(func)) {
+        this->handle_func_ = handle_static_;
     }
 
-    void invoke() noexcept /* fake override */ {
-        assert(this->invoker_ != nullptr);
-        (*this->invoker_)();
-        resumed_ = true;
-        // Invocation of free_func_ should be delayed until the operation is
-        // finished since user may adjust the behavior of free_func_ based on
-        // the result of the operation.
-        maybe_free_();
+private:
+    static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
+        auto *self = static_cast<ZeroCopyOpFinishHandle *>(data);
+        return self->handle_impl_(cqe);
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::handle_cqe_impl(cqe);
-            return {.queue_work = true, .op_finish = false};
+            this->cqe_handler_.handle_cqe(cqe);
+            assert(this->invoker_ != nullptr);
+            (*this->invoker_)();
+            return false;
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
                 notify_(cqe->res);
-                return {.queue_work = false, .op_finish = true};
+                return true;
             } else {
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
+                this->cqe_handler_.handle_cqe(cqe);
+                assert(this->invoker_ != nullptr);
+                (*this->invoker_)();
                 notify_(0);
-                HandleBase::handle_cqe_impl(cqe);
-                return {.queue_work = true, .op_finish = true};
+                return true;
             }
         }
     }
 
-private:
-    void maybe_free_() noexcept {
-        if (resumed_ && notified_) {
-            free_func_(notify_res_);
-            delete this;
-        }
-    }
-
     void notify_(int32_t res) noexcept {
-        assert(res != -ENOTRECOVERABLE);
-        notify_res_ = res;
-        notified_ = true;
-        maybe_free_();
-    }
-
-    static void invoke_static_(void *data) noexcept {
-        auto *self = static_cast<ZeroCopyMixin *>(data);
-        self->invoke();
-    }
-
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<ZeroCopyMixin *>(data);
-        return self->handle_cqe_impl(cqe);
+        free_func_(res);
+        delete this;
     }
 
 protected:
     Func free_func_;
-    int32_t notify_res_ = -ENOTRECOVERABLE;
-    // Use these flags to handle race between invoke and notify
-    bool resumed_ = false;
-    bool notified_ = false;
 };
-
-template <CQEHandlerLike CQEHandler, typename FreeFunc>
-using ZeroCopyOpFinishHandle =
-    ZeroCopyMixin<FreeFunc, OpFinishHandle<CQEHandler>>;
 
 template <typename T>
 constexpr bool is_nothrow_extract_result_v =
@@ -273,6 +228,7 @@ private:
 
         if (no == handles_.size() - 1) {
             // All finished or canceled
+            assert(invoker_ != nullptr);
             (*invoker_)();
             return;
         }
@@ -393,6 +349,7 @@ private:
 
         if (no == sizeof...(Handles) - 1) {
             // All finished or canceled
+            assert(invoker_ != nullptr);
             (*invoker_)();
         }
     }

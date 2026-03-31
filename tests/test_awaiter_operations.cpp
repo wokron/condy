@@ -23,8 +23,7 @@ void event_loop(size_t &unfinished) {
                 return;
             }
             auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
-            handle_ptr->handle_cqe(cqe);
-            (*handle_ptr)();
+            handle_ptr->handle(cqe);
         });
     }
 }
