@@ -35,8 +35,7 @@ struct Action {
 
 } // namespace detail
 
-class OpFinishHandleBase
-    : public InvokerAdapter<OpFinishHandleBase, WorkInvoker> {
+class OpFinishHandleBase : public InvokerAdapter<OpFinishHandleBase> {
 public:
     using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
 
