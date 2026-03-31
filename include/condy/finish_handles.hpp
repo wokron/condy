@@ -75,6 +75,7 @@ private:
 
     bool handle_impl_(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
+        assert(invoker_ != nullptr);
         (*invoker_)();
         return true;
     }
@@ -106,6 +107,7 @@ private:
             return false;
         } else {
             HandleBase::cqe_handler_.handle_cqe(cqe);
+            assert(HandleBase::invoker_ != nullptr);
             (*HandleBase::invoker_)();
             return true;
         }
@@ -145,6 +147,7 @@ private:
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
+            assert(HandleBase::invoker_ != nullptr);
             (*HandleBase::invoker_)();
             return false;
         } else {
@@ -156,6 +159,7 @@ private:
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
                 HandleBase::cqe_handler_.handle_cqe(cqe);
+                assert(HandleBase::invoker_ != nullptr);
                 (*HandleBase::invoker_)();
                 notify_(0);
                 return true;
@@ -233,6 +237,7 @@ private:
 
         if (no == handles_.size() - 1) {
             // All finished or canceled
+            assert(invoker_ != nullptr);
             (*invoker_)();
             return;
         }
@@ -353,6 +358,7 @@ private:
 
         if (no == sizeof...(Handles) - 1) {
             // All finished or canceled
+            assert(invoker_ != nullptr);
             (*invoker_)();
         }
     }
