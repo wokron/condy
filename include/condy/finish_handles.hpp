@@ -79,7 +79,8 @@ public:
 
     detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
-        return {.queue_work = true, .op_finish = true};
+        (*invoker_)();
+        return {.queue_work = false, .op_finish = true};
     }
 
     ReturnType extract_result() noexcept {
@@ -109,12 +110,13 @@ public:
     detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::handle_cqe_impl(cqe);
-            func_(HandleBase::extract_result());
+            HandleBase::cqe_handler_.handle_cqe(cqe);
+            func_(HandleBase::cqe_handler_.extract_result());
             return {.queue_work = false, .op_finish = false};
         } else {
-            HandleBase::handle_cqe_impl(cqe);
-            return {.queue_work = true, .op_finish = true};
+            HandleBase::cqe_handler_.handle_cqe(cqe);
+            (*HandleBase::invoker_)();
+            return {.queue_work = false, .op_finish = true};
         }
     }
 
@@ -151,8 +153,9 @@ public:
     detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            HandleBase::handle_cqe_impl(cqe);
-            return {.queue_work = true, .op_finish = false};
+            HandleBase::cqe_handler_.handle_cqe(cqe);
+            (*HandleBase::invoker_)();
+            return {.queue_work = false, .op_finish = false};
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
                 notify_(cqe->res);
@@ -161,9 +164,10 @@ public:
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
+                HandleBase::cqe_handler_.handle_cqe(cqe);
+                (*HandleBase::invoker_)();
                 notify_(0);
-                HandleBase::handle_cqe_impl(cqe);
-                return {.queue_work = true, .op_finish = true};
+                return {.queue_work = false, .op_finish = true};
             }
         }
     }

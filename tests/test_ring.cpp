@@ -9,6 +9,16 @@
 
 using namespace condy;
 
+namespace {
+
+class MockInvoker : public InvokerAdapter<MockInvoker> {
+public:
+    void invoke() { invoke_count++; }
+    size_t invoke_count = 0;
+};
+
+} // namespace
+
 TEST_CASE("test ring - init and destroy") {
     Ring ring;
     io_uring_params params{};
@@ -22,6 +32,7 @@ TEST_CASE("test ring - register and complete ops") {
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
+    MockInvoker invoker;
 
     constexpr size_t num_ops = 4;
     std::vector<OpFinishHandle<SimpleCQEHandler>> handles(num_ops);
@@ -29,6 +40,7 @@ TEST_CASE("test ring - register and complete ops") {
         auto *sqe = ring.get_sqe();
         io_uring_prep_nop(sqe);
         io_uring_sqe_set_data(sqe, &handles[i]);
+        handles[i].set_invoker(&invoker);
     }
 
     int count = 0;
@@ -46,6 +58,7 @@ TEST_CASE("test ring - register and complete ops") {
     }
 
     REQUIRE(count == num_ops);
+    REQUIRE(invoker.invoke_count == num_ops);
 
     for (size_t i = 0; i < num_ops; i++) {
         int res = handles[i].extract_result();
@@ -61,6 +74,8 @@ TEST_CASE("test ring - cancel ops") {
     std::memset(&params, 0, sizeof(params));
     ring.init(8, &params);
 
+    MockInvoker invoker;
+
     __kernel_timespec ts{
         .tv_sec = 60ll * 60ll, // 1 hour
         .tv_nsec = 0,
@@ -75,6 +90,7 @@ TEST_CASE("test ring - cancel ops") {
             io_uring_prep_timeout(sqe, &ts, 0, 0);
         }
         io_uring_sqe_set_data(sqe, &handles[i]);
+        handles[i].set_invoker(&invoker);
     }
 
     for (size_t i = 0; i < num_ops; i++) {
@@ -109,6 +125,7 @@ TEST_CASE("test ring - cancel ops") {
     }
 
     REQUIRE(total_count == num_ops);
+    REQUIRE(invoker.invoke_count == num_ops);
     REQUIRE(canceled_count == num_ops / 2);
 
     ring.destroy();

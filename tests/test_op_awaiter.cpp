@@ -20,7 +20,6 @@ void event_loop(size_t &unfinished) {
             }
             auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
             handle_ptr->handle_cqe(cqe);
-            (*handle_ptr)();
         });
     }
 }
@@ -171,7 +170,6 @@ void mock_multishot_event_loop(size_t &unfinished) {
             mock_cqe.flags |= IORING_CQE_F_MORE;
             handle_ptr->handle_cqe(&mock_cqe);
             handle_ptr->handle_cqe(cqe);
-            (*handle_ptr)();
         });
     }
 }

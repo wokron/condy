@@ -377,9 +377,6 @@ private:
             if (action.op_finish) {
                 pending_works_--;
             }
-            if (action.queue_work) {
-                (*handle)();
-            }
         } else {
             unreachable();
         }
