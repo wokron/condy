@@ -26,18 +26,9 @@ namespace condy {
 
 class Ring;
 
-namespace detail {
-
-struct Action {
-    bool queue_work;
-    bool op_finish;
-};
-
-} // namespace detail
-
 class OpFinishHandleBase {
 public:
-    using HandleCQEFunc = detail::Action (*)(void *, io_uring_cqe *) noexcept;
+    using HandleCQEFunc = bool (*)(void *, io_uring_cqe *) noexcept;
 
     void cancel() noexcept {
         auto *ring = detail::Context::current().ring();
@@ -47,7 +38,7 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    detail::Action handle_cqe(io_uring_cqe *cqe) noexcept {
+    bool handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
     }
@@ -72,10 +63,10 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept {
+    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept {
         cqe_handler_.handle_cqe(cqe);
         (*invoker_)();
-        return {.queue_work = false, .op_finish = true};
+        return true;
     }
 
     ReturnType extract_result() noexcept {
@@ -83,8 +74,7 @@ public:
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
+    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -102,22 +92,21 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
             func_(HandleBase::cqe_handler_.extract_result());
-            return {.queue_work = false, .op_finish = false};
+            return false;
         } else {
             HandleBase::cqe_handler_.handle_cqe(cqe);
             (*HandleBase::invoker_)();
-            return {.queue_work = false, .op_finish = true};
+            return true;
         }
     }
 
 private:
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
+    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<MultiShotMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }
@@ -139,16 +128,16 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    detail::Action handle_cqe_impl(io_uring_cqe *cqe) noexcept
+    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
             (*HandleBase::invoker_)();
-            return {.queue_work = false, .op_finish = false};
+            return false;
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
                 notify_(cqe->res);
-                return {.queue_work = false, .op_finish = true};
+                return true;
             } else {
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
@@ -156,7 +145,7 @@ public:
                 HandleBase::cqe_handler_.handle_cqe(cqe);
                 (*HandleBase::invoker_)();
                 notify_(0);
-                return {.queue_work = false, .op_finish = true};
+                return true;
             }
         }
     }
@@ -169,8 +158,7 @@ private:
         delete this;
     }
 
-    static detail::Action handle_cqe_static_(void *data,
-                                             io_uring_cqe *cqe) noexcept {
+    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<ZeroCopyMixin *>(data);
         return self->handle_cqe_impl(cqe);
     }

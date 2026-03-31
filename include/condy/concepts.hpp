@@ -23,7 +23,6 @@ class BufferBase;
 namespace detail {
 
 struct FixedFd;
-struct Action;
 
 } // namespace detail
 
@@ -40,7 +39,7 @@ concept HandleLike = requires(T handle, Invoker *invoker) {
 template <typename T>
 concept OpFinishHandleLike =
     HandleLike<T> && requires(T handle, io_uring_cqe *cqe) {
-        { handle.handle_cqe(cqe) } -> std::same_as<detail::Action>;
+        { handle.handle_cqe(cqe) } -> std::same_as<bool>;
     };
 
 template <typename T>
