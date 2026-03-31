@@ -138,6 +138,7 @@ public:
     uint16_t bgid() const noexcept { return bgid_; }
 
     ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        assert(cqe != nullptr);
         int32_t res = cqe->res;
         uint32_t flags = cqe->flags;
 
@@ -209,6 +210,7 @@ public:
         : BundledProvidedBufferQueue(capacity, flags) {}
 
     ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        assert(cqe != nullptr);
         auto result = BundledProvidedBufferQueue::handle_finish(cqe);
         assert(result.num_buffers <= 1);
         return result;
@@ -360,6 +362,7 @@ public:
     uint16_t bgid() const noexcept { return bgid_; }
 
     ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        assert(cqe != nullptr);
         int32_t res = cqe->res;
         uint32_t flags = cqe->flags;
         std::vector<ProvidedBuffer> buffers;
@@ -476,6 +479,7 @@ public:
 
 public:
     ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        assert(cqe != nullptr);
         auto buffers = BundledProvidedBufferPool::handle_finish(cqe);
         if (buffers.empty()) {
             return ReturnType();
