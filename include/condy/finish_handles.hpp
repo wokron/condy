@@ -129,13 +129,6 @@ public:
     }
 
 private:
-    void notify_(int32_t res) noexcept {
-        assert(res != -ENOTRECOVERABLE);
-        notify_res_ = res;
-        free_func_(notify_res_);
-        delete this;
-    }
-
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<ZeroCopyOpFinishHandle *>(data);
         return self->handle_impl_(cqe);
@@ -165,9 +158,13 @@ private:
         }
     }
 
+    void notify_(int32_t res) noexcept {
+        free_func_(res);
+        delete this;
+    }
+
 protected:
     Func free_func_;
-    int32_t notify_res_ = -ENOTRECOVERABLE;
 };
 
 template <typename T>
