@@ -211,6 +211,22 @@ public:
         }
     }
 
+    void cancel(void *data) noexcept {
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
+            io_uring_sqe *sqe = ring_.get_sqe();
+            prep_cancel_(sqe, data);
+            return;
+        }
+
+        auto state = state_.load();
+        if (state != State::Enabled) {
+            return;
+        }
+
+        schedule_msg_ring_(curr_runtime, data, WorkType::Cancel);
+    }
+
     void pend_work() noexcept { pending_works_++; }
 
     void resume_work() noexcept { pending_works_--; }
@@ -333,6 +349,12 @@ private:
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
+    static void prep_cancel_(io_uring_sqe *sqe, void *data) noexcept {
+        io_uring_prep_cancel(sqe, data, 0);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
+        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
+    }
+
     void flush_ring_() noexcept {
         auto r = ring_.reap_completions(
             [this](io_uring_cqe *cqe) { process_cqe_(cqe); });
@@ -370,6 +392,9 @@ private:
                 tsan_acquire(data);
                 (*work)();
             }
+        } else if (type == WorkType::Cancel) {
+            io_uring_sqe *sqe = ring_.get_sqe();
+            prep_cancel_(sqe, data);
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandleBase *>(data);
             auto op_finish = handle->handle(cqe);

@@ -14,6 +14,7 @@ enum class WorkType : uint8_t {
     Common,
     Ignore,
     Schedule,
+    Cancel,
 };
 
 inline std::pair<void *, WorkType> decode_work(void *ptr) noexcept {
