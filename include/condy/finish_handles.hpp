@@ -63,12 +63,6 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept {
-        cqe_handler_.handle_cqe(cqe);
-        (*invoker_)();
-        return true;
-    }
-
     ReturnType extract_result() noexcept {
         return cqe_handler_.extract_result();
     }
@@ -76,7 +70,13 @@ public:
 private:
     static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
-        return self->handle_cqe_impl(cqe);
+        return self->handle_cqe_impl_(cqe);
+    }
+
+    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept {
+        cqe_handler_.handle_cqe(cqe);
+        (*invoker_)();
+        return true;
     }
 
 protected:
@@ -92,7 +92,13 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept
+private:
+    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
+        auto *self = static_cast<MultiShotMixin *>(data);
+        return self->handle_cqe_impl_(cqe);
+    }
+
+    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
@@ -103,12 +109,6 @@ public:
             (*HandleBase::invoker_)();
             return true;
         }
-    }
-
-private:
-    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<MultiShotMixin *>(data);
-        return self->handle_cqe_impl(cqe);
     }
 
 protected:
@@ -128,7 +128,20 @@ public:
         this->handle_func_ = handle_cqe_static_;
     }
 
-    bool handle_cqe_impl(io_uring_cqe *cqe) noexcept
+private:
+    void notify_(int32_t res) noexcept {
+        assert(res != -ENOTRECOVERABLE);
+        notify_res_ = res;
+        free_func_(notify_res_);
+        delete this;
+    }
+
+    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
+        auto *self = static_cast<ZeroCopyMixin *>(data);
+        return self->handle_cqe_impl_(cqe);
+    }
+
+    bool handle_cqe_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
             HandleBase::cqe_handler_.handle_cqe(cqe);
@@ -148,19 +161,6 @@ public:
                 return true;
             }
         }
-    }
-
-private:
-    void notify_(int32_t res) noexcept {
-        assert(res != -ENOTRECOVERABLE);
-        notify_res_ = res;
-        free_func_(notify_res_);
-        delete this;
-    }
-
-    static bool handle_cqe_static_(void *data, io_uring_cqe *cqe) noexcept {
-        auto *self = static_cast<ZeroCopyMixin *>(data);
-        return self->handle_cqe_impl(cqe);
     }
 
 protected:
