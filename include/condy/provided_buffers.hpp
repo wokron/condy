@@ -137,7 +137,10 @@ public:
 public:
     uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
+    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        int32_t res = cqe->res;
+        uint32_t flags = cqe->flags;
+
         if (!(flags & IORING_CQE_F_BUFFER)) {
             return ReturnType{0, 0};
         }
@@ -205,8 +208,8 @@ public:
     ProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
         : BundledProvidedBufferQueue(capacity, flags) {}
 
-    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
-        auto result = BundledProvidedBufferQueue::handle_finish(res, flags);
+    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        auto result = BundledProvidedBufferQueue::handle_finish(cqe);
         assert(result.num_buffers <= 1);
         return result;
     }
@@ -356,7 +359,9 @@ public:
 public:
     uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
+    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        int32_t res = cqe->res;
+        uint32_t flags = cqe->flags;
         std::vector<ProvidedBuffer> buffers;
 
         if (!(flags & IORING_CQE_F_BUFFER)) {
@@ -470,8 +475,8 @@ public:
         : BundledProvidedBufferPool(num_buffers, buffer_size, flags) {}
 
 public:
-    ReturnType handle_finish(int32_t res, uint32_t flags) noexcept {
-        auto buffers = BundledProvidedBufferPool::handle_finish(res, flags);
+    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+        auto buffers = BundledProvidedBufferPool::handle_finish(cqe);
         if (buffers.empty()) {
             return ReturnType();
         }

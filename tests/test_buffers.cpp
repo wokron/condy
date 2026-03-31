@@ -150,7 +150,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
             auto *data = io_uring_cqe_get_data(cqe);
             REQUIRE(data == nullptr);
             r = cqe->res;
-            ret = queue.handle_finish(cqe->res, cqe->flags);
+            ret = queue.handle_finish(cqe);
         });
     }
 
@@ -187,7 +187,7 @@ TEST_CASE("test buffers - provided buffer queue usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    auto ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 0);
     REQUIRE(ret.num_buffers == 0);
     REQUIRE(queue.size() == 4);
@@ -197,7 +197,7 @@ TEST_CASE("test buffers - provided buffer queue usage incr") {
     cqe.res = 7;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    ret = queue.handle_finish(cqe.res, cqe.flags);
+    ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 0);
     REQUIRE(ret.num_buffers == 1);
     REQUIRE(queue.size() == 3);
@@ -208,7 +208,7 @@ TEST_CASE("test buffers - provided buffer queue usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    ret = queue.handle_finish(cqe.res, cqe.flags);
+    ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 1);
     REQUIRE(ret.num_buffers == 0);
     REQUIRE(queue.size() == 3);
@@ -219,7 +219,7 @@ TEST_CASE("test buffers - provided buffer queue usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    ret = queue.handle_finish(cqe.res, cqe.flags);
+    ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 1);
     REQUIRE(ret.num_buffers == 0);
     REQUIRE(queue.size() == 3);
@@ -251,7 +251,7 @@ TEST_CASE("test buffers - provided buffer queue usage bundle") {
     cqe.res = 32;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    auto ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 0);
     REQUIRE(ret.num_buffers == 2);
     REQUIRE(queue.size() == 2);
@@ -264,7 +264,7 @@ TEST_CASE("test buffers - provided buffer queue usage bundle") {
     cqe.res = 25;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 2 << IORING_CQE_BUFFER_SHIFT; // bid = 2
-    ret = queue.handle_finish(cqe.res, cqe.flags);
+    ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 2);
     REQUIRE(ret.num_buffers == 2);
     REQUIRE(queue.size() == 2);
@@ -295,7 +295,7 @@ TEST_CASE("test buffers - provided buffer queue usage bundle incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    auto ret = queue.handle_finish(cqe.res, cqe.flags);
+    auto ret = queue.handle_finish(&cqe);
     REQUIRE(ret.bid == 0);
     REQUIRE(ret.num_buffers == 0);
     REQUIRE(queue.size() == 4);
@@ -305,7 +305,7 @@ TEST_CASE("test buffers - provided buffer queue usage bundle incr") {
     cqe.res = 21;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    auto ret2 = queue.handle_finish(cqe.res, cqe.flags);
+    auto ret2 = queue.handle_finish(&cqe);
     REQUIRE(ret2.bid == 0);
     REQUIRE(ret2.num_buffers == 2);
     REQUIRE(queue.size() == 2);
@@ -358,7 +358,7 @@ TEST_CASE("test buffers - provided buffer pool usage") {
             auto *data = io_uring_cqe_get_data(cqe);
             REQUIRE(data == nullptr);
             r = cqe->res;
-            ret = pool.handle_finish(cqe->res, cqe->flags);
+            ret = pool.handle_finish(cqe);
         });
     }
 
@@ -391,7 +391,7 @@ TEST_CASE("test buffers - provided buffer pool usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    auto ret = pool.handle_finish(&cqe);
     REQUIRE(ret.owns_buffer() == false);
     REQUIRE(ret.size() == 9);
 
@@ -400,7 +400,7 @@ TEST_CASE("test buffers - provided buffer pool usage incr") {
     cqe.res = 7;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    ret = pool.handle_finish(cqe.res, cqe.flags);
+    ret = pool.handle_finish(&cqe);
     REQUIRE(ret.owns_buffer() == true);
     REQUIRE(ret.size() == 7);
 
@@ -410,7 +410,7 @@ TEST_CASE("test buffers - provided buffer pool usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    ret = pool.handle_finish(cqe.res, cqe.flags);
+    ret = pool.handle_finish(&cqe);
     REQUIRE(ret.owns_buffer() == false);
     REQUIRE(ret.size() == 9);
 
@@ -420,7 +420,7 @@ TEST_CASE("test buffers - provided buffer pool usage incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 1 << IORING_CQE_BUFFER_SHIFT; // bid = 1
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    ret = pool.handle_finish(cqe.res, cqe.flags);
+    ret = pool.handle_finish(&cqe);
     REQUIRE(ret.owns_buffer() == false);
     REQUIRE(ret.size() == 1);
 }
@@ -446,7 +446,7 @@ TEST_CASE("test buffers - provided buffer pool usage bundle") {
     cqe.res = 32;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    auto ret = pool.handle_finish(&cqe);
     REQUIRE(ret.size() == 2);
     for (size_t i = 0; i < ret.size(); ++i) {
         REQUIRE(ret[i].owns_buffer() == true);
@@ -458,7 +458,7 @@ TEST_CASE("test buffers - provided buffer pool usage bundle") {
     cqe.res = 25;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 2 << IORING_CQE_BUFFER_SHIFT; // bid = 2
-    auto ret2 = pool.handle_finish(cqe.res, cqe.flags);
+    auto ret2 = pool.handle_finish(&cqe);
     REQUIRE(ret2.size() == 2);
     for (size_t i = 0; i < ret2.size(); ++i) {
         REQUIRE(ret2[i].owns_buffer() == true);
@@ -488,7 +488,7 @@ TEST_CASE("test buffers - provided buffer pool usage bundle incr") {
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
     cqe.flags |= IORING_CQE_F_BUF_MORE;
-    auto ret = pool.handle_finish(cqe.res, cqe.flags);
+    auto ret = pool.handle_finish(&cqe);
     REQUIRE(ret.size() == 1);
     REQUIRE(ret[0].owns_buffer() == false);
     REQUIRE(ret[0].size() == 9);
@@ -498,7 +498,7 @@ TEST_CASE("test buffers - provided buffer pool usage bundle incr") {
     cqe.res = 21;
     cqe.flags |= IORING_CQE_F_BUFFER;
     cqe.flags |= 0 << IORING_CQE_BUFFER_SHIFT; // bid = 0
-    auto ret2 = pool.handle_finish(cqe.res, cqe.flags);
+    auto ret2 = pool.handle_finish(&cqe);
     REQUIRE(ret2.size() == 2);
     REQUIRE(ret2[0].owns_buffer() == true);
     REQUIRE(ret2[0].size() == 7);

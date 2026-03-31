@@ -71,17 +71,13 @@ public:
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 
     void handle_cqe(io_uring_cqe *cqe) noexcept {
-        res_ = cqe->res;
-        flags_ = cqe->flags;
+        result_ = std::make_pair(cqe->res, buffers_->handle_finish(cqe));
     }
 
-    ReturnType extract_result() noexcept {
-        return std::make_pair(res_, buffers_->handle_finish(res_, flags_));
-    }
+    ReturnType extract_result() noexcept { return std::move(result_); }
 
 private:
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
-    uint32_t flags_ = 0;
+    ReturnType result_ = {-ENOTRECOVERABLE, typename Br::ReturnType()};
     Br *buffers_;
 };
 

@@ -78,11 +78,11 @@ concept AwaiterRange =
     std::ranges::range<T> && AwaiterLike<std::ranges::range_value_t<T>>;
 
 template <typename T>
-concept BufferRingLike = requires(T br) {
+concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {
     typename std::decay_t<T>::ReturnType;
     { br.bgid() } -> std::same_as<uint16_t>;
     {
-        br.handle_finish(0, 0)
+        br.handle_finish(cqe)
     } -> std::same_as<typename std::decay_t<T>::ReturnType>;
 };
 
