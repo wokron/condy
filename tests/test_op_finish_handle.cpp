@@ -31,7 +31,7 @@ void event_loop(size_t &unfinished) {
                 return;
             }
             auto handle_ptr = static_cast<condy::OpFinishHandleBase *>(data);
-            handle_ptr->handle_cqe(cqe);
+            handle_ptr->handle(cqe);
         });
     }
 }
@@ -64,7 +64,7 @@ TEST_CASE("test op_finish_handle - basic usage") {
             io_uring_cqe_get_data(cqe));
         io_uring_cqe mock_cqe = *cqe;
         mock_cqe.res = 42;
-        handle_ptr->handle_cqe(&mock_cqe);
+        handle_ptr->handle(&mock_cqe);
     });
 
     REQUIRE(invoker.finished);
@@ -172,8 +172,8 @@ TEST_CASE("test op_finish_handle - multishot op") {
     REQUIRE(!invoker.finished);
     io_uring_cqe cqe{};
     cqe.res = 1;
-    cqe.flags |= IORING_CQE_F_MORE;           // Indicate more results to come
-    auto op_finish = handle.handle_cqe(&cqe); // Multishot
+    cqe.flags |= IORING_CQE_F_MORE;       // Indicate more results to come
+    auto op_finish = handle.handle(&cqe); // Multishot
     REQUIRE(invoker.finished);
     REQUIRE(invoker.result == 1);
     REQUIRE(!op_finish);
@@ -192,7 +192,7 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     io_uring_cqe cqe{};
     cqe.res = 1;
     cqe.flags |= IORING_CQE_F_MORE; // Indicate more results to come
-    auto op_finish1 = handle->handle_cqe(&cqe);
+    auto op_finish1 = handle->handle(&cqe);
     REQUIRE(!op_finish1);
     REQUIRE(invoker.finished);
     REQUIRE(handle->extract_result() == 1);
@@ -200,7 +200,7 @@ TEST_CASE("test op_finish_handle - zero copy op") {
     io_uring_cqe cqe2{};
     cqe2.res = 2;
     cqe2.flags |= IORING_CQE_F_NOTIF;
-    auto op_finish2 = handle->handle_cqe(&cqe2);
+    auto op_finish2 = handle->handle(&cqe2);
     REQUIRE(op_finish2);
     REQUIRE(res == 2);
 }

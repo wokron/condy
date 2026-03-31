@@ -52,7 +52,7 @@ TEST_CASE("test ring - register and complete ops") {
             auto *handle = reinterpret_cast<OpFinishHandleBase *>(
                 io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->handle_cqe(cqe);
+            handle->handle(cqe);
             count++;
         });
     }
@@ -116,7 +116,7 @@ TEST_CASE("test ring - cancel ops") {
             auto *handle = reinterpret_cast<OpFinishHandleBase *>(
                 io_uring_cqe_get_data(cqe));
             REQUIRE(handle != nullptr);
-            handle->handle_cqe(cqe);
+            handle->handle(cqe);
             if (cqe->res == -ECANCELED) {
                 canceled_count++;
             }

@@ -38,7 +38,7 @@ public:
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
-    bool handle_cqe(io_uring_cqe *cqe) noexcept {
+    bool handle(io_uring_cqe *cqe) noexcept {
         assert(handle_func_ != nullptr);
         return handle_func_(this, cqe);
     }

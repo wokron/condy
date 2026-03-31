@@ -373,7 +373,7 @@ private:
             }
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandleBase *>(data);
-            auto op_finish = handle->handle_cqe(cqe);
+            auto op_finish = handle->handle(cqe);
             if (op_finish) {
                 pending_works_--;
             }
