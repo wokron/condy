@@ -726,7 +726,8 @@ inline auto async_recv_multishot(Fd fd, ZeroCopyRxBufferPool &pool,
         detail::prep_recv_zc_multishot(sqe, fd, zcrx_id);
         return sqe;
     };
-    auto op = build_multishot_op_awaiter<ZeroCopyRxCQEHandler>(
+    auto op = build_multishot_op_awaiter<
+        SelectBufferCQEHandler<ZeroCopyRxBufferPool>>(
         std::move(prep_func), std::forward<MultiShotFunc>(func), &pool);
     return detail::maybe_flag_fixed_fd(std::move(op), fd);
 }

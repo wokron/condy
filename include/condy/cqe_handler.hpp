@@ -10,7 +10,6 @@
 #include "condy/concepts.hpp"
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
-#include "condy/zcrx.hpp"
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -56,7 +55,9 @@ struct SimpleCQEHandler {
  * result of the operation (the value of `cqe->res`) and the selected buffer,
  * whose type is determined by the buffer ring.
  */
-template <BufferRingLike Br> class SelectBufferCQEHandler {
+template <typename Br>
+    requires(requires(Br *br, io_uring_cqe *cqe) { br->handle_finish(cqe); })
+class SelectBufferCQEHandler {
 public:
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 
@@ -123,28 +124,6 @@ struct TxTimestampCQEHandler {
         result.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
         return {cqe->res, result};
     }
-};
-#endif
-
-#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
-class ZeroCopyRxCQEHandler {
-public:
-    using ReturnType = std::pair<int, ZeroCopyRxBuffer>;
-
-    ZeroCopyRxCQEHandler(ZeroCopyRxBufferPool *pool) : pool_(pool) {}
-
-    void handle_cqe(io_uring_cqe *cqe) noexcept {
-        assert(detail::check_cqe32(cqe) &&
-               "Expected big CQE for zero-copy RX operations");
-        result_.first = cqe->res;
-        result_.second = pool_->handle_finish(cqe);
-    }
-
-    ReturnType extract_result() noexcept { return std::move(result_); }
-
-private:
-    ReturnType result_;
-    ZeroCopyRxBufferPool *pool_;
 };
 #endif
 
