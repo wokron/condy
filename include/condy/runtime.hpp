@@ -212,6 +212,8 @@ public:
     }
 
     void cancel(void *data) noexcept {
+        // Ensure align of 8 for encoding
+        assert(reinterpret_cast<intptr_t>(data) % 8 == 0);
         auto *curr_runtime = detail::Context::current().runtime();
         if (curr_runtime == this) {
             io_uring_sqe *sqe = ring_.get_sqe();
