@@ -36,13 +36,7 @@ public:
         return cqe_handler_.extract_result();
     }
 
-    void cancel() noexcept {
-        auto *ring = detail::Context::current().ring();
-        io_uring_sqe *sqe = ring->get_sqe();
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
-        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-    }
+    void cancel(Runtime *runtime) noexcept { runtime->cancel(this); }
 
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
@@ -167,11 +161,11 @@ public:
         order_.resize(handles_.size());
     }
 
-    void cancel() noexcept {
+    void cancel(Runtime *runtime) noexcept {
         if (!canceled_) {
             canceled_ = true;
             for (auto &handle : handles_) {
-                handle->cancel();
+                handle->cancel(runtime);
             }
         }
     }
@@ -193,11 +187,12 @@ private:
         order_[no] = idx;
 
         if constexpr (Cancel) {
+            auto *runtime = detail::Context::current().runtime();
             if (!canceled_) {
                 canceled_ = true;
                 for (size_t i = 0; i < handles_.size(); i++) {
                     if (i != idx) {
-                        handles_[i]->cancel();
+                        handles_[i]->cancel(runtime);
                     }
                 }
             }
@@ -271,11 +266,14 @@ public:
         foreach_set_invoker_();
     }
 
-    void cancel() noexcept {
+    void cancel(Runtime *runtime) noexcept {
         if (!canceled_) {
             canceled_ = true;
-            std::apply([](auto *...handles) { (handles->cancel(), ...); },
-                       handles_);
+            std::apply(
+                [runtime](auto *...handles) {
+                    (handles->cancel(runtime), ...);
+                },
+                handles_);
         }
     }
 
@@ -303,13 +301,13 @@ private:
     }
 
     template <size_t SkipIdx, size_t I = 0>
-    void foreach_call_cancel_() noexcept {
+    void foreach_call_cancel_(Runtime *runtime) noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto handle = std::get<I>(handles_);
             if constexpr (I != SkipIdx) {
-                handle->cancel();
+                handle->cancel(runtime);
             }
-            foreach_call_cancel_<SkipIdx, I + 1>();
+            foreach_call_cancel_<SkipIdx, I + 1>(runtime);
         }
     }
 
@@ -320,7 +318,8 @@ private:
         if constexpr (Cancel) {
             if (!canceled_) {
                 canceled_ = true;
-                foreach_call_cancel_<Idx>();
+                auto *runtime = detail::Context::current().runtime();
+                foreach_call_cancel_<Idx>(runtime);
             }
         }
 
