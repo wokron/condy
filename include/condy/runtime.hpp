@@ -211,6 +211,7 @@ public:
         }
     }
 
+    // Internal use only. Schedule a cancel request for the given data.
     void cancel(void *data) noexcept {
         // Ensure align of 8 for encoding
         assert(reinterpret_cast<intptr_t>(data) % 8 == 0);
