@@ -9,7 +9,6 @@
 #pragma once
 
 #include "condy/concepts.hpp"
-#include "condy/finish_handle_base.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <array>
