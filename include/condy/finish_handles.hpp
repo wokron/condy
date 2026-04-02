@@ -9,11 +9,9 @@
 #pragma once
 
 #include "condy/concepts.hpp"
-#include "condy/condy_uring.hpp"
-#include "condy/context.hpp"
+#include "condy/finish_handle_base.hpp"
 #include "condy/invoker.hpp"
-#include "condy/ring.hpp"
-#include "condy/work_type.hpp"
+#include "condy/runtime.hpp"
 #include <array>
 #include <cerrno>
 #include <cstddef>
@@ -23,35 +21,6 @@
 #include <vector>
 
 namespace condy {
-
-class Ring;
-
-class OpFinishHandleBase {
-public:
-    using HandleFunc = bool (*)(void *, io_uring_cqe *) noexcept;
-
-    void cancel() noexcept {
-        auto *ring = detail::Context::current().ring();
-        io_uring_sqe *sqe = ring->get_sqe();
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
-        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-    }
-
-    bool handle(io_uring_cqe *cqe) noexcept {
-        assert(handle_func_ != nullptr);
-        return handle_func_(this, cqe);
-    }
-
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
-
-protected:
-    OpFinishHandleBase() = default;
-
-protected:
-    HandleFunc handle_func_ = nullptr;
-    Invoker *invoker_ = nullptr;
-};
 
 template <CQEHandlerLike CQEHandler>
 class OpFinishHandle : public OpFinishHandleBase {
@@ -65,6 +34,14 @@ public:
 
     ReturnType extract_result() noexcept {
         return cqe_handler_.extract_result();
+    }
+
+    void cancel() noexcept {
+        auto *ring = detail::Context::current().ring();
+        io_uring_sqe *sqe = ring->get_sqe();
+        io_uring_prep_cancel(sqe, this, 0);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
+        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
 private:
