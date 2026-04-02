@@ -195,7 +195,8 @@ public:
             // Fast path: if the ring is enabled, we can directly schedule the
             // work
             tsan_release(work);
-            schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+            schedule_msg_ring_(curr_runtime,
+                               encode_work(work, WorkType::Schedule));
         } else {
             // Slow path: if the ring is not enabled, we need to acquire the
             // mutex to ensure the work is scheduled before the ring is enabled
@@ -204,7 +205,8 @@ public:
             if (state == State::Enabled) {
                 lock.unlock();
                 tsan_release(work);
-                schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+                schedule_msg_ring_(curr_runtime,
+                                   encode_work(work, WorkType::Schedule));
             } else {
                 global_queue_.push_back(work);
             }
@@ -227,7 +229,7 @@ public:
             return;
         }
 
-        schedule_msg_ring_(curr_runtime, data, WorkType::Cancel);
+        schedule_msg_ring_(curr_runtime, encode_work(data, WorkType::Cancel));
     }
 
     void pend_work() noexcept { pending_works_++; }
@@ -310,15 +312,15 @@ public:
     auto &settings() noexcept { return ring_.settings(); }
 
 private:
-    void schedule_msg_ring_(Runtime *curr_runtime, void *data,
-                            WorkType type) noexcept {
+    void schedule_msg_ring_(Runtime *curr_runtime, void *data) noexcept {
+        int ring_fd = this->ring_.ring()->ring_fd;
         if (curr_runtime != nullptr) {
             io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, data, type);
+            prep_msg_ring_(ring_fd, sqe, data);
             curr_runtime->pend_work();
         } else {
             io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, data, type);
+            prep_msg_ring_(ring_fd, &sqe, data);
             int r = detail::sync_msg_ring(&sqe);
             if (r < 0) {
                 panic_on(std::format("sync_msg_ring: {}", std::strerror(-r)));
@@ -338,17 +340,18 @@ private:
             return;
         }
 
-        schedule_msg_ring_(curr_runtime, nullptr, WorkType::Ignore);
+        schedule_msg_ring_(curr_runtime,
+                           encode_work(nullptr, WorkType::Ignore));
     }
 
     void flush_global_queue_() noexcept {
         local_queue_.push_back(std::move(global_queue_));
     }
 
-    void prep_msg_ring_(io_uring_sqe *sqe, void *data, WorkType type) noexcept {
-        io_uring_prep_msg_ring(
-            sqe, this->ring_.ring()->ring_fd, 0,
-            reinterpret_cast<uint64_t>(encode_work(data, type)), 0);
+    static void prep_msg_ring_(int ring_fd, io_uring_sqe *sqe,
+                               void *data) noexcept {
+        io_uring_prep_msg_ring(sqe, ring_fd, 0,
+                               reinterpret_cast<uint64_t>(data), 0);
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
