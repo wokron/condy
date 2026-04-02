@@ -1,4 +1,5 @@
 #include "condy/invoker.hpp"
+#include "condy/runtime.hpp"
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
 #include <doctest/doctest.h>
@@ -9,7 +10,7 @@ namespace {
 struct SimpleFinishHandle {
     using ReturnType = int;
 
-    void cancel() { cancelled_++; }
+    void cancel(condy::Runtime *) { cancelled_++; }
 
     void invoke(int res) {
         res_ = res;

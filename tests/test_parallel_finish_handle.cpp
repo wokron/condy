@@ -11,7 +11,7 @@ struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
 struct SimpleFinishHandle {
     using ReturnType = int;
 
-    void cancel() { cancelled_++; }
+    void cancel(condy::Runtime *) { cancelled_++; }
 
     void invoke(int res) {
         res_ = res;
@@ -66,7 +66,7 @@ TEST_CASE("test parallel_finish_handle - RangedWhenAllFinishHandle cancel") {
     h2.invoke(2);
     REQUIRE(!invoker.finished);
 
-    handle.cancel();
+    handle.cancel(nullptr);
     REQUIRE(!invoker.finished);
     REQUIRE(h1.cancelled_ == 1);
     REQUIRE(h2.cancelled_ == 1);
@@ -152,7 +152,7 @@ TEST_CASE("test parallel_finish_handle - RangedWhenAnyFinishHandle "
     REQUIRE(!invoker.finished);
     REQUIRE(h2.cancelled_ == 1); // Should not increase
 
-    handle.cancel();
+    handle.cancel(nullptr);
     REQUIRE(!invoker.finished);
     REQUIRE(h2.cancelled_ == 1); // Should not increase
 
@@ -260,7 +260,7 @@ TEST_CASE("test parallel_finish_handle - WhenAllFinishHandle cancel") {
     h2.invoke(2);
     REQUIRE(!invoker.finished);
 
-    finish_handle.cancel();
+    finish_handle.cancel(nullptr);
     REQUIRE(!invoker.finished);
     REQUIRE(h1.cancelled_ == 1);
     REQUIRE(h2.cancelled_ == 1);
@@ -347,7 +347,7 @@ TEST_CASE("test parallel_finish_handle - WhenAnyFinishHandle multiple "
     REQUIRE(!invoker.finished);
     REQUIRE(h2.cancelled_ == 1); // Should not increase
 
-    finish_handle.cancel();
+    finish_handle.cancel(nullptr);
     REQUIRE(!invoker.finished);
     REQUIRE(h2.cancelled_ == 1); // Should not increase
 
