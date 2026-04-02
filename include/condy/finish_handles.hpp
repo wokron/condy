@@ -12,6 +12,7 @@
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <array>
+#include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <tuple>
@@ -35,7 +36,10 @@ public:
         return cqe_handler_.extract_result();
     }
 
-    void cancel(Runtime *runtime) noexcept { runtime->cancel(this); }
+    void cancel(Runtime *runtime) noexcept {
+        assert(runtime != nullptr);
+        runtime->cancel(this);
+    }
 
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
@@ -186,9 +190,9 @@ private:
         order_[no] = idx;
 
         if constexpr (Cancel) {
-            auto *runtime = detail::Context::current().runtime();
             if (!canceled_) {
                 canceled_ = true;
+                auto *runtime = detail::Context::current().runtime();
                 for (size_t i = 0; i < handles_.size(); i++) {
                     if (i != idx) {
                         handles_[i]->cancel(runtime);
