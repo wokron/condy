@@ -195,7 +195,8 @@ public:
             // Fast path: if the ring is enabled, we can directly schedule the
             // work
             tsan_release(work);
-            schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+            schedule_msg_ring_(curr_runtime,
+                               encode_work(work, WorkType::Schedule));
         } else {
             // Slow path: if the ring is not enabled, we need to acquire the
             // mutex to ensure the work is scheduled before the ring is enabled
@@ -204,11 +205,31 @@ public:
             if (state == State::Enabled) {
                 lock.unlock();
                 tsan_release(work);
-                schedule_msg_ring_(curr_runtime, work, WorkType::Schedule);
+                schedule_msg_ring_(curr_runtime,
+                                   encode_work(work, WorkType::Schedule));
             } else {
                 global_queue_.push_back(work);
             }
         }
+    }
+
+    // Internal use only. Schedule a cancel request for the given data.
+    void cancel(void *data) noexcept {
+        // Ensure align of 8 for encoding
+        assert(reinterpret_cast<intptr_t>(data) % 8 == 0);
+        auto *curr_runtime = detail::Context::current().runtime();
+        if (curr_runtime == this) {
+            io_uring_sqe *sqe = ring_.get_sqe();
+            prep_cancel_(sqe, data);
+            return;
+        }
+
+        auto state = state_.load();
+        if (state != State::Enabled) {
+            return;
+        }
+
+        schedule_msg_ring_(curr_runtime, encode_work(data, WorkType::Cancel));
     }
 
     void pend_work() noexcept { pending_works_++; }
@@ -291,15 +312,15 @@ public:
     auto &settings() noexcept { return ring_.settings(); }
 
 private:
-    void schedule_msg_ring_(Runtime *curr_runtime, WorkInvoker *work,
-                            WorkType type) noexcept {
+    void schedule_msg_ring_(Runtime *curr_runtime, void *data) noexcept {
+        int ring_fd = this->ring_.ring()->ring_fd;
         if (curr_runtime != nullptr) {
             io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
-            prep_msg_ring_(sqe, work, type);
+            prep_msg_ring_(ring_fd, sqe, data);
             curr_runtime->pend_work();
         } else {
             io_uring_sqe sqe = {};
-            prep_msg_ring_(&sqe, work, type);
+            prep_msg_ring_(ring_fd, &sqe, data);
             int r = detail::sync_msg_ring(&sqe);
             if (r < 0) {
                 panic_on(std::format("sync_msg_ring: {}", std::strerror(-r)));
@@ -319,19 +340,25 @@ private:
             return;
         }
 
-        schedule_msg_ring_(curr_runtime, nullptr, WorkType::Ignore);
+        schedule_msg_ring_(curr_runtime,
+                           encode_work(nullptr, WorkType::Ignore));
     }
 
     void flush_global_queue_() noexcept {
         local_queue_.push_back(std::move(global_queue_));
     }
 
-    void prep_msg_ring_(io_uring_sqe *sqe, WorkInvoker *work,
-                        WorkType type) noexcept {
-        auto data = encode_work(work, type);
-        io_uring_prep_msg_ring(sqe, this->ring_.ring()->ring_fd, 0,
+    static void prep_msg_ring_(int ring_fd, io_uring_sqe *sqe,
+                               void *data) noexcept {
+        io_uring_prep_msg_ring(sqe, ring_fd, 0,
                                reinterpret_cast<uint64_t>(data), 0);
         io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
+    }
+
+    static void prep_cancel_(io_uring_sqe *sqe, void *data) noexcept {
+        io_uring_prep_cancel(sqe, data, 0);
+        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
+        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
     void flush_ring_() noexcept {
@@ -371,6 +398,9 @@ private:
                 tsan_acquire(data);
                 (*work)();
             }
+        } else if (type == WorkType::Cancel) {
+            io_uring_sqe *sqe = ring_.get_sqe();
+            prep_cancel_(sqe, data);
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandleBase *>(data);
             auto op_finish = handle->handle(cqe);

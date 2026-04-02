@@ -368,7 +368,7 @@ public:
             // Successfully canceled
             assert(result_ == -ENOTRECOVERABLE);
             result_ = -ECANCELED;
-            runtime_->resume_work();
+            need_resume_ = true;
             runtime_->schedule(this);
         }
     }
@@ -427,7 +427,7 @@ public:
             // Successfully canceled
             assert(result_.first == -ENOTRECOVERABLE);
             result_.first = -ECANCELED;
-            runtime_->resume_work();
+            need_resume_ = true;
             runtime_->schedule(this);
         }
     }
