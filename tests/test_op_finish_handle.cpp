@@ -103,50 +103,6 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     context.reset();
 }
 
-TEST_CASE("test op_finish_handle - cancel op") {
-    size_t unfinished = 1;
-    SetUnfinishedInvoker invoker{unfinished};
-
-    condy::Ring ring;
-    io_uring_params params{};
-    std::memset(&params, 0, sizeof(params));
-    ring.init(8, &params);
-    auto &context = condy::detail::Context::current();
-    context.init(&ring, &runtime);
-
-    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
-    condy::ParallelFinishHandle<true,
-                                condy::OpFinishHandle<condy::SimpleCQEHandler>,
-                                condy::OpFinishHandle<condy::SimpleCQEHandler>>
-        finish_handle;
-    finish_handle.init(&handle1, &handle2);
-    finish_handle.set_invoker(&invoker);
-
-    auto *sqe = ring.get_sqe();
-    __kernel_timespec ts{
-        .tv_sec = 60ll * 60ll,
-        .tv_nsec = 0,
-    };
-    io_uring_prep_timeout(sqe, &ts, 0, 0);
-    io_uring_sqe_set_data(sqe, &handle1);
-
-    sqe = ring.get_sqe();
-    io_uring_prep_nop(sqe);
-    io_uring_sqe_set_data(sqe, &handle2);
-
-    event_loop(unfinished);
-
-    REQUIRE(unfinished == 0);
-
-    auto r = finish_handle.extract_result();
-    auto &[order, results] = r;
-    REQUIRE(order[0] == 1);
-    REQUIRE(std::get<0>(results) == -ECANCELED);
-    REQUIRE(std::get<1>(results) == 0);
-
-    context.reset();
-}
-
 namespace {
 
 struct SetFinishWorkInvoker

@@ -363,7 +363,8 @@ public:
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    void cancel() noexcept {
+    void cancel([[maybe_unused]] Runtime *runtime) noexcept {
+        assert(runtime == runtime_);
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
             assert(result_ == -ENOTRECOVERABLE);
@@ -422,7 +423,8 @@ class Channel<T, N>::PopFinishHandle
 public:
     using ReturnType = std::pair<int, T>;
 
-    void cancel() noexcept {
+    void cancel([[maybe_unused]] Runtime *runtime) noexcept {
+        assert(runtime == runtime_);
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
             assert(result_.first == -ENOTRECOVERABLE);

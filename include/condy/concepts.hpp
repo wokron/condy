@@ -19,6 +19,7 @@ namespace condy {
 class Ring;
 class Invoker;
 class BufferBase;
+class Runtime;
 
 namespace detail {
 
@@ -27,13 +28,13 @@ struct FixedFd;
 } // namespace detail
 
 template <typename T>
-concept HandleLike = requires(T handle, Invoker *invoker) {
+concept HandleLike = requires(T handle, Invoker *invoker, Runtime *runtime) {
     typename std::decay_t<T>::ReturnType;
     { handle.set_invoker(invoker) } -> std::same_as<void>;
     {
         handle.extract_result()
     } -> std::same_as<typename std::decay_t<T>::ReturnType>;
-    { handle.cancel() } -> std::same_as<void>;
+    { handle.cancel(runtime) } -> std::same_as<void>;
 };
 
 template <typename T>

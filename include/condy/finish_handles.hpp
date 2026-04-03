@@ -9,12 +9,10 @@
 #pragma once
 
 #include "condy/concepts.hpp"
-#include "condy/condy_uring.hpp"
-#include "condy/context.hpp"
 #include "condy/invoker.hpp"
-#include "condy/ring.hpp"
-#include "condy/work_type.hpp"
+#include "condy/runtime.hpp"
 #include <array>
+#include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <tuple>
@@ -23,35 +21,6 @@
 #include <vector>
 
 namespace condy {
-
-class Ring;
-
-class OpFinishHandleBase {
-public:
-    using HandleFunc = bool (*)(void *, io_uring_cqe *) noexcept;
-
-    void cancel() noexcept {
-        auto *ring = detail::Context::current().ring();
-        io_uring_sqe *sqe = ring->get_sqe();
-        io_uring_prep_cancel(sqe, this, 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
-        io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
-    }
-
-    bool handle(io_uring_cqe *cqe) noexcept {
-        assert(handle_func_ != nullptr);
-        return handle_func_(this, cqe);
-    }
-
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
-
-protected:
-    OpFinishHandleBase() = default;
-
-protected:
-    HandleFunc handle_func_ = nullptr;
-    Invoker *invoker_ = nullptr;
-};
 
 template <CQEHandlerLike CQEHandler>
 class OpFinishHandle : public OpFinishHandleBase {
@@ -65,6 +34,11 @@ public:
 
     ReturnType extract_result() noexcept {
         return cqe_handler_.extract_result();
+    }
+
+    void cancel(Runtime *runtime) noexcept {
+        assert(runtime != nullptr);
+        runtime->cancel(this);
     }
 
 private:
@@ -190,11 +164,11 @@ public:
         order_.resize(handles_.size());
     }
 
-    void cancel() noexcept {
+    void cancel(Runtime *runtime) noexcept {
         if (!canceled_) {
             canceled_ = true;
             for (auto &handle : handles_) {
-                handle->cancel();
+                handle->cancel(runtime);
             }
         }
     }
@@ -218,9 +192,10 @@ private:
         if constexpr (Cancel) {
             if (!canceled_) {
                 canceled_ = true;
+                auto *runtime = detail::Context::current().runtime();
                 for (size_t i = 0; i < handles_.size(); i++) {
                     if (i != idx) {
-                        handles_[i]->cancel();
+                        handles_[i]->cancel(runtime);
                     }
                 }
             }
@@ -294,11 +269,14 @@ public:
         foreach_set_invoker_();
     }
 
-    void cancel() noexcept {
+    void cancel(Runtime *runtime) noexcept {
         if (!canceled_) {
             canceled_ = true;
-            std::apply([](auto *...handles) { (handles->cancel(), ...); },
-                       handles_);
+            std::apply(
+                [runtime](auto *...handles) {
+                    (handles->cancel(runtime), ...);
+                },
+                handles_);
         }
     }
 
@@ -326,13 +304,13 @@ private:
     }
 
     template <size_t SkipIdx, size_t I = 0>
-    void foreach_call_cancel_() noexcept {
+    void foreach_call_cancel_(Runtime *runtime) noexcept {
         if constexpr (I < sizeof...(Handles)) {
             auto handle = std::get<I>(handles_);
             if constexpr (I != SkipIdx) {
-                handle->cancel();
+                handle->cancel(runtime);
             }
-            foreach_call_cancel_<SkipIdx, I + 1>();
+            foreach_call_cancel_<SkipIdx, I + 1>(runtime);
         }
     }
 
@@ -343,7 +321,8 @@ private:
         if constexpr (Cancel) {
             if (!canceled_) {
                 canceled_ = true;
-                foreach_call_cancel_<Idx>();
+                auto *runtime = detail::Context::current().runtime();
+                foreach_call_cancel_<Idx>(runtime);
             }
         }
 
