@@ -16,6 +16,7 @@
 #include <format>
 #include <iostream>
 #include <limits>
+#include <new>
 #include <stack>
 #include <stdexcept>
 #include <string_view>
@@ -84,7 +85,7 @@ template <typename T> class RawStorage {
 public:
     template <typename Factory>
     void accept(Factory &&factory) noexcept(
-        std::is_nothrow_invocable_r_v<T, Factory>) {
+        noexcept(T(std::forward<Factory>(factory)()))) {
         new (&storage_) T(std::forward<Factory>(factory)());
     }
 
