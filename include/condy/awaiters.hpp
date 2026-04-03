@@ -55,8 +55,10 @@ template <OpFinishHandleLike Handle, PrepFuncLike Func> class OpAwaiterBase {
 public:
     using HandleType = Handle;
 
-    OpAwaiterBase(HandleBox<Handle> handle, Func func)
-        : prep_func_(func), finish_handle_(std::move(handle)) {}
+    template <typename... Args>
+    OpAwaiterBase(Func func, Args &&...args)
+        : prep_func_(std::move(func)),
+          finish_handle_(Handle(std::forward<Args>(args)...)) {}
 
 public:
     HandleType *get_handle() noexcept { return &finish_handle_.get(); }
@@ -98,47 +100,16 @@ protected:
 };
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler>
-class [[nodiscard]] OpAwaiter
-    : public OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc> {
-public:
-    using Base = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc>;
-    template <typename... Args>
-    OpAwaiter(PrepFunc func, Args &&...args)
-        : Base(HandleBox(
-                   OpFinishHandle<CQEHandler>(std::forward<Args>(args)...)),
-               std::move(func)) {}
-};
+using OpAwaiter = OpAwaiterBase<OpFinishHandle<CQEHandler>, PrepFunc>;
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc>
-class [[nodiscard]] MultiShotOpAwaiter
-    : public OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                           PrepFunc> {
-public:
-    using Base =
-        OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>,
-                      PrepFunc>;
-    template <typename... Args>
-    MultiShotOpAwaiter(PrepFunc func, MultiShotFunc multishot_func,
-                       Args &&...args)
-        : Base(HandleBox(MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>(
-                   std::move(multishot_func), std::forward<Args>(args)...)),
-               std::move(func)) {}
-};
+using MultiShotOpAwaiter =
+    OpAwaiterBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>, PrepFunc>;
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
-class [[nodiscard]] ZeroCopyOpAwaiter
-    : public OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>,
-                           PrepFunc> {
-public:
-    using Base =
-        OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc>;
-    template <typename... Args>
-    ZeroCopyOpAwaiter(PrepFunc func, FreeFunc free_func, Args &&...args)
-        : Base(HandleBox(ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>(
-                   std::move(free_func), std::forward<Args>(args)...)),
-               std::move(func)) {}
-};
+using ZeroCopyOpAwaiter =
+    OpAwaiterBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc>;
 
 template <unsigned int Flags, AwaiterLike Awaiter>
 class [[nodiscard]] FlaggedOpAwaiter : public Awaiter {
