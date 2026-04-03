@@ -11,6 +11,7 @@
 #include <coroutine>
 #include <exception>
 #include <mutex>
+#include <new>
 #include <optional>
 
 namespace condy {
@@ -64,8 +65,8 @@ public:
             (size + alignof(Allocator) - 1) & ~(alignof(Allocator) - 1);
         size_t total_size = allocator_offset + sizeof(Allocator);
         Pointer mem = static_cast<Pointer>(ptr);
-        Allocator &alloc =
-            *reinterpret_cast<Allocator *>(mem + allocator_offset);
+        Allocator &alloc = *std::launder(
+            reinterpret_cast<Allocator *>(mem + allocator_offset));
         Allocator alloc_copy = std::move(alloc);
         alloc.~Allocator();
         alloc_copy.deallocate(mem, total_size);
