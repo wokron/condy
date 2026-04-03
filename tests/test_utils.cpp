@@ -19,7 +19,7 @@ struct int_deleter {
 
 TEST_CASE("test raw_storage - int") {
     condy::RawStorage<int> storage;
-    new (&storage) int(77);
+    storage.construct(77);
     REQUIRE(storage.get() == 77);
     storage.destroy();
 }
