@@ -82,16 +82,22 @@ template <typename Func> auto defer(Func &&func) {
 
 template <typename T> class RawStorage {
 public:
+    template <typename Factory>
+    void accept(Factory &&factory) noexcept(
+        std::is_nothrow_invocable_r_v<T, Factory>) {
+        new (&storage_) T(std::forward<Factory>(factory)());
+    }
+
     template <typename... Args>
     void construct(Args &&...args) noexcept(
         std::is_nothrow_constructible_v<T, Args...>) {
-        new (&storage_) T(std::forward<Args>(args)...);
+        accept([&]() { return T(std::forward<Args>(args)...); });
     }
 
-    T &get() noexcept { return *reinterpret_cast<T *>(&storage_); }
+    T &get() noexcept { return *std::launder(reinterpret_cast<T *>(storage_)); }
 
     const T &get() const noexcept {
-        return *reinterpret_cast<const T *>(&storage_);
+        return *std::launder(reinterpret_cast<const T *>(storage_));
     }
 
     void destroy() noexcept { get().~T(); }

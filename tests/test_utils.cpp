@@ -42,6 +42,26 @@ TEST_CASE("test raw_storage - std::unique_ptr") {
     REQUIRE(int_deleter::called);
 }
 
+TEST_CASE("test raw_storage - guaranteed return value optimization") {
+    struct Fixed {
+        Fixed(int v) : value(v) {}
+        Fixed(const Fixed &) = delete;
+        Fixed &operator=(const Fixed &) = delete;
+        Fixed(Fixed &&) = delete;
+        Fixed &operator=(Fixed &&) = delete;
+        int value;
+    };
+
+    auto f1 = [](int v) { return Fixed(v); };
+
+    auto f2 = [&]() { return f1(42); };
+
+    condy::RawStorage<Fixed> storage;
+    storage.accept(f2);
+    REQUIRE(storage.get().value == 42);
+    storage.destroy();
+}
+
 TEST_CASE("test small_array - small") {
     condy::SmallArray<int, 4> arr(3);
     arr[0] = 10;
