@@ -32,6 +32,8 @@ public:
         this->handle_func_ = handle_static_;
     }
 
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
+
     ReturnType extract_result() noexcept {
         return cqe_handler_.extract_result();
     }
@@ -55,6 +57,7 @@ private:
     }
 
 protected:
+    Invoker *invoker_ = nullptr;
     CQEHandler cqe_handler_;
 };
 
