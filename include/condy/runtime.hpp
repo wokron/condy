@@ -95,14 +95,11 @@ public:
         return handle_func_(this, cqe);
     }
 
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
-
 protected:
     OpFinishHandleBase() = default;
 
 protected:
     HandleFunc handle_func_ = nullptr;
-    Invoker *invoker_ = nullptr;
 };
 
 /**

@@ -41,6 +41,8 @@ public:
         runtime->cancel(this);
     }
 
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
+
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
@@ -55,6 +57,7 @@ private:
     }
 
 protected:
+    Invoker *invoker_ = nullptr;
     CQEHandler cqe_handler_;
 };
 
