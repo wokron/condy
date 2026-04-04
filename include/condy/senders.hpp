@@ -118,6 +118,85 @@ auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
         std::forward<Args>(handler_args)...);
 }
 
+template <typename... Senders> class WhenAllSender {
+public:
+    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+
+    WhenAllSender(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) {
+        return OperationState<Receiver>(std::move(senders_),
+                                        std::move(receiver));
+    }
+
+    template <typename Receiver> class OperationState {
+    public:
+        OperationState(std::tuple<Senders...> senders, Receiver receiver)
+            : receiver_(std::move(receiver)) {
+            connect_senders_(std::move(senders),
+                             std::make_index_sequence<sizeof...(Senders)>{});
+        }
+
+        void start() noexcept {
+            std::apply([&](auto &&...state) { (state.get().start(), ...); },
+                       operation_states_);
+        }
+
+    private:
+        template <size_t... Is>
+        void connect_senders_(std::tuple<Senders...> senders,
+                              std::index_sequence<Is...>) {
+            (std::get<Is>(operation_states_).accept([&] {
+                return std::get<Is>(senders).connect(ReceiverImpl<Is>{this});
+            }),
+             ...);
+        }
+
+        template <size_t Idx> void check_and_invoke_() {
+            auto no = completed_count_++;
+            order_[no] = Idx;
+            if (no == sizeof...(Senders) - 1) {
+                std::move(receiver_)(std::move(results_));
+            }
+        }
+
+        template <size_t I> struct ReceiverImpl {
+            OperationState *state;
+
+            void operator()(typename std::tuple_element_t<
+                            I, std::tuple<Senders...>>::ReturnType result) {
+                std::get<I>(state->operation_states_).destroy();
+                std::get<I>(state->results_) = std::move(result);
+                state->check_and_invoke_<I>();
+            }
+        };
+
+        template <typename T> struct operation_state_traits;
+
+        template <size_t... Is>
+        struct operation_state_traits<std::index_sequence<Is...>> {
+            using type =
+                std::tuple<RawStorage<decltype(std::declval<Senders>().connect(
+                    std::declval<ReceiverImpl<Is>>()))>...>;
+        };
+
+        using OperationStates = typename operation_state_traits<
+            std::make_index_sequence<sizeof...(Senders)>>::type;
+        OperationStates operation_states_;
+        size_t completed_count_ = 0;
+        std::array<size_t, sizeof...(Senders)> order_{};
+        std::tuple<typename Senders::ReturnType...> results_;
+        Receiver receiver_;
+    };
+
+    std::tuple<Senders...> senders_;
+};
+
+template <typename... Senders> auto when_all_senders(Senders &&...senders) {
+    return WhenAllSender<std::decay_t<Senders>...>(
+        std::forward<Senders>(senders)...);
+}
+
 namespace detail {
 
 template <typename Func, typename... Args>
