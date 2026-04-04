@@ -193,8 +193,34 @@ public:
     std::tuple<Senders...> senders_;
 };
 
+template <typename... Senders>
+class WhenAllSender : public ParallelSender<Senders...> {
+public:
+    using Base = ParallelSender<Senders...>;
+    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+
+    WhenAllSender(Senders... senders) : Base(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) {
+        return Base::connect(ReceiverAdapter<Receiver>{std::move(receiver)});
+    }
+
+private:
+    template <typename Receiver> struct ReceiverAdapter {
+        Receiver receiver;
+
+        template <typename... Args>
+        void operator()(std::pair<std::array<size_t, sizeof...(Senders)>,
+                                  std::tuple<Args...>>
+                            result) {
+            auto &[order, results] = result;
+            std::move(receiver)(std::move(results));
+        }
+    };
+};
+
 template <typename... Senders> auto when_all_senders(Senders &&...senders) {
-    return ParallelSender<std::decay_t<Senders>...>(
+    return WhenAllSender<std::decay_t<Senders>...>(
         std::forward<Senders>(senders)...);
 }
 
