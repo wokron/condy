@@ -267,7 +267,7 @@ inline Task<T, Allocator> co_spawn(Runtime &runtime,
                                    Coro<T, Allocator> coro) noexcept {
     auto handle = coro.release();
     auto &promise = handle.promise();
-    promise.set_auto_destroy(false);
+    promise.mark_running();
 
     runtime.schedule(&promise);
     return {handle};
