@@ -197,27 +197,6 @@ private:
     std::stack<T> recycled_ids_;
 };
 
-class AtomicMutex {
-public:
-    void lock() noexcept {
-        bool expected = false;
-        while (!lock_.compare_exchange_weak(expected, true,
-                                            std::memory_order_acquire,
-                                            std::memory_order_relaxed)) {
-            expected = false;
-            lock_.wait(true, std::memory_order_relaxed);
-        }
-    }
-
-    void unlock() noexcept {
-        lock_.store(false, std::memory_order_release);
-        lock_.notify_one();
-    }
-
-private:
-    std::atomic_bool lock_ = false;
-};
-
 #if __cplusplus >= 202302L
 [[noreturn]] inline void unreachable() { std::unreachable(); }
 #else
