@@ -34,9 +34,6 @@ namespace condy {
  * operations that can be awaited in coroutines. The internal implementation
  * utilizes msg_ring operations of io_uring for efficient cross-runtime
  * notifications.
- * @note Legacy version with different error handling is available in
- * condy::legacy::Channel, which is deprecated and will be removed in future
- * versions.
  */
 template <typename T, size_t N = 2> class Channel {
 public:
