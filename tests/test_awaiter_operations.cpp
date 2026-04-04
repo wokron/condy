@@ -200,10 +200,8 @@ TEST_CASE("test awaiter_operations - ranged awaiter push") {
         auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
-        auto awaiter = condy::when_all(std::vector<decltype(aw1)>{});
-        awaiter.push(aw1);
-        awaiter.push(aw2);
-        awaiter.push(aw3);
+        std::vector<decltype(aw1)> awaiters = {aw1, aw2, aw3};
+        auto awaiter = condy::when_all(std::move(awaiters));
         auto r = co_await awaiter;
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});

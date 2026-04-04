@@ -19,6 +19,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <tuple>
 
 namespace condy {
@@ -135,7 +136,11 @@ public:
     using HandleType = Handle;
 
     RangedParallelAwaiterBase(std::vector<Awaiter> awaiters)
-        : awaiters_(std::move(awaiters)) {}
+        : awaiters_(std::move(awaiters)) {
+        if (awaiters_.empty()) {
+            throw std::invalid_argument("Awaiter range cannot be empty");
+        }
+    }
 
 public:
     HandleType *get_handle() noexcept { return &finish_handle_; }
@@ -158,13 +163,7 @@ public:
     }
 
 public:
-    bool await_ready() const noexcept {
-        if (awaiters_.empty()) [[unlikely]] {
-            // TODO: Better way to handle this case?
-            panic_on("Cannot await on an empty range of operations");
-        }
-        return false;
-    }
+    bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
@@ -176,9 +175,6 @@ public:
     typename Handle::ReturnType await_resume() noexcept {
         return finish_handle_.extract_result();
     }
-
-public:
-    void push(Awaiter awaiter) { awaiters_.push_back(std::move(awaiter)); }
 
 protected:
     HandleType finish_handle_;
