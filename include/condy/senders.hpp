@@ -118,11 +118,12 @@ auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
         std::forward<Args>(handler_args)...);
 }
 
-template <typename... Senders> class WhenAllSender {
+template <typename... Senders> class ParallelSender {
 public:
-    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+    using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
+                                 std::tuple<typename Senders::ReturnType...>>;
 
-    WhenAllSender(Senders... senders) : senders_(std::move(senders)...) {}
+    ParallelSender(Senders... senders) : senders_(std::move(senders)...) {}
 
     template <typename Receiver> auto connect(Receiver receiver) {
         return OperationState<Receiver>(std::move(senders_),
@@ -156,7 +157,7 @@ public:
             auto no = completed_count_++;
             order_[no] = Idx;
             if (no == sizeof...(Senders) - 1) {
-                std::move(receiver_)(std::move(results_));
+                std::move(receiver_)(std::make_pair(order_, results_));
             }
         }
 
@@ -193,7 +194,7 @@ public:
 };
 
 template <typename... Senders> auto when_all_senders(Senders &&...senders) {
-    return WhenAllSender<std::decay_t<Senders>...>(
+    return ParallelSender<std::decay_t<Senders>...>(
         std::forward<Senders>(senders)...);
 }
 
