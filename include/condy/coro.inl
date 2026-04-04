@@ -8,9 +8,9 @@
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
 #include "condy/utils.hpp"
+#include <atomic>
 #include <coroutine>
 #include <exception>
-#include <mutex>
 #include <new>
 #include <optional>
 
@@ -127,7 +127,7 @@ public:
                 } else if (expected == State::RunningDetached ||
                            expected == State::RunningJoining) {
                     desired = State::Finished;
-                } else {
+                } else [[unlikely]] {
                     panic_on(std::format(
                         "Invalid coroutine state in final_suspend: {}",
                         static_cast<int>(expected)));
@@ -141,7 +141,7 @@ public:
                 handle.destroy();
                 return std::noop_coroutine();
             } else if (prev == State::RunningJoining) {
-                auto *callback = self.remote_callback_;
+                auto *callback = self.callback_;
                 (*callback)();
                 return std::noop_coroutine();
             } else {
@@ -156,7 +156,13 @@ public:
     FinalAwaiter final_suspend() const noexcept { return {}; }
 
 public:
-    void mark_running() noexcept { state_ = State::RunningJoinable; }
+    void mark_running() noexcept {
+        state_.store(State::RunningJoinable, std::memory_order_relaxed);
+    }
+
+    void set_caller_handle(std::coroutine_handle<> handle) noexcept {
+        caller_handle_ = handle;
+    }
 
     void request_detach() noexcept {
         State expected = state_.load(std::memory_order_acquire);
@@ -166,7 +172,7 @@ public:
                 desired = State::RunningDetached;
             } else if (expected == State::Zombie) {
                 desired = State::Finished;
-            } else {
+            } else [[unlikely]] {
                 panic_on(
                     std::format("Invalid coroutine state in request_detach: {}",
                                 static_cast<int>(expected)));
@@ -183,19 +189,19 @@ public:
         }
     }
 
-    bool register_task_await(Invoker *remote_callback) noexcept {
+    bool request_join(Invoker *remote_callback) noexcept {
         State expected = state_.load(std::memory_order_acquire);
         State desired;
         do {
             if (expected == State::RunningJoinable) {
                 desired = State::RunningJoining;
-                remote_callback_ = remote_callback;
+                callback_ = remote_callback;
             } else if (expected == State::Zombie) {
                 desired = State::Finished;
-            } else {
-                panic_on(std::format(
-                    "Invalid coroutine state in register_task_await: {}",
-                    static_cast<int>(expected)));
+            } else [[unlikely]] {
+                panic_on(
+                    std::format("Invalid coroutine state in request_join: {}",
+                                static_cast<int>(expected)));
             }
         } while (!state_.compare_exchange_weak(expected, desired,
                                                std::memory_order_acq_rel,
@@ -208,10 +214,6 @@ public:
             assert(prev == State::RunningJoinable);
             return true;
         }
-    }
-
-    void set_caller_handle(std::coroutine_handle<> handle) noexcept {
-        caller_handle_ = handle;
     }
 
     std::exception_ptr exception() noexcept { return std::move(exception_); }
@@ -236,7 +238,7 @@ protected:
     std::atomic<State> state_ = State::Idle;
     union {
         std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
-        Invoker *remote_callback_;
+        Invoker *callback_;
     };
     std::exception_ptr exception_;
 };

@@ -103,7 +103,7 @@ void TaskBase<T, Allocator>::wait_inner_(
     };
 
     TaskWaiter waiter(prom);
-    if (handle.promise().register_task_await(&waiter)) {
+    if (handle.promise().request_join(&waiter)) {
         // Still not finished, wait
         fut.get();
     }
@@ -198,7 +198,7 @@ struct TaskAwaiterBase : public InvokerAdapter<TaskAwaiterBase<T, Allocator>> {
         detail::Context::current().runtime()->pend_work();
         assert(runtime_ != nullptr);
         caller_promise_ = &caller_handle.promise();
-        return task_handle_.promise().register_task_await(this);
+        return task_handle_.promise().request_join(this);
     }
 
     void invoke() noexcept {
