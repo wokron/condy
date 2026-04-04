@@ -79,10 +79,43 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
 using OpSender =
     OpSenderBase<OpFinishHandle<CQEHandler>, PrepFunc, HandleArgs...>;
 
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
+          typename MultiShotFunc, typename... HandleArgs>
+using MultiShotOpSender =
+    OpSenderBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>, PrepFunc,
+                 HandleArgs...>;
+
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
+          typename... HandleArgs>
+using ZeroCopyOpSender =
+    OpSenderBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc,
+                 HandleArgs...>;
+
 template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc, typename... Args>
 auto build_op_sender(PrepFunc &&prep_func, Args &&...args) {
-    return OpSender<PrepFunc, CQEHandler, Args...>(
+    return OpSender<std::decay_t<PrepFunc>, CQEHandler, Args...>(
         std::forward<PrepFunc>(prep_func), std::forward<Args>(args)...);
+}
+
+template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc,
+          typename MultiShotFunc, typename... Args>
+auto build_multishot_op_sender(PrepFunc &&func, MultiShotFunc &&multishot_func,
+                               Args &&...handler_args) {
+    return MultiShotOpSender<std::decay_t<PrepFunc>, CQEHandler,
+                             std::decay_t<MultiShotFunc>, Args...>(
+        std::forward<PrepFunc>(func),
+        std::forward<MultiShotFunc>(multishot_func),
+        std::forward<Args>(handler_args)...);
+}
+
+template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc, typename FreeFunc,
+          typename... Args>
+auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
+                               Args &&...handler_args) {
+    return ZeroCopyOpSender<std::decay_t<PrepFunc>, CQEHandler,
+                            std::decay_t<FreeFunc>, Args...>(
+        std::forward<PrepFunc>(func), std::forward<FreeFunc>(free_func),
+        std::forward<Args>(handler_args)...);
 }
 
 namespace detail {
