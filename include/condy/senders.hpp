@@ -4,6 +4,7 @@
 #include "condy/cqe_handler.hpp"
 #include "condy/invoker.hpp"
 #include "condy/utils.hpp"
+#include <atomic>
 
 namespace condy {
 
@@ -43,6 +44,10 @@ public:
             // io_uring_sqe_set_flags(sqe, sqe->flags | flags);
             auto *work = encode_work(&finish_handle_.get(), WorkType::Common);
             io_uring_sqe_set_data(sqe, work);
+        }
+
+        void cancel(Runtime *runtime) noexcept {
+            finish_handle_.get().cancel(runtime);
         }
 
         void invoke() noexcept {
@@ -118,7 +123,7 @@ auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
         std::forward<Args>(handler_args)...);
 }
 
-template <typename... Senders> class ParallelSender {
+template <bool Cancel, typename... Senders> class ParallelSender {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
                                  std::tuple<typename Senders::ReturnType...>>;
@@ -138,9 +143,27 @@ public:
                              std::make_index_sequence<sizeof...(Senders)>{});
         }
 
+        ~OperationState() {
+            std::apply([](auto &&...state) { (state.destroy(), ...); },
+                       operation_states_);
+        }
+
         void start() noexcept {
             std::apply([&](auto &&...state) { (state.get().start(), ...); },
                        operation_states_);
+        }
+
+        void cancel(Runtime *runtime) noexcept {
+            if constexpr (Cancel) {
+                if (canceled_.exchange(true)) {
+                    return;
+                }
+                std::apply(
+                    [&](auto &&...state) {
+                        (state.get().cancel(runtime), ...);
+                    },
+                    operation_states_);
+            }
         }
 
     private:
@@ -156,8 +179,27 @@ public:
         template <size_t Idx> void check_and_invoke_() {
             auto no = completed_count_++;
             order_[no] = Idx;
+
+            if constexpr (Cancel) {
+                if (!canceled_.exchange(true)) {
+                    auto *runtime = detail::Context::current().runtime();
+                    foreach_call_cancel_<Idx>(runtime);
+                }
+            }
+
             if (no == sizeof...(Senders) - 1) {
                 std::move(receiver_)(std::make_pair(order_, results_));
+            }
+        }
+
+        template <size_t SkipIdx, size_t I = 0>
+        void foreach_call_cancel_(Runtime *runtime) noexcept {
+            if constexpr (I < sizeof...(Senders)) {
+                auto &state = std::get<I>(operation_states_);
+                if constexpr (I != SkipIdx) {
+                    state.get().cancel(runtime);
+                }
+                foreach_call_cancel_<SkipIdx, I + 1>(runtime);
             }
         }
 
@@ -166,7 +208,6 @@ public:
 
             void operator()(typename std::tuple_element_t<
                             I, std::tuple<Senders...>>::ReturnType result) {
-                std::get<I>(state->operation_states_).destroy();
                 std::get<I>(state->results_) = std::move(result);
                 state->check_and_invoke_<I>();
             }
@@ -188,15 +229,16 @@ public:
         std::array<size_t, sizeof...(Senders)> order_{};
         std::tuple<typename Senders::ReturnType...> results_;
         Receiver receiver_;
+        std::atomic_bool canceled_ = false;
     };
 
     std::tuple<Senders...> senders_;
 };
 
 template <typename... Senders>
-class WhenAllSender : public ParallelSender<Senders...> {
+class WhenAllSender : public ParallelSender<false, Senders...> {
 public:
-    using Base = ParallelSender<Senders...>;
+    using Base = ParallelSender<false, Senders...>;
     using ReturnType = std::tuple<typename Senders::ReturnType...>;
 
     WhenAllSender(Senders... senders) : Base(std::move(senders)...) {}
