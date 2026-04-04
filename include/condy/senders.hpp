@@ -261,8 +261,59 @@ private:
     };
 };
 
+template <typename... Senders>
+class WhenAnySender : public ParallelSender<true, Senders...> {
+public:
+    using Base = ParallelSender<true, Senders...>;
+    using ReturnType = std::variant<typename Senders::ReturnType...>;
+
+    WhenAnySender(Senders... senders) : Base(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) {
+        return Base::connect(ReceiverAdapter<Receiver>{std::move(receiver)});
+    }
+
+private:
+    template <typename Receiver> struct ReceiverAdapter {
+        Receiver receiver;
+
+        template <typename... Args>
+        void operator()(std::pair<std::array<size_t, sizeof...(Senders)>,
+                                  std::tuple<Args...>>
+                            result) {
+            auto &[order, results] = result;
+            auto idx = order[0];
+            std::move(receiver)(tuple_at_(results, idx));
+        }
+    };
+
+    template <size_t Idx = 0>
+    static auto tuple_at_(std::tuple<typename Senders::ReturnType...> &results,
+                          size_t idx) {
+        if constexpr (Idx < sizeof...(Senders)) {
+            if (idx == Idx) {
+                return ReturnType{std::in_place_index<Idx>,
+                                  std::move(std::get<Idx>(results))};
+            } else {
+                return tuple_at_<Idx + 1>(results, idx);
+            }
+        } else {
+            // Should not reach here, but we need to make compiler happy.
+            // Throwing an exception will lead to wrong optimization.
+            assert(false && "Index out of bounds");
+            return ReturnType{std::in_place_index<0>,
+                              std::move(std::get<0>(results))};
+        }
+    }
+};
+
 template <typename... Senders> auto when_all_senders(Senders &&...senders) {
     return WhenAllSender<std::decay_t<Senders>...>(
+        std::forward<Senders>(senders)...);
+}
+
+template <typename... Senders> auto when_any_senders(Senders &&...senders) {
+    return WhenAnySender<std::decay_t<Senders>...>(
         std::forward<Senders>(senders)...);
 }
 
