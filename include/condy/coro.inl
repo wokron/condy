@@ -156,6 +156,7 @@ public:
     FinalAwaiter final_suspend() const noexcept { return {}; }
 
 public:
+    // Should be called before task is scheduled
     void mark_running() noexcept {
         state_.store(State::RunningJoinable, std::memory_order_relaxed);
     }
@@ -225,6 +226,37 @@ public:
     }
 
 protected:
+    // Promise lifecycle state machine:
+    //
+    // 1) co_spawn():
+    //    - Idle -> RunningJoinable:
+    //          Task has been scheduled and is joinable.
+    //
+    // 2) final_suspend():
+    //    - RunningJoinable -> Zombie:
+    //          Coroutine completed, but no join/detach consumer has claimed
+    //          final ownership yet.
+    //    - RunningDetached -> Finished:
+    //          Detach path, performs destroy() immediately.
+    //    - RunningJoining -> Finished:
+    //          Join path, invokes the registered callback to wake the
+    //          waiter/continuation.
+    //
+    // 3) request_detach():
+    //    - RunningJoinable -> RunningDetached:
+    //          Detach requested before completion; final_suspend will destroy
+    //          later.
+    //    - Zombie -> Finished:
+    //          Detach requested after completion; requester destroys coroutine
+    //          immediately.
+    //
+    // 4) request_join():
+    //    - RunningJoinable -> RunningJoining:
+    //          Join requested before completion; stores callback and waits for
+    //          final_suspend callback.
+    //    - Zombie -> Finished:
+    //          Join requested after completion; caller can resume/wait
+    //          immediately (no callback path needed).
     enum class State : uint8_t {
         Idle,
         RunningJoinable,
