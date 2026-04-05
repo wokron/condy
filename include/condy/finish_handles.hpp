@@ -251,6 +251,7 @@ public:
     ReturnType extract_result() noexcept {
         auto r = Base::extract_result();
         auto &[order, results] = r;
+        assert(!order.empty());
         auto idx = order[0];
         return std::make_pair(idx, std::move(results[idx]));
     }
