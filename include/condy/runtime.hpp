@@ -14,6 +14,7 @@
 #include "condy/singleton.hpp"
 #include "condy/utils.hpp"
 #include "condy/work_type.hpp"
+#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -60,6 +61,28 @@ inline int sync_msg_ring(io_uring_sqe *sqe_data) noexcept {
     return r;
 #endif
 }
+
+class CancelRequest {
+public:
+    CancelRequest(void *data) : data_(data) {}
+
+    void wait() noexcept {
+        while (!finished_.load(std::memory_order_acquire)) {
+            finished_.wait(false, std::memory_order_relaxed);
+        }
+    }
+
+    void notify() noexcept {
+        finished_.store(true, std::memory_order_release);
+        finished_.notify_one();
+    }
+
+    void *data() const noexcept { return data_; }
+
+private:
+    void *data_;
+    std::atomic_bool finished_ = false;
+};
 
 } // namespace detail
 
@@ -247,7 +270,11 @@ public:
             return;
         }
 
-        schedule_msg_ring_(curr_runtime, encode_work(data, WorkType::Cancel));
+        detail::CancelRequest request(data);
+        tsan_release(&request);
+        schedule_msg_ring_(curr_runtime,
+                           encode_work(&request, WorkType::Cancel));
+        request.wait();
     }
 
     void pend_work() noexcept { pending_works_++; }
@@ -413,12 +440,16 @@ private:
                 pending_works_--;
             } else {
                 auto *work = static_cast<WorkInvoker *>(data);
-                tsan_acquire(data);
+                tsan_acquire(work);
                 (*work)();
             }
         } else if (type == WorkType::Cancel) {
+            detail::CancelRequest *request =
+                static_cast<detail::CancelRequest *>(data);
+            tsan_acquire(request);
             io_uring_sqe *sqe = ring_.get_sqe();
-            prep_cancel_(sqe, data);
+            prep_cancel_(sqe, request->data());
+            request->notify();
         } else if (type == WorkType::Common) {
             auto *handle = static_cast<OpFinishHandleBase *>(data);
             auto op_finish = handle->handle(cqe);
