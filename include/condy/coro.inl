@@ -8,9 +8,9 @@
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
 #include "condy/utils.hpp"
+#include <atomic>
 #include <coroutine>
 #include <exception>
-#include <mutex>
 #include <new>
 #include <optional>
 
@@ -116,28 +116,38 @@ public:
         std::coroutine_handle<>
         await_suspend(std::coroutine_handle<PromiseType> handle) noexcept {
             auto &self = handle.promise();
-            std::unique_lock lock(self.mutex_);
 
-            // 1. Detached task, destroy self
-            if (self.auto_destroy_) {
-                assert(self.caller_handle_ == std::noop_coroutine());
-                lock.unlock();
+            State expected = self.state_.load(std::memory_order_acquire);
+            State desired;
+            do {
+                if (expected == State::Idle) {
+                    return self.caller_handle_;
+                } else if (expected == State::RunningJoinable) {
+                    desired = State::Zombie;
+                } else if (expected == State::RunningDetached ||
+                           expected == State::RunningJoining) {
+                    desired = State::Finished;
+                } else [[unlikely]] {
+                    panic_on(std::format(
+                        "Invalid coroutine state in final_suspend: {}",
+                        static_cast<int>(expected)));
+                }
+            } while (!self.state_.compare_exchange_weak(
+                expected, desired, std::memory_order_acq_rel,
+                std::memory_order_acquire));
+
+            State prev = expected;
+            if (prev == State::RunningDetached) {
                 handle.destroy();
                 return std::noop_coroutine();
-            }
-
-            // 2. Task awaited by another coroutine, invoke callback
-            if (self.remote_callback_ != nullptr) {
-                auto *callback = self.remote_callback_;
-                assert(self.caller_handle_ == std::noop_coroutine());
-                lock.unlock();
+            } else if (prev == State::RunningJoining) {
+                auto *callback = self.callback_;
                 (*callback)();
                 return std::noop_coroutine();
+            } else {
+                assert(prev == State::RunningJoinable);
+                return std::noop_coroutine();
             }
-
-            // 3. Stacked coroutine, or task that has not been awaited yet
-            self.finished_ = true;
-            return self.caller_handle_;
         }
 
         void await_resume() const noexcept {}
@@ -146,33 +156,65 @@ public:
     FinalAwaiter final_suspend() const noexcept { return {}; }
 
 public:
-    void request_detach() noexcept {
-        std::lock_guard lock(mutex_);
-        if (!finished_) {
-            auto_destroy_ = true;
-        } else {
-            // Destroy self immediately
-            auto handle = std::coroutine_handle<PromiseType>::from_promise(
-                static_cast<PromiseType &>(*this));
-            handle.destroy();
-        }
-    }
-
-    bool register_task_await(Invoker *remote_callback) noexcept {
-        std::lock_guard lock(mutex_);
-        if (finished_) {
-            return false; // ready to resume immediately
-        }
-        remote_callback_ = remote_callback;
-        return true;
+    // Should be called before task is scheduled
+    void mark_running() noexcept {
+        state_.store(State::RunningJoinable, std::memory_order_relaxed);
     }
 
     void set_caller_handle(std::coroutine_handle<> handle) noexcept {
         caller_handle_ = handle;
     }
 
-    void set_auto_destroy(bool auto_destroy) noexcept {
-        auto_destroy_ = auto_destroy;
+    void request_detach() noexcept {
+        State expected = state_.load(std::memory_order_acquire);
+        State desired;
+        do {
+            if (expected == State::RunningJoinable) {
+                desired = State::RunningDetached;
+            } else if (expected == State::Zombie) {
+                desired = State::Finished;
+            } else [[unlikely]] {
+                panic_on(
+                    std::format("Invalid coroutine state in request_detach: {}",
+                                static_cast<int>(expected)));
+            }
+        } while (!state_.compare_exchange_weak(expected, desired,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire));
+
+        State prev = expected;
+        if (prev == State::Zombie) {
+            auto h = std::coroutine_handle<PromiseType>::from_promise(
+                static_cast<PromiseType &>(*this));
+            h.destroy();
+        }
+    }
+
+    bool request_join(Invoker *remote_callback) noexcept {
+        State expected = state_.load(std::memory_order_acquire);
+        State desired;
+        do {
+            if (expected == State::RunningJoinable) {
+                desired = State::RunningJoining;
+                callback_ = remote_callback;
+            } else if (expected == State::Zombie) {
+                desired = State::Finished;
+            } else [[unlikely]] {
+                panic_on(
+                    std::format("Invalid coroutine state in request_join: {}",
+                                static_cast<int>(expected)));
+            }
+        } while (!state_.compare_exchange_weak(expected, desired,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire));
+
+        State prev = expected;
+        if (prev == State::Zombie) {
+            return false; // ready to resume immediately
+        } else {
+            assert(prev == State::RunningJoinable);
+            return true;
+        }
     }
 
     std::exception_ptr exception() noexcept { return std::move(exception_); }
@@ -184,11 +226,52 @@ public:
     }
 
 protected:
-    AtomicMutex mutex_;
-    bool auto_destroy_ = true;
-    bool finished_ = false;
-    std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
-    Invoker *remote_callback_ = nullptr;
+    // Promise lifecycle state machine:
+    //
+    // 1) co_spawn():
+    //    - Idle -> RunningJoinable:
+    //          Task has been scheduled and is joinable.
+    //
+    // 2) final_suspend():
+    //    - RunningJoinable -> Zombie:
+    //          Coroutine completed, but no join/detach consumer has claimed
+    //          final ownership yet.
+    //    - RunningDetached -> Finished:
+    //          Detach path, performs destroy() immediately.
+    //    - RunningJoining -> Finished:
+    //          Join path, invokes the registered callback to wake the
+    //          waiter/continuation.
+    //
+    // 3) request_detach():
+    //    - RunningJoinable -> RunningDetached:
+    //          Detach requested before completion; final_suspend will destroy
+    //          later.
+    //    - Zombie -> Finished:
+    //          Detach requested after completion; requester destroys coroutine
+    //          immediately.
+    //
+    // 4) request_join():
+    //    - RunningJoinable -> RunningJoining:
+    //          Join requested before completion; stores callback and waits for
+    //          final_suspend callback.
+    //    - Zombie -> Finished:
+    //          Join requested after completion; caller can resume/wait
+    //          immediately (no callback path needed).
+    enum class State : uint8_t {
+        Idle,
+        RunningJoinable,
+        RunningDetached,
+        RunningJoining,
+        Zombie,
+        Finished,
+    };
+    static_assert(std::atomic<State>::is_always_lock_free);
+
+    std::atomic<State> state_ = State::Idle;
+    union {
+        std::coroutine_handle<> caller_handle_ = std::noop_coroutine();
+        Invoker *callback_;
+    };
     std::exception_ptr exception_;
 };
 
@@ -216,7 +299,6 @@ template <typename PromiseType> struct CoroAwaiterBase {
 
     std::coroutine_handle<PromiseType>
     await_suspend(std::coroutine_handle<> caller_handle) noexcept {
-        handle_.promise().set_auto_destroy(false);
         handle_.promise().set_caller_handle(caller_handle);
         return handle_;
     }

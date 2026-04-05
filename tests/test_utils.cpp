@@ -137,22 +137,3 @@ TEST_CASE("test id_pool - exhaustion") {
     auto id = pool.allocate();
     REQUIRE(id == 0);
 }
-
-TEST_CASE("test atomic_mutex - concurrent") {
-    condy::AtomicMutex mutex;
-    size_t counter = 0;
-    constexpr size_t times = 10000;
-
-    auto worker = [&]() {
-        for (size_t i = 0; i < times; ++i) {
-            std::lock_guard lock(mutex);
-            ++counter;
-        }
-    };
-
-    std::thread t1(worker);
-    std::thread t2(worker);
-    t1.join();
-    t2.join();
-    REQUIRE(counter == times * 2);
-}
