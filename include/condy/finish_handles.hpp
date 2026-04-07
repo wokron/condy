@@ -15,6 +15,7 @@
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
+#include <memory>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -142,6 +143,34 @@ private:
 
 protected:
     Func free_func_;
+};
+
+template <OpFinishHandleLike Handle> class HandleBox {
+public:
+    HandleBox(Handle h) : handle_(std::move(h)) {}
+
+    Handle &get() noexcept { return handle_; }
+
+    void maybe_release() noexcept { /* No-op */ }
+
+private:
+    Handle handle_;
+};
+
+template <CQEHandlerLike CQEHandler, typename Func>
+class HandleBox<ZeroCopyOpFinishHandle<CQEHandler, Func>> {
+public:
+    using Handle = ZeroCopyOpFinishHandle<CQEHandler, Func>;
+    HandleBox(Handle h) : handle_ptr_(std::make_unique<Handle>(std::move(h))) {}
+    HandleBox(const HandleBox &other) // Deep copy
+        : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}
+
+    Handle &get() noexcept { return *handle_ptr_; }
+
+    void maybe_release() noexcept { handle_ptr_.release(); }
+
+private:
+    std::unique_ptr<Handle> handle_ptr_;
 };
 
 template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
