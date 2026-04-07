@@ -156,6 +156,17 @@ auto operator||(WhenAnySender<Ss...> aws, S sender) {
                                                  std::move(sender));
 }
 
+template <typename Sender1, typename Sender2>
+auto operator>>(Sender1 s1, Sender2 s2) {
+    return link(std::move(s1), std::move(s2));
+}
+
+template <typename S, typename... Ss>
+auto operator>>(LinkSender<Ss...> aws, S sender) {
+    return LinkSender<Ss..., std::decay_t<S>>(std::move(aws),
+                                              std::move(sender));
+}
+
 } // namespace operators
 
 } // namespace temp

@@ -145,6 +145,11 @@ public:
 
     LinkSenderBase(Senders... senders) : senders_(std::move(senders)...) {}
 
+    template <typename S, typename... Ss>
+    LinkSenderBase(LinkSenderBase<Flags, Ss...> other, S sender)
+        : senders_(std::tuple_cat(std::move(other.senders_),
+                                  std::make_tuple(std::move(sender)))) {}
+
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return detail::LinkOperationState<Receiver, Flags, Senders...>(
             std::move(senders_), std::move(receiver));
@@ -152,6 +157,8 @@ public:
 
 private:
     std::tuple<Senders...> senders_;
+
+    template <unsigned int, typename...> friend class LinkSenderBase;
 };
 
 template <typename... Senders>

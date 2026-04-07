@@ -115,6 +115,20 @@ TEST_CASE("test senders - link") {
     condy::sync_wait(f());
 }
 
+TEST_CASE("test senders - >>") {
+    using condy::temp::operators::operator>>;
+    auto f = []() -> condy::Coro<void> {
+        auto [r1, r2, r3] = co_await condy::detail::as_awaiter(
+            condy::detail::make_op_sender(io_uring_prep_nop) >>
+            condy::detail::make_op_sender(io_uring_prep_nop) >>
+            condy::detail::make_op_sender(io_uring_prep_nop));
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == 0);
+        REQUIRE(r3 == 0);
+    };
+    condy::sync_wait(f());
+}
+
 TEST_CASE("test senders - hard_link") {
     auto f = []() -> condy::Coro<void> {
         auto [r1, r2] =
