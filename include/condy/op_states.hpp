@@ -211,7 +211,7 @@ template <typename Receiver, typename... Senders>
 using ParallelAllOperationState =
     ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
 
-template <typename Receiver> struct ReceiverWrapper {
+template <typename Receiver> struct ReceiverAllWrapper {
     Receiver receiver;
     template <typename R> void operator()(R &&result) noexcept {
         auto &[order, results] = result;
@@ -222,30 +222,70 @@ template <typename Receiver> struct ReceiverWrapper {
     }
 };
 
+template <typename T> struct tuple_to_variant_traits;
+
+template <typename... Ts> struct tuple_to_variant_traits<std::tuple<Ts...>> {
+    using type = std::variant<Ts...>;
+    static constexpr size_t value = sizeof...(Ts);
+};
+
+template <size_t Idx = 0> auto tuple_at(auto &results, size_t idx) {
+    using Traits = tuple_to_variant_traits<std::decay_t<decltype(results)>>;
+    using ReturnType = typename Traits::type;
+    if constexpr (Idx < Traits::value) {
+        if (idx == Idx) {
+            return ReturnType{std::in_place_index<Idx>,
+                              std::move(std::get<Idx>(results))};
+        } else {
+            return tuple_at<Idx + 1>(results, idx);
+        }
+    } else {
+        // Should not reach here, but we need to make compiler happy.
+        // Throwing an exception will lead to wrong optimization.
+        assert(false && "Index out of bounds");
+        return ReturnType{std::in_place_index<0>,
+                          std::move(std::get<0>(results))};
+    }
+}
+
+template <typename Receiver> struct ReceiverAnyWrapper {
+    Receiver receiver;
+    template <typename R> void operator()(R &&result) noexcept {
+        auto &[order, results] = result;
+        size_t index = order[0];
+        std::move(receiver)(tuple_at(results, index));
+    }
+    std::stop_token get_stop_token() const noexcept {
+        return receiver.get_stop_token();
+    }
+};
+
 template <typename Receiver, typename... Senders>
 class WhenAnyOperationState
-    : public ParallelAnyOperationState<ReceiverWrapper<Receiver>, Senders...> {
+    : public ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>,
+                                       Senders...> {
 public:
     using Base =
-        ParallelAnyOperationState<ReceiverWrapper<Receiver>, Senders...>;
+        ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>, Senders...>;
 
     WhenAnyOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : Base(std::move(senders),
-               ReceiverWrapper<Receiver>{std::move(receiver)}) {}
+               ReceiverAnyWrapper<Receiver>{std::move(receiver)}) {}
 
     void start(unsigned int flags) noexcept { Base::start(flags); }
 };
 
 template <typename Receiver, typename... Senders>
 class WhenAllOperationState
-    : public ParallelAllOperationState<ReceiverWrapper<Receiver>, Senders...> {
+    : public ParallelAllOperationState<ReceiverAllWrapper<Receiver>,
+                                       Senders...> {
 public:
     using Base =
-        ParallelAllOperationState<ReceiverWrapper<Receiver>, Senders...>;
+        ParallelAllOperationState<ReceiverAllWrapper<Receiver>, Senders...>;
 
     WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : Base(std::move(senders),
-               ReceiverWrapper<Receiver>{std::move(receiver)}) {}
+               ReceiverAllWrapper<Receiver>{std::move(receiver)}) {}
 
     void start(unsigned int flags) noexcept { Base::start(flags); }
 };

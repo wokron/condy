@@ -80,7 +80,7 @@ private:
 
 template <typename... Senders> class WhenAnySender {
 public:
-    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+    using ReturnType = std::variant<typename Senders::ReturnType...>;
 
     WhenAnySender(Senders... senders) : senders_(std::move(senders)...) {}
 

@@ -31,13 +31,11 @@ TEST_CASE("test senders - when_any") {
             .tv_sec = 60,
             .tv_nsec = 0,
         };
-        auto [r1, r2] =
-            co_await condy::detail::as_awaiter(condy::temp::when_any(
-                condy::detail::make_op_sender(io_uring_prep_nop),
-                condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0,
-                                              0)));
-        REQUIRE(r1 == 0);
-        REQUIRE(r2 == -ECANCELED);
+        auto r = co_await condy::detail::as_awaiter(condy::temp::when_any(
+            condy::detail::make_op_sender(io_uring_prep_nop),
+            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
+        REQUIRE(r.index() == 0);
+        REQUIRE(std::get<0>(r) == 0);
     };
     condy::sync_wait(f());
 }
