@@ -48,6 +48,21 @@ using ZeroCopyOpSender =
     OpSenderBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc,
                  HandleArgs...>;
 
+template <unsigned int Flags, typename Sender> class FlaggedOpSender {
+public:
+    using ReturnType = typename Sender::ReturnType;
+
+    FlaggedOpSender(Sender sender) : sender_(std::move(sender)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::FlaggedOpState<Flags, Sender, Receiver>(
+            std::move(sender_), std::move(receiver));
+    }
+
+private:
+    Sender sender_;
+};
+
 template <typename... Senders> class WhenAllSender {
 public:
     using ReturnType = std::tuple<typename Senders::ReturnType...>;

@@ -4,6 +4,7 @@
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/invoker.hpp"
+#include "condy/utils.hpp"
 
 namespace condy {
 namespace detail {
@@ -46,6 +47,27 @@ private:
     Func prep_func_;
     HandleBox<Handle> finish_handle_;
     Receiver receiver_;
+};
+
+template <unsigned int Flags, typename Sender, typename Receiver>
+class FlaggedOpState {
+public:
+    FlaggedOpState(Sender sender, Receiver receiver) {
+        op_state_.accept([&] { return sender.connect(std::move(receiver)); });
+    }
+    ~FlaggedOpState() { op_state_.destroy(); }
+
+    FlaggedOpState(FlaggedOpState &&) = delete;
+    FlaggedOpState &operator=(FlaggedOpState &&) = delete;
+    FlaggedOpState(const FlaggedOpState &) = delete;
+    FlaggedOpState &operator=(const FlaggedOpState &) = delete;
+
+    void start(unsigned int flags) noexcept { op_state_.get().start(flags | Flags); }
+
+private:
+    using OperationState =
+        decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    RawStorage<OperationState> op_state_;
 };
 
 template <typename Receiver, typename... Senders> class WhenAllOperationState {

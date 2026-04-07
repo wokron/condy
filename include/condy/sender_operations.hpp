@@ -94,6 +94,19 @@ template <typename Sender> auto as_awaiter(Sender &&sender) {
 
 namespace temp {
 
+template <unsigned int Flags, typename Sender> auto flag(Sender &&sender) {
+    return FlaggedOpSender<Flags, std::decay_t<Sender>>(
+        std::forward<Sender>(sender));
+}
+
+template <typename Sender> auto drain(Sender &&sender) {
+    return flag<IOSQE_IO_DRAIN>(std::forward<Sender>(sender));
+}
+
+template <typename Sender> auto always_async(Sender &&sender) {
+    return flag<IOSQE_ASYNC>(std::forward<Sender>(sender));
+}
+
 template <typename... Senders> auto when_all(Senders &&...senders) {
     return WhenAllSender<std::decay_t<Senders>...>(
         std::forward<Senders>(senders)...);
