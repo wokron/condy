@@ -99,6 +99,16 @@ template <typename... Senders> auto when_all(Senders &&...senders) {
         std::forward<Senders>(senders)...);
 }
 
+template <typename... Senders> auto link(Senders &&...senders) {
+    return LinkSender<std::decay_t<Senders>...>(
+        std::forward<Senders>(senders)...);
+}
+
+template <typename... Senders> auto hard_link(Senders &&...senders) {
+    return HardLinkSender<std::decay_t<Senders>...>(
+        std::forward<Senders>(senders)...);
+}
+
 } // namespace temp
 
 } // namespace condy

@@ -63,4 +63,25 @@ private:
     std::tuple<Senders...> senders_;
 };
 
+template <unsigned int Flags, typename... Senders> class LinkSenderBase {
+public:
+    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+
+    LinkSenderBase(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::LinkOperationState<Receiver, Flags, Senders...>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::tuple<Senders...> senders_;
+};
+
+template <typename... Senders>
+using LinkSender = LinkSenderBase<IOSQE_IO_LINK, Senders...>;
+
+template <typename... Senders>
+using HardLinkSender = LinkSenderBase<IOSQE_IO_HARDLINK, Senders...>;
+
 } // namespace condy

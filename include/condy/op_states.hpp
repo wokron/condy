@@ -107,10 +107,38 @@ private:
     using OperationStates = typename operation_state_traits<
         std::make_index_sequence<sizeof...(Senders)>>::type;
 
+protected:
     OperationStates op_states_;
     std::tuple<typename Senders::ReturnType...> results_;
     size_t completed_count_ = 0;
     Receiver receiver_;
+};
+
+template <typename Receiver, unsigned int Flags, typename... Senders>
+class LinkOperationState : public WhenAllOperationState<Receiver, Senders...> {
+public:
+    using Base = WhenAllOperationState<Receiver, Senders...>;
+    using Base::Base;
+
+    void start(unsigned int flags) noexcept {
+        auto *ring = detail::Context::current().ring();
+        ring->reserve_space(sizeof...(Senders));
+        start_linked_operations_(flags);
+    }
+
+private:
+    template <size_t I = 0>
+    void start_linked_operations_(unsigned int flags) noexcept {
+        if constexpr (I < sizeof...(Senders)) {
+            auto &state = std::get<I>(Base::op_states_);
+            if constexpr (I < sizeof...(Senders) - 1) {
+                state.get().start(flags | Flags);
+            } else {
+                state.get().start(flags);
+            }
+            start_linked_operations_<I + 1>(flags);
+        }
+    }
 };
 
 } // namespace detail
