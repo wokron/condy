@@ -76,6 +76,8 @@ private:
             awaiter->result_type = std::move(result);
             handle.resume();
         }
+
+        std::stop_token get_stop_token() const noexcept { return {}; }
     };
 
     using OperationState =

@@ -5,6 +5,7 @@
 #include "condy/finish_handles.hpp"
 #include "condy/invoker.hpp"
 #include "condy/utils.hpp"
+#include <stop_token>
 
 namespace condy {
 namespace detail {
@@ -35,18 +36,36 @@ public:
         io_uring_sqe_set_flags(sqe, sqe->flags | flags);
         auto *work = encode_work(&finish_handle_.get(), WorkType::Common);
         io_uring_sqe_set_data(sqe, work);
+
+        auto stop_token = receiver_.get_stop_token();
+        if (stop_token.stop_possible()) {
+            stop_callback_.emplace(std::move(stop_token),
+                                   Cancellation{this, context.runtime()});
+        }
     }
 
     void invoke() noexcept {
+        stop_callback_.reset();
         auto result = finish_handle_.get().extract_result();
         finish_handle_.maybe_release();
         std::move(receiver_)(std::move(result));
     }
 
 private:
+    struct Cancellation {
+        OpSenderOperationState *self;
+        Runtime *runtime;
+        void operator()() noexcept { self->cancel_(runtime); }
+    };
+
+    void cancel_(Runtime *runtime) noexcept {
+        finish_handle_.get().cancel(runtime);
+    }
+
     Func prep_func_;
     HandleBox<Handle> finish_handle_;
     Receiver receiver_;
+    std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
 template <unsigned int Flags, typename Sender, typename Receiver>
@@ -62,7 +81,9 @@ public:
     FlaggedOpState(const FlaggedOpState &) = delete;
     FlaggedOpState &operator=(const FlaggedOpState &) = delete;
 
-    void start(unsigned int flags) noexcept { op_state_.get().start(flags | Flags); }
+    void start(unsigned int flags) noexcept {
+        op_state_.get().start(flags | Flags);
+    }
 
 private:
     using OperationState =
@@ -98,7 +119,8 @@ private:
         if constexpr (I < sizeof...(Senders)) {
             std::get<I>(op_states_).accept([&] {
                 return std::move(std::get<I>(senders))
-                    .connect(ChildReceiver<I>{this});
+                    .connect(
+                        ChildReceiver<I>{this, receiver_.get_stop_token()});
             });
             connect_senders_<I + 1>(senders);
         }
@@ -114,9 +136,12 @@ private:
 
     template <size_t I> struct ChildReceiver {
         WhenAllOperationState *self;
+        std::stop_token stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_<I>(std::forward<R>(result));
         }
+
+        std::stop_token get_stop_token() const noexcept { return stop_token; }
     };
 
     template <typename T> struct operation_state_traits;
