@@ -120,6 +120,10 @@ template <typename... Senders> auto when_all(Senders &&...senders) {
     return parallel<WhenAllSender>(std::forward<Senders>(senders)...);
 }
 
+template<typename... Senders> auto when_any(Senders &&...senders) {
+    return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
+}
+
 template <typename... Senders> auto link(Senders &&...senders) {
     return parallel<LinkSender>(std::forward<Senders>(senders)...);
 }

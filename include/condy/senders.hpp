@@ -78,6 +78,21 @@ private:
     std::tuple<Senders...> senders_;
 };
 
+template <typename... Senders> class WhenAnySender {
+public:
+    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+
+    WhenAnySender(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::WhenAnyOperationState<Receiver, Senders...>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::tuple<Senders...> senders_;
+};
+
 template <unsigned int Flags, typename... Senders> class LinkSenderBase {
 public:
     using ReturnType = std::tuple<typename Senders::ReturnType...>;

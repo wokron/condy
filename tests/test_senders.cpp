@@ -1,5 +1,6 @@
 #include "condy/sender_operations.hpp"
 #include "condy/sync_wait.hpp"
+#include <cerrno>
 #include <doctest/doctest.h>
 #include <liburing.h>
 
@@ -20,6 +21,23 @@ TEST_CASE("test senders - when_all") {
                 condy::detail::make_op_sender(io_uring_prep_nop)));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
+    };
+    condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - when_any") {
+    auto f = []() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60,
+            .tv_nsec = 0,
+        };
+        auto [r1, r2] =
+            co_await condy::detail::as_awaiter(condy::temp::when_any(
+                condy::detail::make_op_sender(io_uring_prep_nop),
+                condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0,
+                                              0)));
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == -ECANCELED);
     };
     condy::sync_wait(f());
 }
