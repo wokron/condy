@@ -92,4 +92,13 @@ template <typename Sender> auto as_awaiter(Sender &&sender) {
 
 } // namespace detail
 
+namespace temp {
+
+template <typename... Senders> auto when_all(Senders &&...senders) {
+    return WhenAllSender<std::decay_t<Senders>...>(
+        std::forward<Senders>(senders)...);
+}
+
+} // namespace temp
+
 } // namespace condy

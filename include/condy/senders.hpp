@@ -48,4 +48,19 @@ using ZeroCopyOpSender =
     OpSenderBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc,
                  HandleArgs...>;
 
+template <typename... Senders> class WhenAllSender {
+public:
+    using ReturnType = std::tuple<typename Senders::ReturnType...>;
+
+    WhenAllSender(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::WhenAllOperationState<Receiver, Senders...>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::tuple<Senders...> senders_;
+};
+
 } // namespace condy

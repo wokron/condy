@@ -48,6 +48,71 @@ private:
     Receiver receiver_;
 };
 
+template <typename Receiver, typename... Senders> class WhenAllOperationState {
+public:
+    WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
+        : receiver_(std::move(receiver)) {
+        connect_senders_(senders);
+    }
+
+    WhenAllOperationState(WhenAllOperationState &&) = delete;
+    WhenAllOperationState &operator=(WhenAllOperationState &&) = delete;
+    WhenAllOperationState(const WhenAllOperationState &) = delete;
+    WhenAllOperationState &operator=(const WhenAllOperationState &) = delete;
+
+    ~WhenAllOperationState() {
+        std::apply([](auto &&...states) { (states.destroy(), ...); },
+                   op_states_);
+    }
+
+    void start(unsigned int flags) noexcept {
+        std::apply([&](auto &&...states) { (states.get().start(flags), ...); },
+                   op_states_);
+    }
+
+private:
+    template <size_t I = 0>
+    void connect_senders_(std::tuple<Senders...> &senders) noexcept {
+        if constexpr (I < sizeof...(Senders)) {
+            std::get<I>(op_states_).accept([&] {
+                return std::move(std::get<I>(senders))
+                    .connect(ChildReceiver<I>{this});
+            });
+            connect_senders_<I + 1>(senders);
+        }
+    }
+
+    template <size_t I, typename R> void receive_(R &&result) noexcept {
+        auto no = completed_count_++;
+        std::get<I>(results_) = std::forward<R>(result);
+        if (no + 1 == sizeof...(Senders)) {
+            std::move(receiver_)(std::move(results_));
+        }
+    }
+
+    template <size_t I> struct ChildReceiver {
+        WhenAllOperationState *self;
+        template <typename R> void operator()(R &&result) noexcept {
+            self->receive_<I>(std::forward<R>(result));
+        }
+    };
+
+    template <typename T> struct operation_state_traits;
+    template <size_t... Is>
+    struct operation_state_traits<std::index_sequence<Is...>> {
+        using type =
+            std::tuple<RawStorage<decltype(std::declval<Senders>().connect(
+                std::declval<ChildReceiver<Is>>()))>...>;
+    };
+    using OperationStates = typename operation_state_traits<
+        std::make_index_sequence<sizeof...(Senders)>>::type;
+
+    OperationStates op_states_;
+    std::tuple<typename Senders::ReturnType...> results_;
+    size_t completed_count_ = 0;
+    Receiver receiver_;
+};
+
 } // namespace detail
 
 } // namespace condy
