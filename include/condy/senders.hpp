@@ -101,6 +101,11 @@ public:
 
     WhenAllSender(Senders... senders) : senders_(std::move(senders)...) {}
 
+    template <typename S, typename... Ss>
+    WhenAllSender(WhenAllSender<Ss...> other, S sender)
+        : senders_(std::tuple_cat(std::move(other.senders_),
+                                  std::make_tuple(std::move(sender)))) {}
+
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return detail::WhenAllOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
@@ -108,6 +113,8 @@ public:
 
 private:
     std::tuple<Senders...> senders_;
+
+    template <typename...> friend class WhenAllSender;
 };
 
 template <typename... Senders> class WhenAnySender {
@@ -116,6 +123,11 @@ public:
 
     WhenAnySender(Senders... senders) : senders_(std::move(senders)...) {}
 
+    template <typename S, typename... Ss>
+    WhenAnySender(WhenAnySender<Ss...> other, S sender)
+        : senders_(std::tuple_cat(std::move(other.senders_),
+                                  std::make_tuple(std::move(sender)))) {}
+
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return detail::WhenAnyOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
@@ -123,6 +135,8 @@ public:
 
 private:
     std::tuple<Senders...> senders_;
+
+    template <typename...> friend class WhenAnySender;
 };
 
 template <unsigned int Flags, typename... Senders> class LinkSenderBase {

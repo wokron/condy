@@ -120,7 +120,7 @@ template <typename... Senders> auto when_all(Senders &&...senders) {
     return parallel<WhenAllSender>(std::forward<Senders>(senders)...);
 }
 
-template<typename... Senders> auto when_any(Senders &&...senders) {
+template <typename... Senders> auto when_any(Senders &&...senders) {
     return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
 }
 
@@ -131,6 +131,32 @@ template <typename... Senders> auto link(Senders &&...senders) {
 template <typename... Senders> auto hard_link(Senders &&...senders) {
     return parallel<HardLinkSender>(std::forward<Senders>(senders)...);
 }
+
+namespace operators {
+
+template <typename Sender1, typename Sender2>
+auto operator&&(Sender1 s1, Sender2 s2) {
+    return when_all(std::move(s1), std::move(s2));
+}
+
+template <typename S, typename... Ss>
+auto operator&&(WhenAllSender<Ss...> aws, S sender) {
+    return WhenAllSender<Ss..., std::decay_t<S>>(std::move(aws),
+                                                 std::move(sender));
+}
+
+template <typename Sender1, typename Sender2>
+auto operator||(Sender1 s1, Sender2 s2) {
+    return when_any(std::move(s1), std::move(s2));
+}
+
+template <typename S, typename... Ss>
+auto operator||(WhenAnySender<Ss...> aws, S sender) {
+    return WhenAnySender<Ss..., std::decay_t<S>>(std::move(aws),
+                                                 std::move(sender));
+}
+
+} // namespace operators
 
 } // namespace temp
 

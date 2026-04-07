@@ -55,6 +55,20 @@ TEST_CASE("test senders - when_any") {
     condy::sync_wait(f());
 }
 
+TEST_CASE("test senders - &&") {
+    using condy::temp::operators::operator&&;
+    auto f = []() -> condy::Coro<void> {
+        auto [r1, r2, r3] = co_await condy::detail::as_awaiter(
+            condy::detail::make_op_sender(io_uring_prep_nop) &&
+            condy::detail::make_op_sender(io_uring_prep_nop) &&
+            condy::detail::make_op_sender(io_uring_prep_nop));
+        REQUIRE(r1 == 0);
+        REQUIRE(r2 == 0);
+        REQUIRE(r3 == 0);
+    };
+    condy::sync_wait(f());
+}
+
 TEST_CASE("test senders - parallel any") {
     auto f = []() -> condy::Coro<void> {
         __kernel_timespec ts{
@@ -64,10 +78,28 @@ TEST_CASE("test senders - parallel any") {
         auto [order, r] = co_await condy::detail::as_awaiter(
             condy::temp::parallel<condy::ParallelAnySender>(
                 condy::detail::make_op_sender(io_uring_prep_nop),
-                condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
+                condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0,
+                                              0)));
         REQUIRE(order[0] == 0);
         REQUIRE(std::get<0>(r) == 0);
         REQUIRE(std::get<1>(r) == -ECANCELED);
+    };
+    condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - ||") {
+    using condy::temp::operators::operator||;
+    auto f = []() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60,
+            .tv_nsec = 0,
+        };
+        auto r = co_await condy::detail::as_awaiter(
+            condy::detail::make_op_sender(io_uring_prep_nop) ||
+            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0) ||
+            condy::detail::make_op_sender(io_uring_prep_nop));
+        REQUIRE(r.index() == 0);
+        REQUIRE(std::get<0>(r) == 0);
     };
     condy::sync_wait(f());
 }
