@@ -91,77 +91,7 @@ private:
     RawStorage<OperationState> op_state_;
 };
 
-template <typename Receiver, typename... Senders> class WhenAllOperationState {
-public:
-    WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
-        : receiver_(std::move(receiver)) {
-        connect_senders_(senders);
-    }
-
-    WhenAllOperationState(WhenAllOperationState &&) = delete;
-    WhenAllOperationState &operator=(WhenAllOperationState &&) = delete;
-    WhenAllOperationState(const WhenAllOperationState &) = delete;
-    WhenAllOperationState &operator=(const WhenAllOperationState &) = delete;
-
-    ~WhenAllOperationState() {
-        std::apply([](auto &&...states) { (states.destroy(), ...); },
-                   op_states_);
-    }
-
-    void start(unsigned int flags) noexcept {
-        std::apply([&](auto &&...states) { (states.get().start(flags), ...); },
-                   op_states_);
-    }
-
-private:
-    template <size_t I = 0>
-    void connect_senders_(std::tuple<Senders...> &senders) noexcept {
-        if constexpr (I < sizeof...(Senders)) {
-            std::get<I>(op_states_).accept([&] {
-                return std::move(std::get<I>(senders))
-                    .connect(
-                        ChildReceiver<I>{this, receiver_.get_stop_token()});
-            });
-            connect_senders_<I + 1>(senders);
-        }
-    }
-
-    template <size_t I, typename R> void receive_(R &&result) noexcept {
-        auto no = completed_count_++;
-        std::get<I>(results_) = std::forward<R>(result);
-        if (no + 1 == sizeof...(Senders)) {
-            std::move(receiver_)(std::move(results_));
-        }
-    }
-
-    template <size_t I> struct ChildReceiver {
-        WhenAllOperationState *self;
-        std::stop_token stop_token;
-        template <typename R> void operator()(R &&result) noexcept {
-            self->receive_<I>(std::forward<R>(result));
-        }
-
-        std::stop_token get_stop_token() const noexcept { return stop_token; }
-    };
-
-    template <typename T> struct operation_state_traits;
-    template <size_t... Is>
-    struct operation_state_traits<std::index_sequence<Is...>> {
-        using type =
-            std::tuple<RawStorage<decltype(std::declval<Senders>().connect(
-                std::declval<ChildReceiver<Is>>()))>...>;
-    };
-    using OperationStates = typename operation_state_traits<
-        std::make_index_sequence<sizeof...(Senders)>>::type;
-
-protected:
-    OperationStates op_states_;
-    std::tuple<typename Senders::ReturnType...> results_;
-    size_t completed_count_ = 0;
-    Receiver receiver_;
-};
-
-class Canceller {
+class WhenAnyCanceller {
 public:
     void set_token(std::stop_token token) noexcept {
         if (token.stop_possible()) {
@@ -175,7 +105,7 @@ public:
 
 private:
     struct Cancellation {
-        Canceller *self;
+        WhenAnyCanceller *self;
         void operator()() noexcept { self->cancel_(); }
     };
     void cancel_() noexcept { stop_source_.request_stop(); }
@@ -184,19 +114,34 @@ private:
     std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
-template <typename Receiver, typename... Senders> class WhenAnyOperationState {
+class WhenAllCanceller {
 public:
-    WhenAnyOperationState(std::tuple<Senders...> senders, Receiver receiver)
+    void set_token(std::stop_token token) noexcept {
+        stop_token_ = std::move(token);
+    }
+
+    std::stop_token get_token() const noexcept { return stop_token_; }
+
+    void maybe_request_stop() noexcept {}
+
+private:
+    std::stop_token stop_token_;
+};
+
+template <typename Receiver, typename Canceller, typename... Senders>
+class ParallelOperationState {
+public:
+    ParallelOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : receiver_(std::move(receiver)) {
         connect_senders_(senders);
     }
 
-    WhenAnyOperationState(WhenAnyOperationState &&) = delete;
-    WhenAnyOperationState &operator=(WhenAnyOperationState &&) = delete;
-    WhenAnyOperationState(const WhenAnyOperationState &) = delete;
-    WhenAnyOperationState &operator=(const WhenAnyOperationState &) = delete;
+    ParallelOperationState(ParallelOperationState &&) = delete;
+    ParallelOperationState &operator=(ParallelOperationState &&) = delete;
+    ParallelOperationState(const ParallelOperationState &) = delete;
+    ParallelOperationState &operator=(const ParallelOperationState &) = delete;
 
-    ~WhenAnyOperationState() {
+    ~ParallelOperationState() {
         std::apply([](auto &&...states) { (states.destroy(), ...); },
                    op_states_);
     }
@@ -229,7 +174,7 @@ private:
     }
 
     template <size_t I> struct ChildReceiver {
-        WhenAnyOperationState *self;
+        ParallelOperationState *self;
         std::stop_token stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_<I>(std::forward<R>(result));
@@ -255,6 +200,12 @@ protected:
     Receiver receiver_;
     Canceller canceller_;
 };
+
+template <typename Receiver, typename... Senders>
+using WhenAnyOperationState = ParallelOperationState<Receiver, WhenAnyCanceller, Senders...>;
+
+template<typename Receiver, typename... Senders>
+using WhenAllOperationState = ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
 
 template <typename Receiver, unsigned int Flags, typename... Senders>
 class LinkOperationState : public WhenAllOperationState<Receiver, Senders...> {
