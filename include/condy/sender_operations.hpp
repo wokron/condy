@@ -107,19 +107,23 @@ template <typename Sender> auto always_async(Sender &&sender) {
     return flag<IOSQE_ASYNC>(std::forward<Sender>(sender));
 }
 
-template <typename... Senders> auto when_all(Senders &&...senders) {
-    return WhenAllSender<std::decay_t<Senders>...>(
+template <template <typename... Senders> typename SenderType,
+          typename... Senders>
+auto parallel(Senders &&...senders) {
+    return SenderType<std::decay_t<Senders>...>(
         std::forward<Senders>(senders)...);
+}
+
+template <typename... Senders> auto when_all(Senders &&...senders) {
+    return parallel<WhenAllSender>(std::forward<Senders>(senders)...);
 }
 
 template <typename... Senders> auto link(Senders &&...senders) {
-    return LinkSender<std::decay_t<Senders>...>(
-        std::forward<Senders>(senders)...);
+    return parallel<LinkSender>(std::forward<Senders>(senders)...);
 }
 
 template <typename... Senders> auto hard_link(Senders &&...senders) {
-    return HardLinkSender<std::decay_t<Senders>...>(
-        std::forward<Senders>(senders)...);
+    return parallel<HardLinkSender>(std::forward<Senders>(senders)...);
 }
 
 } // namespace temp
