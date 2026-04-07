@@ -167,9 +167,10 @@ private:
     template <size_t I, typename R> void receive_(R &&result) noexcept {
         canceller_.maybe_request_stop();
         auto no = completed_count_++;
+        order_[no] = I;
         std::get<I>(results_) = std::forward<R>(result);
         if (no + 1 == sizeof...(Senders)) {
-            std::move(receiver_)(std::move(results_));
+            std::move(receiver_)(std::make_pair(order_, results_));
         }
     }
 
@@ -195,6 +196,7 @@ private:
 
 protected:
     OperationStates op_states_;
+    std::array<size_t, sizeof...(Senders)> order_;
     std::tuple<typename Senders::ReturnType...> results_;
     size_t completed_count_ = 0;
     Receiver receiver_;
@@ -202,10 +204,51 @@ protected:
 };
 
 template <typename Receiver, typename... Senders>
-using WhenAnyOperationState = ParallelOperationState<Receiver, WhenAnyCanceller, Senders...>;
+using ParallelAnyOperationState =
+    ParallelOperationState<Receiver, WhenAnyCanceller, Senders...>;
 
-template<typename Receiver, typename... Senders>
-using WhenAllOperationState = ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
+template <typename Receiver, typename... Senders>
+using ParallelAllOperationState =
+    ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
+
+template <typename Receiver> struct ReceiverWrapper {
+    Receiver receiver;
+    template <typename R> void operator()(R &&result) noexcept {
+        auto &[order, results] = result;
+        std::move(receiver)(std::move(results));
+    }
+    std::stop_token get_stop_token() const noexcept {
+        return receiver.get_stop_token();
+    }
+};
+
+template <typename Receiver, typename... Senders>
+class WhenAnyOperationState
+    : public ParallelAnyOperationState<ReceiverWrapper<Receiver>, Senders...> {
+public:
+    using Base =
+        ParallelAnyOperationState<ReceiverWrapper<Receiver>, Senders...>;
+
+    WhenAnyOperationState(std::tuple<Senders...> senders, Receiver receiver)
+        : Base(std::move(senders),
+               ReceiverWrapper<Receiver>{std::move(receiver)}) {}
+
+    void start(unsigned int flags) noexcept { Base::start(flags); }
+};
+
+template <typename Receiver, typename... Senders>
+class WhenAllOperationState
+    : public ParallelAllOperationState<ReceiverWrapper<Receiver>, Senders...> {
+public:
+    using Base =
+        ParallelAllOperationState<ReceiverWrapper<Receiver>, Senders...>;
+
+    WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
+        : Base(std::move(senders),
+               ReceiverWrapper<Receiver>{std::move(receiver)}) {}
+
+    void start(unsigned int flags) noexcept { Base::start(flags); }
+};
 
 template <typename Receiver, unsigned int Flags, typename... Senders>
 class LinkOperationState : public WhenAllOperationState<Receiver, Senders...> {
