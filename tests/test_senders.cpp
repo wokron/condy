@@ -26,6 +26,13 @@ TEST_CASE("test senders - when_all") {
     condy::sync_wait(f());
 }
 
+TEST_CASE("test senders - empty when_all") {
+    auto f = []() -> condy::Coro<void> {
+        co_await condy::detail::as_awaiter(condy::temp::when_all());
+    };
+    condy::sync_wait(f());
+}
+
 TEST_CASE("test senders - parallel all") {
     auto f = []() -> condy::Coro<void> {
         auto [order, r] = co_await condy::detail::as_awaiter(
@@ -36,6 +43,14 @@ TEST_CASE("test senders - parallel all") {
         REQUIRE(order[1] == 1);
         REQUIRE(std::get<0>(r) == 0);
         REQUIRE(std::get<1>(r) == 0);
+    };
+    condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - empty parallell all") {
+    auto f = []() -> condy::Coro<void> {
+        [[maybe_unused]] auto [order, r] = co_await condy::detail::as_awaiter(
+            condy::temp::parallel<condy::ParallelAllSender>());
     };
     condy::sync_wait(f());
 }
@@ -83,6 +98,14 @@ TEST_CASE("test senders - parallel any") {
         REQUIRE(order[0] == 0);
         REQUIRE(std::get<0>(r) == 0);
         REQUIRE(std::get<1>(r) == -ECANCELED);
+    };
+    condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - empty parallel any") {
+    auto f = []() -> condy::Coro<void> {
+        [[maybe_unused]] auto [order, r] = co_await condy::detail::as_awaiter(
+            condy::temp::parallel<condy::ParallelAnySender>());
     };
     condy::sync_wait(f());
 }

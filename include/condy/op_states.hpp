@@ -147,9 +147,14 @@ public:
     }
 
     void start(unsigned int flags) noexcept {
-        canceller_.set_token(receiver_.get_stop_token());
-        std::apply([&](auto &&...states) { (states.get().start(flags), ...); },
-                   op_states_);
+        if constexpr (sizeof...(Senders) == 0) {
+            std::move(receiver_)(std::make_pair(order_, results_));
+        } else {
+            canceller_.set_token(receiver_.get_stop_token());
+            std::apply(
+                [&](auto &&...states) { (states.get().start(flags), ...); },
+                op_states_);
+        }
     }
 
 private:
@@ -265,6 +270,9 @@ class WhenAnyOperationState
     : public ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>,
                                        Senders...> {
 public:
+    static_assert(sizeof...(Senders) > 0,
+                  "when_any requires at least one sender");
+
     using Base =
         ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>, Senders...>;
 
