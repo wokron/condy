@@ -1,4 +1,5 @@
 #include "condy/sender_operations.hpp"
+#include "condy/senders.hpp"
 #include "condy/sync_wait.hpp"
 #include <cerrno>
 #include <doctest/doctest.h>
@@ -25,6 +26,20 @@ TEST_CASE("test senders - when_all") {
     condy::sync_wait(f());
 }
 
+TEST_CASE("test senders - parallel all") {
+    auto f = []() -> condy::Coro<void> {
+        auto [order, r] = co_await condy::detail::as_awaiter(
+            condy::temp::parallel<condy::ParallelAllSender>(
+                condy::detail::make_op_sender(io_uring_prep_nop),
+                condy::detail::make_op_sender(io_uring_prep_nop)));
+        REQUIRE(order[0] == 0);
+        REQUIRE(order[1] == 1);
+        REQUIRE(std::get<0>(r) == 0);
+        REQUIRE(std::get<1>(r) == 0);
+    };
+    condy::sync_wait(f());
+}
+
 TEST_CASE("test senders - when_any") {
     auto f = []() -> condy::Coro<void> {
         __kernel_timespec ts{
@@ -36,6 +51,23 @@ TEST_CASE("test senders - when_any") {
             condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
         REQUIRE(r.index() == 0);
         REQUIRE(std::get<0>(r) == 0);
+    };
+    condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - parallel any") {
+    auto f = []() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60,
+            .tv_nsec = 0,
+        };
+        auto [order, r] = co_await condy::detail::as_awaiter(
+            condy::temp::parallel<condy::ParallelAnySender>(
+                condy::detail::make_op_sender(io_uring_prep_nop),
+                condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
+        REQUIRE(order[0] == 0);
+        REQUIRE(std::get<0>(r) == 0);
+        REQUIRE(std::get<1>(r) == -ECANCELED);
     };
     condy::sync_wait(f());
 }

@@ -63,6 +63,38 @@ private:
     Sender sender_;
 };
 
+template <typename... Senders> class ParallelAllSender {
+public:
+    using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
+                                 std::tuple<typename Senders::ReturnType...>>;
+
+    ParallelAllSender(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::ParallelAllOperationState<Receiver, Senders...>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::tuple<Senders...> senders_;
+};
+
+template <typename... Senders> class ParallelAnySender {
+public:
+    using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
+                                 std::tuple<typename Senders::ReturnType...>>;
+
+    ParallelAnySender(Senders... senders) : senders_(std::move(senders)...) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::ParallelAnyOperationState<Receiver, Senders...>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::tuple<Senders...> senders_;
+};
+
 template <typename... Senders> class WhenAllSender {
 public:
     using ReturnType = std::tuple<typename Senders::ReturnType...>;
