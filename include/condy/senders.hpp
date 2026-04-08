@@ -238,4 +238,26 @@ private:
     std::vector<Sender> senders_;
 };
 
+template <unsigned int Flags, typename Sender> class RangedLinkSenderBase {
+public:
+    using ReturnType = std::vector<typename Sender::ReturnType>;
+
+    RangedLinkSenderBase(std::vector<Sender> senders)
+        : senders_(std::move(senders)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::RangedLinkOperationState<Receiver, Flags, Sender>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::vector<Sender> senders_;
+};
+
+template <typename Sender>
+using RangedLinkSender = RangedLinkSenderBase<IOSQE_IO_LINK, Sender>;
+
+template <typename Sender>
+using RangedHardLinkSender = RangedLinkSenderBase<IOSQE_IO_HARDLINK, Sender>;
+
 } // namespace condy

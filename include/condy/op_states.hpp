@@ -359,6 +359,8 @@ private:
     using OperationStates =
         std::vector<RawStorage<decltype(std::declval<Sender>().connect(
             std::declval<ChildReceiver>()))>>;
+
+protected:
     OperationStates op_states_;
     std::vector<size_t> order_;
     std::vector<typename Sender::ReturnType> results_;
@@ -412,6 +414,27 @@ public:
     WhenAnyRangeOperationState(std::vector<Sender> senders, Receiver receiver)
         : Base(std::move(senders),
                ReceiverRangedAnyWrapper<Receiver>{std::move(receiver)}) {}
+};
+
+template <typename Receiver, unsigned int Flags, typename Sender>
+class RangedLinkOperationState
+    : public WhenAllRangeOperationState<Receiver, Sender> {
+public:
+    using Base = WhenAllRangeOperationState<Receiver, Sender>;
+    using Base::Base;
+
+    void start(unsigned int flags) noexcept {
+        auto *ring = detail::Context::current().ring();
+        ring->reserve_space(Base::op_states_.size());
+        for (size_t i = 0; i < Base::op_states_.size(); ++i) {
+            auto &op_state = Base::op_states_[i];
+            if (i < Base::op_states_.size() - 1) {
+                op_state.get().start(flags | Flags);
+            } else {
+                op_state.get().start(flags);
+            }
+        }
+    }
 };
 
 } // namespace detail

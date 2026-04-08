@@ -146,8 +146,16 @@ template <typename... Senders> auto link(Senders &&...senders) {
     return parallel<LinkSender>(std::forward<Senders>(senders)...);
 }
 
+template <std::ranges::range Range> auto link(Range &&range) {
+    return parallel<RangedLinkSender>(std::forward<Range>(range));
+}
+
 template <typename... Senders> auto hard_link(Senders &&...senders) {
     return parallel<HardLinkSender>(std::forward<Senders>(senders)...);
+}
+
+template <std::ranges::range Range> auto hard_link(Range &&range) {
+    return parallel<RangedHardLinkSender>(std::forward<Range>(range));
 }
 
 namespace operators {
