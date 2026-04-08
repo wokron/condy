@@ -253,8 +253,6 @@ public:
     WhenAnyOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : Base(std::move(senders),
                ReceiverAnyWrapper<Receiver>{std::move(receiver)}) {}
-
-    void start(unsigned int flags) noexcept { Base::start(flags); }
 };
 
 template <typename Receiver, typename... Senders>
@@ -268,8 +266,6 @@ public:
     WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : Base(std::move(senders),
                ReceiverAllWrapper<Receiver>{std::move(receiver)}) {}
-
-    void start(unsigned int flags) noexcept { Base::start(flags); }
 };
 
 template <typename Receiver, unsigned int Flags, typename... Senders>
