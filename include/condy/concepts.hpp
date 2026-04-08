@@ -95,4 +95,8 @@ concept FdLike = std::same_as<std::decay_t<T>, int> ||
 template <typename T, typename... Us>
 concept AnySameAs = (std::same_as<T, Us> || ...);
 
+template <typename T>
+concept SenderLike =
+    requires(T sender) { typename std::decay_t<T>::ReturnType; };
+
 } // namespace condy
