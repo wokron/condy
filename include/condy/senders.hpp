@@ -167,4 +167,75 @@ using LinkSender = LinkSenderBase<IOSQE_IO_LINK, Senders...>;
 template <typename... Senders>
 using HardLinkSender = LinkSenderBase<IOSQE_IO_HARDLINK, Senders...>;
 
+template <typename Sender> class RangedParallelAllSender {
+public:
+    using ReturnType = std::pair<std::vector<size_t>,
+                                 std::vector<typename Sender::ReturnType>>;
+
+    RangedParallelAllSender(std::vector<Sender> senders)
+        : senders_(std::move(senders)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::RangedParallelAllOperationState<Receiver, Sender>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::vector<Sender> senders_;
+};
+
+template <typename Sender> class RangedParallelAnySender {
+public:
+    using ReturnType = std::pair<std::vector<size_t>,
+                                 std::vector<typename Sender::ReturnType>>;
+
+    RangedParallelAnySender(std::vector<Sender> senders)
+        : senders_(std::move(senders)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::RangedParallelAnyOperationState<Receiver, Sender>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::vector<Sender> senders_;
+};
+
+template <typename Sender> class RangedWhenAllSender {
+public:
+    using ReturnType = std::vector<typename Sender::ReturnType>;
+
+    RangedWhenAllSender(std::vector<Sender> senders)
+        : senders_(std::move(senders)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::WhenAllRangeOperationState<Receiver, Sender>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::vector<Sender> senders_;
+};
+
+template <typename Sender> class RangedWhenAnySender {
+public:
+    using ReturnType = std::pair<size_t, typename Sender::ReturnType>;
+
+    RangedWhenAnySender(std::vector<Sender> senders)
+        : senders_(std::move(senders)) {
+        if (senders_.empty()) {
+            throw std::invalid_argument(
+                "when_any requires at least one sender");
+        }
+    }
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return detail::WhenAnyRangeOperationState<Receiver, Sender>(
+            std::move(senders_), std::move(receiver));
+    }
+
+private:
+    std::vector<Sender> senders_;
+};
+
 } // namespace condy

@@ -5,6 +5,7 @@
 #include "condy/finish_handles.hpp"
 #include "condy/invoker.hpp"
 #include "condy/utils.hpp"
+#include <cstddef>
 #include <stop_token>
 
 namespace condy {
@@ -293,6 +294,124 @@ private:
             start_linked_operations_<I + 1>(flags);
         }
     }
+};
+
+template <typename Receiver, typename Canceller, typename Sender>
+class RangedParallelOperationState {
+public:
+    RangedParallelOperationState(std::vector<Sender> senders, Receiver receiver)
+        : op_states_(senders.size()), order_(senders.size()),
+          results_(senders.size()), receiver_(std::move(receiver)) {
+        for (size_t i = 0; i < senders.size(); ++i) {
+            op_states_[i].accept([&] {
+                return std::move(senders[i])
+                    .connect(ChildReceiver{this, i, canceller_.get_token()});
+            });
+        }
+    }
+
+    RangedParallelOperationState(RangedParallelOperationState &&) = delete;
+    RangedParallelOperationState &
+    operator=(RangedParallelOperationState &&) = delete;
+    RangedParallelOperationState(const RangedParallelOperationState &) = delete;
+    RangedParallelOperationState &
+    operator=(const RangedParallelOperationState &) = delete;
+
+    ~RangedParallelOperationState() {
+        for (auto &op_state : op_states_) {
+            op_state.destroy();
+        }
+    }
+
+    void start(unsigned int flags) noexcept {
+        if (op_states_.empty()) {
+            std::move(receiver_)(std::make_pair(order_, results_));
+        } else {
+            canceller_.set_token(receiver_.get_stop_token());
+            for (auto &op_state : op_states_) {
+                op_state.get().start(flags);
+            }
+        }
+    }
+
+private:
+    void receive_(size_t index, auto &&result) noexcept {
+        canceller_.maybe_request_stop();
+        size_t no = completed_count_++;
+        order_[no] = index;
+        results_[index] = std::forward<decltype(result)>(result);
+        if (no + 1 == op_states_.size()) {
+            std::move(receiver_)(std::make_pair(order_, results_));
+        }
+    }
+
+    struct ChildReceiver {
+        RangedParallelOperationState *self;
+        size_t index;
+        std::stop_token stop_token;
+        template <typename R> void operator()(R &&result) noexcept {
+            self->receive_(index, std::forward<R>(result));
+        }
+
+        std::stop_token get_stop_token() const noexcept { return stop_token; }
+    };
+
+    using OperationStates =
+        std::vector<RawStorage<decltype(std::declval<Sender>().connect(
+            std::declval<ChildReceiver>()))>>;
+    OperationStates op_states_;
+    std::vector<size_t> order_;
+    std::vector<typename Sender::ReturnType> results_;
+    size_t completed_count_ = 0;
+    Receiver receiver_;
+    Canceller canceller_;
+};
+
+template <typename Receiver, typename Sender>
+using RangedParallelAllOperationState =
+    RangedParallelOperationState<Receiver, WhenAllCanceller, Sender>;
+
+template <typename Receiver, typename Sender>
+using RangedParallelAnyOperationState =
+    RangedParallelOperationState<Receiver, WhenAnyCanceller, Sender>;
+
+template <typename Receiver, typename Sender>
+class WhenAllRangeOperationState
+    : public RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>,
+                                             Sender> {
+public:
+    using Base =
+        RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>, Sender>;
+
+    WhenAllRangeOperationState(std::vector<Sender> senders, Receiver receiver)
+        : Base(std::move(senders),
+               ReceiverAllWrapper<Receiver>{std::move(receiver)}) {}
+};
+
+template <typename Receiver> struct ReceiverRangedAnyWrapper {
+    Receiver receiver;
+    template <typename R> void operator()(R &&result) noexcept {
+        auto &[order, results] = result;
+        size_t index = order[0];
+        std::move(receiver)(std::make_pair(index, std::move(results[index])));
+    }
+    std::stop_token get_stop_token() const noexcept {
+        return receiver.get_stop_token();
+    }
+};
+
+template <typename Receiver, typename Sender>
+class WhenAnyRangeOperationState
+    : public RangedParallelAnyOperationState<ReceiverRangedAnyWrapper<Receiver>,
+                                             Sender> {
+public:
+    using Base =
+        RangedParallelAnyOperationState<ReceiverRangedAnyWrapper<Receiver>,
+                                        Sender>;
+
+    WhenAnyRangeOperationState(std::vector<Sender> senders, Receiver receiver)
+        : Base(std::move(senders),
+               ReceiverRangedAnyWrapper<Receiver>{std::move(receiver)}) {}
 };
 
 } // namespace detail

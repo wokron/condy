@@ -116,12 +116,30 @@ auto parallel(Senders &&...senders) {
         std::forward<Senders>(senders)...);
 }
 
+template <template <typename Sender> typename RangedSenderType,
+          std::ranges::range Range>
+auto parallel(Range &&range) {
+    using SenderType = typename std::decay_t<Range>::value_type;
+    auto begin = std::make_move_iterator(std::begin(range));
+    auto end = std::make_move_iterator(std::end(range));
+    std::vector<SenderType> senders(begin, end);
+    return RangedSenderType<SenderType>(std::move(senders));
+}
+
 template <typename... Senders> auto when_all(Senders &&...senders) {
     return parallel<WhenAllSender>(std::forward<Senders>(senders)...);
 }
 
+template <std::ranges::range Range> auto when_all(Range &&range) {
+    return parallel<RangedWhenAllSender>(std::forward<Range>(range));
+}
+
 template <typename... Senders> auto when_any(Senders &&...senders) {
     return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
+}
+
+template <std::ranges::range Range> auto when_any(Range &&range) {
+    return parallel<RangedWhenAnySender>(std::forward<Range>(range));
 }
 
 template <typename... Senders> auto link(Senders &&...senders) {
