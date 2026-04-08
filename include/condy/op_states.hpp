@@ -227,32 +227,6 @@ template <typename Receiver> struct ReceiverAllWrapper {
     }
 };
 
-template <typename T> struct tuple_to_variant_traits;
-
-template <typename... Ts> struct tuple_to_variant_traits<std::tuple<Ts...>> {
-    using type = std::variant<Ts...>;
-    static constexpr size_t value = sizeof...(Ts);
-};
-
-template <size_t Idx = 0> auto tuple_at(auto &results, size_t idx) {
-    using Traits = tuple_to_variant_traits<std::decay_t<decltype(results)>>;
-    using ReturnType = typename Traits::type;
-    if constexpr (Idx < Traits::value) {
-        if (idx == Idx) {
-            return ReturnType{std::in_place_index<Idx>,
-                              std::move(std::get<Idx>(results))};
-        } else {
-            return tuple_at<Idx + 1>(results, idx);
-        }
-    } else {
-        // Should not reach here, but we need to make compiler happy.
-        // Throwing an exception will lead to wrong optimization.
-        assert(false && "Index out of bounds");
-        return ReturnType{std::in_place_index<0>,
-                          std::move(std::get<0>(results))};
-    }
-}
-
 template <typename Receiver> struct ReceiverAnyWrapper {
     Receiver receiver;
     template <typename R> void operator()(R &&result) noexcept {
