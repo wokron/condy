@@ -10,9 +10,9 @@ class OpSenderBase {
 public:
     using ReturnType = typename Handle::ReturnType;
 
-    OpSenderBase(Func func, HandleArgs &&...args)
+    OpSenderBase(Func func, HandleArgs ...args)
         : prep_func_(std::move(func)),
-          handle_args_(std::forward<HandleArgs>(args)...) {}
+          handle_args_(std::move(args)...) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return detail::OpSenderOperationState<Handle, Func, Receiver>(
@@ -28,7 +28,7 @@ public:
 
 private:
     Func prep_func_;
-    std::tuple<HandleArgs &&...> handle_args_;
+    std::tuple<HandleArgs...> handle_args_;
 };
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
@@ -40,13 +40,13 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc, typename... HandleArgs>
 using MultiShotOpSender =
     OpSenderBase<MultiShotOpFinishHandle<CQEHandler, MultiShotFunc>, PrepFunc,
-                 HandleArgs...>;
+                 MultiShotFunc, HandleArgs...>;
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
           typename... HandleArgs>
 using ZeroCopyOpSender =
     OpSenderBase<ZeroCopyOpFinishHandle<CQEHandler, FreeFunc>, PrepFunc,
-                 HandleArgs...>;
+                 FreeFunc, HandleArgs...>;
 
 template <unsigned int Flags, typename Sender> class FlaggedOpSender {
 public:

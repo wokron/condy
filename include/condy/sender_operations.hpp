@@ -8,7 +8,7 @@ namespace condy {
 
 template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc, typename... Args>
 auto build_op_sender(PrepFunc &&prep_func, Args &&...args) {
-    return OpSender<PrepFunc, CQEHandler, Args...>(
+    return OpSender<PrepFunc, CQEHandler, std::decay_t<Args>...>(
         std::forward<PrepFunc>(prep_func), std::forward<Args>(args)...);
 }
 
@@ -17,7 +17,7 @@ template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc,
 auto build_multishot_op_sender(PrepFunc &&func, MultiShotFunc &&multishot_func,
                                Args &&...handler_args) {
     return MultiShotOpSender<std::decay_t<PrepFunc>, CQEHandler,
-                             std::decay_t<MultiShotFunc>>(
+                             std::decay_t<MultiShotFunc>, std::decay_t<Args>...>(
         std::forward<PrepFunc>(func),
         std::forward<MultiShotFunc>(multishot_func),
         std::forward<Args>(handler_args)...);
@@ -28,7 +28,7 @@ template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc, typename FreeFunc,
 auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
                                Args &&...handler_args) {
     return ZeroCopyOpSender<std::decay_t<PrepFunc>, CQEHandler,
-                            std::decay_t<FreeFunc>>(
+                            std::decay_t<FreeFunc>, std::decay_t<Args>...>(
         std::forward<PrepFunc>(func), std::forward<FreeFunc>(free_func),
         std::forward<Args>(handler_args)...);
 }
@@ -206,8 +206,6 @@ template <typename Sender> auto as_awaiter(Sender &&sender) {
 
 } // namespace detail
 
-namespace temp {
-
 template <unsigned int Flags, typename Sender> auto flag(Sender &&sender) {
     return FlaggedOpSender<Flags, std::decay_t<Sender>>(
         std::forward<Sender>(sender));
@@ -306,7 +304,5 @@ auto operator>>(LinkSender<Ss...> aws, S sender) {
 }
 
 } // namespace operators
-
-} // namespace temp
 
 } // namespace condy
