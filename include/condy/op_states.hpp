@@ -164,7 +164,7 @@ private:
         if constexpr (I < sizeof...(Senders)) {
             std::get<I>(op_states_).accept([&] {
                 return std::move(std::get<I>(senders))
-                    .connect(ChildReceiver<I>{this, canceller_.get_token()});
+                    .connect(ChildReceiver<I>{this});
             });
             connect_senders_<I + 1>(senders);
         }
@@ -182,12 +182,11 @@ private:
 
     template <size_t I> struct ChildReceiver {
         ParallelOperationState *self;
-        std::stop_token stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_<I>(std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept { return stop_token; }
+        std::stop_token get_stop_token() const noexcept { return self->canceller_.get_token(); }
     };
 
     template <typename T> struct operation_state_traits;
@@ -305,7 +304,7 @@ public:
         for (size_t i = 0; i < senders.size(); ++i) {
             op_states_[i].accept([&] {
                 return std::move(senders[i])
-                    .connect(ChildReceiver{this, i, canceller_.get_token()});
+                    .connect(ChildReceiver{this, i});
             });
         }
     }
@@ -348,12 +347,11 @@ private:
     struct ChildReceiver {
         RangedParallelOperationState *self;
         size_t index;
-        std::stop_token stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_(index, std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept { return stop_token; }
+        std::stop_token get_stop_token() const noexcept { return self->canceller_.get_token(); }
     };
 
     using OperationStates =
