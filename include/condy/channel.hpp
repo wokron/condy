@@ -142,6 +142,12 @@ public:
      */
     PopAwaiter pop() noexcept { return {*this}; }
 
+    class [[nodiscard]] PushSender;
+    class [[nodiscard]] PopSender;
+
+    PushSender push_sender(T item) { return {*this, std::move(item)}; }
+    PopSender pop_sender() { return {*this}; }
+
     /**
      * @brief Get the capacity of the channel.
      */
@@ -467,6 +473,95 @@ private:
     Runtime *runtime_ = nullptr;
     ReturnType result_ = {-ENOTRECOVERABLE, T()}; // Internal error if not set
     bool need_resume_ = false;
+};
+
+template <typename T, size_t N> class Channel<T, N>::PushSender {
+public:
+    using ReturnType = int;
+
+    PushSender(Channel &channel, T item) : channel_(channel), item_(std::move(item)) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return OperationState<Receiver>(channel_, std::move(item_),
+                                        std::move(receiver));
+    }
+
+private:
+    template <typename Receiver>
+    class OperationState : public InvokerAdapter<OperationState<Receiver>> {
+    public:
+        OperationState(Channel &channel, T item, Receiver receiver)
+            : channel_(channel), finish_handle_(std::move(item)),
+              receiver_(receiver) {}
+
+        void start(unsigned int /*flags*/) noexcept {
+            auto *runtime = detail::Context::current().runtime();
+            finish_handle_.set_invoker(this);
+            finish_handle_.init(&channel_, runtime);
+            int r = channel_.request_push_(&finish_handle_);
+            if (r != -EAGAIN) {
+                // Operation completed immediately
+                finish_handle_.set_result(r);
+                runtime->schedule(&finish_handle_);
+            }
+        }
+
+        void invoke() noexcept {
+            auto result = finish_handle_.extract_result();
+            std::move(receiver_)(std::move(result));
+        }
+
+    private:
+        Channel &channel_;
+        PushFinishHandle finish_handle_;
+        Receiver receiver_;
+    };
+
+    Channel &channel_;
+    T item_;
+};
+
+template <typename T, size_t N> class Channel<T, N>::PopSender {
+public:
+    using ReturnType = std::pair<int, T>;
+
+    PopSender(Channel &channel) : channel_(channel) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return OperationState<Receiver>(channel_, std::move(receiver));
+    }
+
+private:
+    template <typename Receiver>
+    class OperationState : public InvokerAdapter<OperationState<Receiver>> {
+    public:
+        OperationState(Channel &channel, Receiver receiver)
+            : channel_(channel), receiver_(receiver) {}
+
+        void start(unsigned int /*flags*/) noexcept {
+            auto *runtime = detail::Context::current().runtime();
+            finish_handle_.set_invoker(this);
+            finish_handle_.init(&channel_, runtime);
+            auto item = channel_.request_pop_(&finish_handle_);
+            auto r = item.first;
+            if (r != -EAGAIN) {
+                finish_handle_.set_result(std::move(item));
+                runtime->schedule(&finish_handle_);
+            }
+        }
+
+        void invoke() noexcept {
+            auto result = finish_handle_.extract_result();
+            std::move(receiver_)(std::move(result));
+        }
+
+    private:
+        Channel &channel_;
+        PopFinishHandle finish_handle_;
+        Receiver receiver_;
+    };
+
+    Channel &channel_;
 };
 
 /**

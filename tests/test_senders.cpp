@@ -1,3 +1,4 @@
+#include "condy/channel.hpp"
 #include "condy/sender_operations.hpp"
 #include "condy/senders.hpp"
 #include "condy/sync_wait.hpp"
@@ -314,4 +315,56 @@ TEST_CASE("test senders - flags") {
         REQUIRE(r == 0);
     };
     condy::sync_wait(f());
+}
+
+TEST_CASE("test senders - channel basic") {
+    condy::Runtime runtime;
+    condy::Channel<int> channel(20);
+
+    const size_t num_producers = 4;
+    const size_t num_consumers = 4;
+    const size_t items_per_producer = 25;
+
+    size_t finished = 0;
+    auto producer = [&](size_t id) -> condy::Coro<void> {
+        for (size_t i = 1; i <= items_per_producer; ++i) {
+            co_await channel.push_sender(static_cast<int>(id * 100 + i));
+        }
+        finished++;
+    };
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        assert((num_producers * items_per_producer) % num_consumers == 0);
+        for (size_t i = 0;
+             i < (num_producers * items_per_producer) / num_consumers; ++i) {
+            auto [r, item] = co_await channel.pop_sender();
+            REQUIRE(r == 0);
+            REQUIRE(item != 0); // Basic check to ensure item is received
+        }
+        finished++;
+    };
+
+    std::vector<condy::Task<void>> producer_tasks;
+    producer_tasks.reserve(num_producers);
+    for (size_t i = 0; i < num_producers; ++i) {
+        producer_tasks.push_back(condy::co_spawn(runtime, producer(i)));
+    }
+
+    std::vector<condy::Task<void>> consumer_tasks;
+    consumer_tasks.reserve(num_consumers);
+    for (size_t i = 0; i < num_consumers; ++i) {
+        consumer_tasks.push_back(condy::co_spawn(runtime, consumer()));
+    }
+
+    runtime.allow_exit();
+    runtime.run();
+
+    for (auto &task : producer_tasks) {
+        task.wait();
+    }
+    for (auto &task : consumer_tasks) {
+        task.wait();
+    }
+
+    REQUIRE(finished == (num_producers + num_consumers));
 }
