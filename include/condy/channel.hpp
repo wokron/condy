@@ -115,7 +115,7 @@ public:
         push_awaiters_.push_back(fake_handle);
     }
 
-    struct [[nodiscard]] PushAwaiter;
+    class [[nodiscard]] PushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
@@ -129,9 +129,9 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    PushAwaiter push(T item) noexcept { return {*this, std::move(item)}; }
+    PushSender push(T item) noexcept { return {*this, std::move(item)}; }
 
-    struct [[nodiscard]] PopAwaiter;
+    class [[nodiscard]] PopSender;
     /**
      * @brief Pop an item from the channel, awaiting if necessary.
      * @return PopAwaiter Awaiter object for the pop operation.
@@ -141,10 +141,7 @@ public:
      * -EPIPE. If this operation is cancelled while waiting, it will return
      * -ECANCELED.
      */
-    PopAwaiter pop() noexcept { return {*this}; }
-
-    class [[nodiscard]] PushSender;
-    class [[nodiscard]] PopSender;
+    PopSender pop() noexcept { return {*this}; }
 
     PushSender push_sender(T item) { return {*this, std::move(item)}; }
     PopSender pop_sender() { return {*this}; }
@@ -478,9 +475,10 @@ private:
 
 template <typename T, size_t N> class Channel<T, N>::PushSender {
 public:
-    using ReturnType = int;
+    using ReturnType = int32_t;
 
-    PushSender(Channel &channel, T item) : channel_(channel), item_(std::move(item)) {}
+    PushSender(Channel &channel, T item)
+        : channel_(channel), item_(std::move(item)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return OperationState<Receiver>(channel_, std::move(item_),
@@ -539,7 +537,7 @@ private:
 
 template <typename T, size_t N> class Channel<T, N>::PopSender {
 public:
-    using ReturnType = std::pair<int, T>;
+    using ReturnType = std::pair<int32_t, T>;
 
     PopSender(Channel &channel) : channel_(channel) {}
 
@@ -593,111 +591,6 @@ private:
     };
 
     Channel &channel_;
-};
-
-/**
- * @brief Awaiter for pushing an item into the channel.
- * @return int32_t The result of the push operation. 0 if the item was
- * successfully pushed; -EPIPE if the channel is closed; -ECANCELED if the push
- * operation was cancelled.
- */
-template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {
-public:
-    using HandleType = PushFinishHandle;
-
-    PushAwaiter(Channel &channel, T item)
-        : channel_(channel), finish_handle_(std::move(item)) {}
-
-public:
-    HandleType *get_handle() noexcept { return &finish_handle_; }
-
-    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
-
-    void register_operation(unsigned int /*flags*/) noexcept {
-        auto *runtime = detail::Context::current().runtime();
-        finish_handle_.init(&channel_, runtime);
-        int32_t r = channel_.request_push_(&finish_handle_);
-        if (r != -EAGAIN) {
-            // Operation completed immediately
-            finish_handle_.set_result(r);
-            runtime->schedule(&finish_handle_);
-        }
-    }
-
-public:
-    bool await_ready() const noexcept { return false; }
-
-    template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
-        init_finish_handle();
-        finish_handle_.set_invoker(&h.promise());
-        finish_handle_.init(&channel_, detail::Context::current().runtime());
-        int32_t r = channel_.request_push_(&finish_handle_);
-        if (r != -EAGAIN) {
-            // Operation completed immediately
-            finish_handle_.set_result(r);
-            return false; // Do not suspend
-        }
-        return true; // Suspend
-    }
-
-    auto await_resume() noexcept { return finish_handle_.extract_result(); }
-
-private:
-    Channel &channel_;
-    PushFinishHandle finish_handle_;
-};
-
-/**
- * @brief Awaiter for popping an item from the channel.
- * @return std::pair<int32_t, T> The result of the pop operation. 0 and the
- * popped item if successful; -EPIPE if the channel is closed; -ECANCELED if
- * the pop operation was cancelled.
- */
-template <typename T, size_t N> struct Channel<T, N>::PopAwaiter {
-public:
-    using HandleType = PopFinishHandle;
-
-    PopAwaiter(Channel &channel) : channel_(channel) {}
-
-public:
-    HandleType *get_handle() noexcept { return &finish_handle_; }
-
-    void init_finish_handle() noexcept { /* Leaf node, no-op */ }
-
-    void register_operation(unsigned int /*flags*/) noexcept {
-        auto *runtime = detail::Context::current().runtime();
-        finish_handle_.init(&channel_, runtime);
-        auto item = channel_.request_pop_(&finish_handle_);
-        auto r = item.first;
-        if (r != -EAGAIN) {
-            finish_handle_.set_result(std::move(item));
-            runtime->schedule(&finish_handle_);
-        }
-    }
-
-public:
-    bool await_ready() const noexcept { return false; }
-
-    template <typename PromiseType>
-    bool await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
-        init_finish_handle();
-        finish_handle_.set_invoker(&h.promise());
-        finish_handle_.init(&channel_, detail::Context::current().runtime());
-        auto item = channel_.request_pop_(&finish_handle_);
-        auto r = item.first;
-        if (r != -EAGAIN) {
-            finish_handle_.set_result(std::move(item));
-            return false; // Do not suspend
-        }
-        return true; // Suspend
-    }
-
-    auto await_resume() noexcept { return finish_handle_.extract_result(); }
-
-private:
-    Channel &channel_;
-    PopFinishHandle finish_handle_;
 };
 
 } // namespace condy

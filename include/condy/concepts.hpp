@@ -58,19 +58,11 @@ concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
 };
 
 template <typename T>
-concept AwaiterLike = requires(T awaiter) {
-    typename std::decay_t<T>::HandleType;
-    {
-        awaiter.get_handle()
-    } -> std::same_as<typename std::decay_t<T>::HandleType *>;
-    { awaiter.init_finish_handle() } -> std::same_as<void>;
-    { awaiter.register_operation(0) } -> std::same_as<void>;
-    { awaiter.await_ready() } noexcept -> std::same_as<bool>;
-    { awaiter.await_suspend(std::declval<std::coroutine_handle<>>()) } noexcept;
-    {
-        awaiter.await_resume()
-    } -> std::same_as<typename std::decay_t<T>::HandleType::ReturnType>;
-};
+concept SenderLike =
+    requires(T sender) { typename std::decay_t<T>::ReturnType; };
+
+template <typename T>
+concept AwaiterLike = SenderLike<T>;
 
 template <typename T>
 concept AwaiterRange =
@@ -95,8 +87,6 @@ concept FdLike = std::same_as<std::decay_t<T>, int> ||
 template <typename T, typename... Us>
 concept AnySameAs = (std::same_as<T, Us> || ...);
 
-template <typename T>
-concept SenderLike =
-    requires(T sender) { typename std::decay_t<T>::ReturnType; };
+
 
 } // namespace condy
