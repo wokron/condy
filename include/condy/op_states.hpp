@@ -186,7 +186,9 @@ private:
             self->receive_<I>(std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept { return self->canceller_.get_token(); }
+        std::stop_token get_stop_token() const noexcept {
+            return self->canceller_.get_token();
+        }
     };
 
     template <typename T> struct operation_state_traits;
@@ -303,8 +305,7 @@ public:
           results_(senders.size()), receiver_(std::move(receiver)) {
         for (size_t i = 0; i < senders.size(); ++i) {
             op_states_[i].accept([&] {
-                return std::move(senders[i])
-                    .connect(ChildReceiver{this, i});
+                return std::move(senders[i]).connect(ChildReceiver{this, i});
             });
         }
     }
@@ -351,7 +352,9 @@ private:
             self->receive_(index, std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept { return self->canceller_.get_token(); }
+        std::stop_token get_stop_token() const noexcept {
+            return self->canceller_.get_token();
+        }
     };
 
     using OperationStates =

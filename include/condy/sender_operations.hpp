@@ -17,7 +17,8 @@ template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc,
 auto build_multishot_op_sender(PrepFunc &&func, MultiShotFunc &&multishot_func,
                                Args &&...handler_args) {
     return MultiShotOpSender<std::decay_t<PrepFunc>, CQEHandler,
-                             std::decay_t<MultiShotFunc>, std::decay_t<Args>...>(
+                             std::decay_t<MultiShotFunc>,
+                             std::decay_t<Args>...>(
         std::forward<PrepFunc>(func),
         std::forward<MultiShotFunc>(multishot_func),
         std::forward<Args>(handler_args)...);

@@ -10,9 +10,8 @@ class OpSenderBase {
 public:
     using ReturnType = typename Handle::ReturnType;
 
-    OpSenderBase(Func func, HandleArgs ...args)
-        : prep_func_(std::move(func)),
-          handle_args_(std::move(args)...) {}
+    OpSenderBase(Func func, HandleArgs... args)
+        : prep_func_(std::move(func)), handle_args_(std::move(args)...) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
         return detail::OpSenderOperationState<Handle, Func, Receiver>(
