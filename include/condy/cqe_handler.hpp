@@ -112,50 +112,46 @@ private:
  */
 struct TxTimestampResult {
     /**
-     * @brief The timestamp key if successful, which is the value of `cqe->res`
-     * for the corresponding CQE.
-     */
-    int tskey; // cqe->res
-
-    /**
      * @brief The timestamp type, could be SCM_TSTAMP_SND, SCM_TSTAMP_SCHED,
      * SCM_TSTAMP_ACK, etc.
      */
     int tstype; // cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT
 
     /**
-     * @brief The timestamp value.
-     */
-    io_timespec ts; // *(io_timespec *)(cqe + 1)
-
-    /**
      * @brief Whether this timestamp is a hardware timestamp.
      */
     bool hwts; // cqe->flags & IORING_CQE_F_TSTAMP_HW
+
+    /**
+     * @brief The timestamp value.
+     */
+    io_timespec ts; // *(io_timespec *)(cqe + 1)
 };
 
 /**
  * @brief A CQE handler for TX timestamp operations that extracts timestamp
  * information from the CQE.
- * @return TxTimestampResult Result of the TX timestamp operation.
+ * @return std::pair<int, TxTimestampResult> Result of the TX timestamp
+ * operation.
  */
 class TxTimestampCQEHandler {
 public:
-    using ReturnType = TxTimestampResult;
+    using ReturnType = std::pair<int, TxTimestampResult>;
 
     void handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for TX timestamp operations");
-        result_.tskey = cqe->res;
+        tskey_ = cqe->res;
         result_.tstype =
             static_cast<int>(cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT);
-        result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
         result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
+        result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
     }
 
-    ReturnType extract_result() noexcept { return result_; }
+    ReturnType extract_result() noexcept { return {tskey_, result_}; }
 
 private:
+    int tskey_ = -ENOTRECOVERABLE; // Internal error if not set
     TxTimestampResult result_;
 };
 #endif

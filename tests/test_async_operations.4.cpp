@@ -431,7 +431,7 @@ TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
         auto r = co_await condy::async_send(fd, condy::buffer(msg), 0);
         REQUIRE(r == static_cast<ssize_t>(msg.size()));
 
-        std::vector<condy::TxTimestampResult> results;
+        std::vector<std::pair<int32_t, condy::TxTimestampResult>> results;
         co_await (
             condy::async_uring_cmd_multishot<condy::TxTimestampCQEHandler>(
                 SOCKET_URING_OP_TX_TIMESTAMP, fd, [](auto) { /* no-op */ },
@@ -443,9 +443,9 @@ TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
                 }) ||
             chan.pop());
         REQUIRE(results.size() == 3);
-        REQUIRE(results[0].tstype == SCM_TSTAMP_SCHED);
-        REQUIRE(results[1].tstype == SCM_TSTAMP_SND);
-        REQUIRE(results[2].tstype == SCM_TSTAMP_ACK);
+        REQUIRE(results[0].second.tstype == SCM_TSTAMP_SCHED);
+        REQUIRE(results[1].second.tstype == SCM_TSTAMP_SND);
+        REQUIRE(results[2].second.tstype == SCM_TSTAMP_ACK);
     };
 
     condy::sync_wait(runtime, func());
