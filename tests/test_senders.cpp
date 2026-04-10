@@ -368,3 +368,38 @@ TEST_CASE("test senders - channel basic") {
 
     REQUIRE(finished == (num_producers + num_consumers));
 }
+
+TEST_CASE("test channel - channel cancel pop") {
+    using condy::temp::operators::operator||;
+
+    condy::Runtime runtime;
+    condy::Channel<int> ch1(1), ch2(1);
+
+    std::atomic_bool finished = false;
+
+    auto func = [&]() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60ll * 60ll,
+            .tv_nsec = 0,
+        };
+        auto r = co_await (ch1.pop_sender() || ch2.pop_sender() ||
+                           condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0));
+        REQUIRE(r.index() == 1);
+        REQUIRE(std::get<1>(r).first == 0);
+        REQUIRE(std::get<1>(r).second == 42);
+        finished = true;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    std::thread t([&]() {
+        runtime.allow_exit();
+        runtime.run();
+    });
+
+    REQUIRE(!finished);
+    REQUIRE(ch2.try_push(42) == 0);
+
+    t.join();
+    REQUIRE(finished);
+}

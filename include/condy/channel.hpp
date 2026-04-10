@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <new>
 #include <optional>
+#include <stop_token>
 #include <type_traits>
 
 namespace condy {
@@ -503,18 +504,33 @@ private:
                 // Operation completed immediately
                 finish_handle_.set_result(r);
                 runtime->schedule(&finish_handle_);
+                return;
+            }
+
+            auto stop_token = receiver_.get_stop_token();
+            if (stop_token.stop_possible()) {
+                stop_callback_.emplace(std::move(stop_token),
+                                       Cancellation{this, runtime});
             }
         }
 
         void invoke() noexcept {
+            stop_callback_.reset();
             auto result = finish_handle_.extract_result();
             std::move(receiver_)(std::move(result));
         }
 
     private:
+        struct Cancellation {
+            OperationState *self;
+            Runtime *runtime;
+            void operator()() noexcept { self->finish_handle_.cancel(runtime); }
+        };
+
         Channel &channel_;
         PushFinishHandle finish_handle_;
         Receiver receiver_;
+        std::optional<std::stop_callback<Cancellation>> stop_callback_;
     };
 
     Channel &channel_;
@@ -547,18 +563,33 @@ private:
             if (r != -EAGAIN) {
                 finish_handle_.set_result(std::move(item));
                 runtime->schedule(&finish_handle_);
+                return;
+            }
+
+            auto stop_token = receiver_.get_stop_token();
+            if (stop_token.stop_possible()) {
+                stop_callback_.emplace(std::move(stop_token),
+                                       Cancellation{this, runtime});
             }
         }
 
         void invoke() noexcept {
+            stop_callback_.reset();
             auto result = finish_handle_.extract_result();
             std::move(receiver_)(std::move(result));
         }
 
     private:
+        struct Cancellation {
+            OperationState *self;
+            Runtime *runtime;
+            void operator()() noexcept { self->finish_handle_.cancel(runtime); }
+        };
+
         Channel &channel_;
         PopFinishHandle finish_handle_;
         Receiver receiver_;
+        std::optional<std::stop_callback<Cancellation>> stop_callback_;
     };
 
     Channel &channel_;
