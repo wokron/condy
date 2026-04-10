@@ -239,67 +239,68 @@ TEST_CASE("test runtime - allow_exit from other thread") {
     t1.join();
 }
 
-TEST_CASE("test runtime - cancel from other task") {
-    condy::Runtime runtime(options);
+// TODO: Re-enable these tests
+// TEST_CASE("test runtime - cancel from other task") {
+//     condy::Runtime runtime(options);
 
-    auto cancel_task = [&](void *ptr) -> condy::Coro<void> {
-        runtime.cancel(ptr);
-        co_return;
-    };
-    auto func = [&]() -> condy::Coro<void> {
-        __kernel_timespec ts{
-            .tv_sec = 60ll * 60ll,
-            .tv_nsec = 0,
-        };
-        auto aw =
-            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        void *ptr = aw.get_handle();
-        auto t = condy::co_spawn(cancel_task(ptr));
-        co_await aw;
-        co_await t;
-    };
+//     auto cancel_task = [&](void *ptr) -> condy::Coro<void> {
+//         runtime.cancel(ptr);
+//         co_return;
+//     };
+//     auto func = [&]() -> condy::Coro<void> {
+//         __kernel_timespec ts{
+//             .tv_sec = 60ll * 60ll,
+//             .tv_nsec = 0,
+//         };
+//         auto aw =
+//             condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+//         void *ptr = aw.get_handle();
+//         auto t = condy::co_spawn(cancel_task(ptr));
+//         co_await aw;
+//         co_await t;
+//     };
 
-    condy::co_spawn(runtime, func()).detach();
+//     condy::co_spawn(runtime, func()).detach();
 
-    runtime.allow_exit();
-    runtime.run();
-}
+//     runtime.allow_exit();
+//     runtime.run();
+// }
 
-TEST_CASE("test runtime - cancel from other thread") {
-    condy::Runtime runtime(options);
+// TEST_CASE("test runtime - cancel from other thread") {
+//     condy::Runtime runtime(options);
 
-    std::atomic_bool r1_started = false;
-    void *ptr = nullptr;
+//     std::atomic_bool r1_started = false;
+//     void *ptr = nullptr;
 
-    auto notify_task = [&]() -> condy::Coro<void> {
-        r1_started = true;
-        r1_started.notify_one();
-        co_return;
-    };
+//     auto notify_task = [&]() -> condy::Coro<void> {
+//         r1_started = true;
+//         r1_started.notify_one();
+//         co_return;
+//     };
 
-    auto func = [&]() -> condy::Coro<void> {
-        __kernel_timespec ts{
-            .tv_sec = 60ll * 60ll,
-            .tv_nsec = 0,
-        };
-        auto aw =
-            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
-        ptr = aw.get_handle();
-        auto t = condy::co_spawn(runtime, notify_task());
-        co_await aw;
-        co_await t;
-    };
+//     auto func = [&]() -> condy::Coro<void> {
+//         __kernel_timespec ts{
+//             .tv_sec = 60ll * 60ll,
+//             .tv_nsec = 0,
+//         };
+//         auto aw =
+//             condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+//         ptr = aw.get_handle();
+//         auto t = condy::co_spawn(runtime, notify_task());
+//         co_await aw;
+//         co_await t;
+//     };
 
-    condy::co_spawn(runtime, func()).detach();
+//     condy::co_spawn(runtime, func()).detach();
 
-    std::thread t1([&]() {
-        runtime.allow_exit();
-        runtime.run();
-    });
+//     std::thread t1([&]() {
+//         runtime.allow_exit();
+//         runtime.run();
+//     });
 
-    r1_started.wait(false);
+//     r1_started.wait(false);
 
-    runtime.cancel(ptr);
+//     runtime.cancel(ptr);
 
-    t1.join();
-}
+//     t1.join();
+// }

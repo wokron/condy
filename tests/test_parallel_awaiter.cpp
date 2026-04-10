@@ -2,6 +2,7 @@
 #include "condy/runtime.hpp"
 #include <condy/awaiters.hpp>
 #include <condy/coro.hpp>
+#include <cstddef>
 #include <doctest/doctest.h>
 #include <memory>
 
@@ -24,43 +25,57 @@ struct SimpleFinishHandle {
         registered_ = true;
     }
 
-    void set_stealable(bool stealable) { stealable_ = stealable; }
-
-    bool stealable_ = true;
     int res_;
     int cancelled_ = 0;
     bool registered_ = false;
     condy::Invoker *invoker_ = nullptr;
 };
 
-class SimpleAwaiter {
-public:
-    using HandleType = SimpleFinishHandle;
+struct SimpleSender {
+    using ReturnType = int;
 
-    HandleType *get_handle() { return handle_ptr_.get(); }
-
-    bool await_ready() const noexcept { return false; }
-
-    template <typename PromiseType>
-    void await_suspend(std::coroutine_handle<PromiseType>) noexcept {
-        // Do nothing, since it will not be called in this test
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return OperationState<Receiver>{handle_ptr_, std::move(receiver)};
     }
 
-    int await_resume() {
-        return 0; // Do nothing
-    }
+    template <typename Receiver>
+    struct OperationState
+        : public condy::InvokerAdapter<OperationState<Receiver>> {
 
-    void init_finish_handle(bool stealable = true) {
-        handle_ptr_->set_stealable(stealable);
-    }
+        OperationState(std::shared_ptr<SimpleFinishHandle> handle_ptr,
+                       Receiver receiver)
+            : handle_ptr_(std::move(handle_ptr)),
+              receiver_(std::move(receiver)) {}
+        void start(unsigned int) {
+            handle_ptr_->set_invoker(this);
+            auto stop_token = receiver_.get_stop_token();
+            if (stop_token.stop_possible()) {
+                stop_callback_.emplace(std::move(stop_token),
+                                       Cancellation{this});
+            }
+        }
+        void invoke() {
+            int res = handle_ptr_->extract_result();
+            std::move(receiver_)(res);
+        }
 
-    void register_operation(unsigned int) {
-        // Do nothing
-    }
+        struct Cancellation {
+            OperationState *self;
+            void operator()() { self->cancel_(); }
+        };
+        void cancel_() { handle_ptr_->cancel(nullptr); }
+
+        std::shared_ptr<SimpleFinishHandle> handle_ptr_;
+        Receiver receiver_;
+        std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    };
 
     // Use ptr to make handle accessible outside of ParallelAwaiter
-    std::shared_ptr<HandleType> handle_ptr_ = std::make_shared<HandleType>();
+    std::shared_ptr<SimpleFinishHandle> handle_ptr_ =
+        std::make_shared<SimpleFinishHandle>();
 };
+
+using SimpleAwaiter = SimpleSender;
 
 } // namespace
 
