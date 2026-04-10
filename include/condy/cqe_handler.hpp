@@ -82,43 +82,27 @@ private:
 };
 
 /**
- * @brief Result for NVMe passthrough commands, containing the status and result
- * of the command
- */
-struct NVMeResult {
-    /**
-     * @brief Status of this NVMe command, is the value of `cqe->res` for the
-     * corresponding CQE.
-     */
-    int status;
-
-    /**
-     * @brief Result of this NVMe command, is the value of `cqe->big_cqe[0]` for
-     * the corresponding CQE.
-     */
-    uint64_t result;
-};
-
-/**
  * @brief A CQE handler for NVMe passthrough commands that extracts the status
  * and result from the CQE.
- * @return NVMeResult Result of the NVMe command.
+ * @return std::pair<int, uint64_t> A pair containing the status and result of
+ * the NVMe command.
  */
 class NVMePassthruCQEHandler {
 public:
-    using ReturnType = NVMeResult;
+    using ReturnType = std::pair<int, uint64_t>;
 
     void handle_cqe(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for NVMe passthrough");
-        result_.status = cqe->res;
-        result_.result = cqe->big_cqe[0];
+        status_ = cqe->res;
+        result_ = cqe->big_cqe[0];
     }
 
-    ReturnType extract_result() noexcept { return result_; }
+    ReturnType extract_result() noexcept { return {status_, result_}; }
 
 private:
-    NVMeResult result_;
+    int status_ = -ENOTRECOVERABLE; // Internal error if not set
+    uint64_t result_ = 0;
 };
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
