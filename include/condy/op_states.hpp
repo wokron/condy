@@ -225,7 +225,6 @@ template <typename Receiver> struct ReceiverAnyWrapper {
 };
 
 template <typename Receiver, typename... Senders>
-    requires(sizeof...(Senders) > 0)
 using WhenAnyOperationState =
     ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>, Senders...>;
 

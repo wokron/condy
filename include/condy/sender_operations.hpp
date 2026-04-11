@@ -119,6 +119,7 @@ template <std::ranges::range Range> auto when_all(Range &&range) {
 }
 
 template <typename... Senders> auto when_any(Senders &&...senders) {
+    static_assert(sizeof...(Senders) > 0, "when_any requires at least one sender");
     return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
 }
 
