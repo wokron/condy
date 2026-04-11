@@ -44,9 +44,7 @@ private:
     }
 
     bool handle_impl_(io_uring_cqe *cqe) noexcept {
-        stop_callback_.reset();
-        cqe_handler_.handle_cqe(cqe);
-        std::move(receiver_)(cqe_handler_.extract_result());
+        finish_(cqe);
         return true;
     }
 
@@ -57,6 +55,12 @@ private:
     };
 
 protected:
+    void finish_(io_uring_cqe *cqe) noexcept {
+        stop_callback_.reset();
+        cqe_handler_.handle_cqe(cqe);
+        std::move(receiver_)(cqe_handler_.extract_result());
+    }
+
     CQEHandler cqe_handler_;
     Receiver receiver_;
     std::optional<std::stop_callback<Cancellation>> stop_callback_;
@@ -86,9 +90,7 @@ private:
             func_(this->cqe_handler_.extract_result());
             return false;
         } else {
-            this->stop_callback_.reset();
-            this->cqe_handler_.handle_cqe(cqe);
-            std::move(this->receiver_)(this->cqe_handler_.extract_result());
+            this->finish_(cqe);
             return true;
         }
     }
@@ -117,9 +119,7 @@ private:
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            this->stop_callback_.reset();
-            this->cqe_handler_.handle_cqe(cqe);
-            std::move(this->receiver_)(this->cqe_handler_.extract_result());
+            this->finish_(cqe);
             return false;
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
@@ -129,9 +129,7 @@ private:
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
-                this->stop_callback_.reset();
-                this->cqe_handler_.handle_cqe(cqe);
-                std::move(this->receiver_)(this->cqe_handler_.extract_result());
+                this->finish_(cqe);
                 notify_(0);
                 return true;
             }
