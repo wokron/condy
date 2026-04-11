@@ -14,15 +14,13 @@ public:
         : prep_func_(std::move(func)), handle_args_(std::move(args)...) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
-        return detail::OpSenderOperationState<Handle, Func, Receiver>(
-            prep_func_,
-            std::apply(
-                [](auto &&...args) {
-                    return HandleBox(
-                        Handle(std::forward<decltype(args)>(args)...));
-                },
-                std::move(handle_args_)),
-            std::move(receiver));
+        return std::apply(
+            [&](auto &&...args) {
+                return detail::OpSenderOperationState<Handle, Func, Receiver>(
+                    prep_func_, std::move(receiver),
+                    std::forward<decltype(args)>(args)...);
+            },
+            std::move(handle_args_));
     }
 
 private:

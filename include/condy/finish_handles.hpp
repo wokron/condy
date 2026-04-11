@@ -147,11 +147,16 @@ protected:
 
 template <OpFinishHandleLike Handle> class HandleBox {
 public:
-    HandleBox(Handle h) : handle_(std::move(h)) {}
+    template <typename... Args>
+    HandleBox(Args &&...args) : handle_(std::forward<Args>(args)...) {}
 
+    HandleBox(const HandleBox &) = delete;
+    HandleBox &operator=(const HandleBox &) = delete;
+    HandleBox(HandleBox &&) = delete;
+    HandleBox &operator=(HandleBox &&) = delete;
+
+public:
     Handle &get() noexcept { return handle_; }
-
-    void maybe_release() noexcept { /* No-op */ }
 
 private:
     Handle handle_;
@@ -161,16 +166,21 @@ template <CQEHandlerLike CQEHandler, typename Func>
 class HandleBox<ZeroCopyOpFinishHandle<CQEHandler, Func>> {
 public:
     using Handle = ZeroCopyOpFinishHandle<CQEHandler, Func>;
-    HandleBox(Handle h) : handle_ptr_(std::make_unique<Handle>(std::move(h))) {}
-    HandleBox(const HandleBox &other) // Deep copy
-        : handle_ptr_(std::make_unique<Handle>(*other.handle_ptr_)) {}
 
+    template <typename... Args>
+    HandleBox(Args &&...args)
+        : handle_ptr_(new Handle(std::forward<Args>(args)...)) {}
+
+    HandleBox(const HandleBox &) = delete;
+    HandleBox &operator=(const HandleBox &) = delete;
+    HandleBox(HandleBox &&) = delete;
+    HandleBox &operator=(HandleBox &&) = delete;
+
+public:
     Handle &get() noexcept { return *handle_ptr_; }
 
-    void maybe_release() noexcept { handle_ptr_.release(); }
-
 private:
-    std::unique_ptr<Handle> handle_ptr_;
+    Handle *handle_ptr_;
 };
 
 } // namespace condy

@@ -15,10 +15,11 @@ template <OpFinishHandleLike Handle, PrepFuncLike Func, typename Receiver>
 class OpSenderOperationState
     : public InvokerAdapter<OpSenderOperationState<Handle, Func, Receiver>> {
 public:
-    OpSenderOperationState(Func prep_func, HandleBox<Handle> finish_handle,
-                           Receiver receiver)
+    template <typename... HandleArgs>
+    OpSenderOperationState(Func prep_func, Receiver receiver,
+                           HandleArgs &&...handle_args)
         : prep_func_(std::move(prep_func)),
-          finish_handle_(std::move(finish_handle)),
+          finish_handle_(std::forward<HandleArgs>(handle_args)...),
           receiver_(std::move(receiver)) {}
 
     OpSenderOperationState(OpSenderOperationState &&) = delete;
@@ -48,7 +49,6 @@ public:
     void invoke() noexcept {
         stop_callback_.reset();
         auto result = finish_handle_.get().extract_result();
-        finish_handle_.maybe_release();
         std::move(receiver_)(std::move(result));
     }
 
