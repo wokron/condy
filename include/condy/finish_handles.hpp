@@ -29,6 +29,12 @@ public:
         this->handle_func_ = handle_static_;
     }
 
+    OpFinishHandle(const OpFinishHandle &) = delete;
+    OpFinishHandle &operator=(const OpFinishHandle &) = delete;
+    OpFinishHandle(OpFinishHandle &&) = delete;
+    OpFinishHandle &operator=(OpFinishHandle &&) = delete;
+
+public:
     void maybe_install_cancellation(Runtime *runtime) noexcept {
         auto stop_token = receiver_.get_stop_token();
         if (stop_token.stop_possible()) {
