@@ -9,34 +9,33 @@
 #pragma once
 
 #include "condy/concepts.hpp"
-#include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <cassert>
 #include <cerrno>
+#include <stop_token>
 #include <utility>
 
 namespace condy {
 
-template <CQEHandlerLike CQEHandler>
+template <CQEHandlerLike CQEHandler, typename Receiver>
 class OpFinishHandle : public OpFinishHandleBase {
 public:
     using ReturnType = typename CQEHandler::ReturnType;
 
     template <typename... Args>
-    OpFinishHandle(Args &&...args) : cqe_handler_(std::forward<Args>(args)...) {
+    OpFinishHandle(Receiver receiver, Args &&...args)
+        : cqe_handler_(std::forward<Args>(args)...),
+          receiver_(std::move(receiver)) {
         this->handle_func_ = handle_static_;
     }
 
-    ReturnType extract_result() noexcept {
-        return cqe_handler_.extract_result();
+    void maybe_install_cancellation(Runtime *runtime) noexcept {
+        auto stop_token = receiver_.get_stop_token();
+        if (stop_token.stop_possible()) {
+            stop_callback_.emplace(std::move(stop_token),
+                                   Cancellation{this, runtime});
+        }
     }
-
-    void cancel(Runtime *runtime) noexcept {
-        assert(runtime != nullptr);
-        runtime->cancel(this);
-    }
-
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
 
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
@@ -45,23 +44,31 @@ private:
     }
 
     bool handle_impl_(io_uring_cqe *cqe) noexcept {
+        stop_callback_.reset();
         cqe_handler_.handle_cqe(cqe);
-        assert(invoker_ != nullptr);
-        (*invoker_)();
+        std::move(receiver_)(cqe_handler_.extract_result());
         return true;
     }
 
+    struct Cancellation {
+        OpFinishHandle *self;
+        Runtime *runtime;
+        void operator()() noexcept { runtime->cancel(self); }
+    };
+
 protected:
-    Invoker *invoker_ = nullptr;
     CQEHandler cqe_handler_;
+    Receiver receiver_;
+    std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
-template <CQEHandlerLike CQEHandler, typename Func>
-class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler> {
+template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
+class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
     template <typename... Args>
-    MultiShotOpFinishHandle(Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+    MultiShotOpFinishHandle(Receiver receiver, Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
+                                               std::forward<Args>(args)...),
           func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
@@ -79,9 +86,9 @@ private:
             func_(this->cqe_handler_.extract_result());
             return false;
         } else {
+            this->stop_callback_.reset();
             this->cqe_handler_.handle_cqe(cqe);
-            assert(this->invoker_ != nullptr);
-            (*this->invoker_)();
+            std::move(this->receiver_)(this->cqe_handler_.extract_result());
             return true;
         }
     }
@@ -90,12 +97,13 @@ protected:
     Func func_;
 };
 
-template <CQEHandlerLike CQEHandler, typename Func>
-class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler> {
+template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
+class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
     template <typename... Args>
-    ZeroCopyOpFinishHandle(Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler>(std::forward<Args>(args)...),
+    ZeroCopyOpFinishHandle(Receiver receiver, Func func, Args &&...args)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
+                                               std::forward<Args>(args)...),
           free_func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
@@ -109,9 +117,9 @@ private:
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
+            this->stop_callback_.reset();
             this->cqe_handler_.handle_cqe(cqe);
-            assert(this->invoker_ != nullptr);
-            (*this->invoker_)();
+            std::move(this->receiver_)(this->cqe_handler_.extract_result());
             return false;
         } else {
             if (cqe->flags & IORING_CQE_F_NOTIF) {
@@ -121,9 +129,9 @@ private:
                 // Only one cqe means the operation is finished without
                 // notification. This is rare but possible.
                 // https://github.com/axboe/liburing/issues/1462
+                this->stop_callback_.reset();
                 this->cqe_handler_.handle_cqe(cqe);
-                assert(this->invoker_ != nullptr);
-                (*this->invoker_)();
+                std::move(this->receiver_)(this->cqe_handler_.extract_result());
                 notify_(0);
                 return true;
             }
@@ -139,7 +147,7 @@ protected:
     Func free_func_;
 };
 
-template <OpFinishHandleLike Handle> class HandleBox {
+template <typename Handle> class HandleBox {
 public:
     template <typename... Args>
     HandleBox(Args &&...args) : handle_(std::forward<Args>(args)...) {}
@@ -156,10 +164,10 @@ private:
     Handle handle_;
 };
 
-template <CQEHandlerLike CQEHandler, typename Func>
-class HandleBox<ZeroCopyOpFinishHandle<CQEHandler, Func>> {
+template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
+class HandleBox<ZeroCopyOpFinishHandle<CQEHandler, Func, Receiver>> {
 public:
-    using Handle = ZeroCopyOpFinishHandle<CQEHandler, Func>;
+    using Handle = ZeroCopyOpFinishHandle<CQEHandler, Func, Receiver>;
 
     template <typename... Args>
     HandleBox(Args &&...args)

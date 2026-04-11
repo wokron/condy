@@ -5,11 +5,9 @@
 #pragma once
 
 #include <concepts>
-#include <coroutine>
 #include <cstdint>
 #include <ranges>
 #include <type_traits>
-#include <utility>
 
 struct io_uring_cqe;
 struct io_uring_sqe;
@@ -26,22 +24,6 @@ namespace detail {
 struct FixedFd;
 
 } // namespace detail
-
-template <typename T>
-concept HandleLike = requires(T handle, Invoker *invoker, Runtime *runtime) {
-    typename std::decay_t<T>::ReturnType;
-    { handle.set_invoker(invoker) } -> std::same_as<void>;
-    {
-        handle.extract_result()
-    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
-    { handle.cancel(runtime) } -> std::same_as<void>;
-};
-
-template <typename T>
-concept OpFinishHandleLike =
-    HandleLike<T> && requires(T handle, io_uring_cqe *cqe) {
-        { handle.handle(cqe) } -> std::same_as<bool>;
-    };
 
 template <typename T>
 concept PrepFuncLike = requires(T prep_func, Ring *ring) {

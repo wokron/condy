@@ -3,7 +3,6 @@
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
-#include "condy/invoker.hpp"
 #include "condy/utils.hpp"
 #include <cstddef>
 #include <stop_token>
@@ -12,16 +11,15 @@
 namespace condy {
 namespace detail {
 
-template <OpFinishHandleLike Handle, PrepFuncLike Func, typename Receiver>
-class OpSenderOperationState
-    : public InvokerAdapter<OpSenderOperationState<Handle, Func, Receiver>> {
+template <typename Handle, PrepFuncLike Func, typename Receiver>
+class OpSenderOperationState {
 public:
     template <typename... HandleArgs>
     OpSenderOperationState(Func prep_func, Receiver receiver,
                            HandleArgs &&...handle_args)
         : prep_func_(std::move(prep_func)),
-          finish_handle_(std::forward<HandleArgs>(handle_args)...),
-          receiver_(std::move(receiver)) {}
+          finish_handle_(std::move(receiver),
+                         std::forward<HandleArgs>(handle_args)...) {}
 
     OpSenderOperationState(OpSenderOperationState &&) = delete;
     OpSenderOperationState &operator=(OpSenderOperationState &&) = delete;
@@ -33,41 +31,18 @@ public:
         auto &context = detail::Context::current();
         auto *ring = context.ring();
         context.runtime()->pend_work();
-        finish_handle_.get().set_invoker(this);
         io_uring_sqe *sqe = prep_func_(ring);
         assert(sqe && "prep_func must return a valid sqe");
         io_uring_sqe_set_flags(sqe, sqe->flags | flags);
         auto *work = encode_work(&finish_handle_.get(), WorkType::Common);
         io_uring_sqe_set_data(sqe, work);
 
-        auto stop_token = receiver_.get_stop_token();
-        if (stop_token.stop_possible()) {
-            stop_callback_.emplace(std::move(stop_token),
-                                   Cancellation{this, context.runtime()});
-        }
-    }
-
-    void invoke() noexcept {
-        stop_callback_.reset();
-        auto result = finish_handle_.get().extract_result();
-        std::move(receiver_)(std::move(result));
+        finish_handle_.get().maybe_install_cancellation(context.runtime());
     }
 
 private:
-    struct Cancellation {
-        OpSenderOperationState *self;
-        Runtime *runtime;
-        void operator()() noexcept { self->cancel_(runtime); }
-    };
-
-    void cancel_(Runtime *runtime) noexcept {
-        finish_handle_.get().cancel(runtime);
-    }
-
     Func prep_func_;
     HandleBox<Handle> finish_handle_;
-    Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
 template <unsigned int Flags, typename Sender, typename Receiver>
