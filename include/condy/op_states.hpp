@@ -105,6 +105,8 @@ public:
 
     std::stop_token get_token() noexcept { return stop_source_.get_token(); }
 
+    void maybe_reset() noexcept { stop_callback_.reset(); }
+
 private:
     struct Cancellation {
         WhenAnyCanceller *self;
@@ -125,6 +127,8 @@ public:
     std::stop_token get_token() const noexcept { return stop_token_; }
 
     void maybe_request_stop() noexcept {}
+
+    void maybe_reset() noexcept {}
 
 private:
     std::stop_token stop_token_;
@@ -177,6 +181,7 @@ private:
         order_[no] = I;
         std::get<I>(results_) = std::forward<R>(result);
         if (no + 1 == sizeof...(Senders)) {
+            canceller_.maybe_reset();
             std::move(receiver_)(std::make_pair(order_, results_));
         }
     }
