@@ -220,6 +220,7 @@ using ParallelAllOperationState =
 
 template <typename Receiver> struct ReceiverAllWrapper {
     Receiver receiver;
+    ReceiverAllWrapper(Receiver receiver) : receiver(std::move(receiver)) {}
     template <typename R> void operator()(R &&result) noexcept {
         auto &[order, results] = result;
         std::move(receiver)(std::move(results));
@@ -231,6 +232,7 @@ template <typename Receiver> struct ReceiverAllWrapper {
 
 template <typename Receiver> struct ReceiverAnyWrapper {
     Receiver receiver;
+    ReceiverAnyWrapper(Receiver receiver) : receiver(std::move(receiver)) {}
     template <typename R> void operator()(R &&result) noexcept {
         auto &[order, results] = result;
         size_t index = order[0];
@@ -242,33 +244,13 @@ template <typename Receiver> struct ReceiverAnyWrapper {
 };
 
 template <typename Receiver, typename... Senders>
-class WhenAnyOperationState
-    : public ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>,
-                                       Senders...> {
-public:
-    static_assert(sizeof...(Senders) > 0,
-                  "when_any requires at least one sender");
-
-    using Base =
-        ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>, Senders...>;
-
-    WhenAnyOperationState(std::tuple<Senders...> senders, Receiver receiver)
-        : Base(std::move(senders),
-               ReceiverAnyWrapper<Receiver>{std::move(receiver)}) {}
-};
+    requires(sizeof...(Senders) > 0)
+using WhenAnyOperationState =
+    ParallelAnyOperationState<ReceiverAnyWrapper<Receiver>, Senders...>;
 
 template <typename Receiver, typename... Senders>
-class WhenAllOperationState
-    : public ParallelAllOperationState<ReceiverAllWrapper<Receiver>,
-                                       Senders...> {
-public:
-    using Base =
-        ParallelAllOperationState<ReceiverAllWrapper<Receiver>, Senders...>;
-
-    WhenAllOperationState(std::tuple<Senders...> senders, Receiver receiver)
-        : Base(std::move(senders),
-               ReceiverAllWrapper<Receiver>{std::move(receiver)}) {}
-};
+using WhenAllOperationState =
+    ParallelAllOperationState<ReceiverAllWrapper<Receiver>, Senders...>;
 
 template <typename Receiver, unsigned int Flags, typename... Senders>
 class LinkOperationState : public WhenAllOperationState<Receiver, Senders...> {
@@ -379,20 +361,13 @@ using RangedParallelAnyOperationState =
     RangedParallelOperationState<Receiver, WhenAnyCanceller, Sender>;
 
 template <typename Receiver, typename Sender>
-class WhenAllRangeOperationState
-    : public RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>,
-                                             Sender> {
-public:
-    using Base =
-        RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>, Sender>;
-
-    WhenAllRangeOperationState(std::vector<Sender> senders, Receiver receiver)
-        : Base(std::move(senders),
-               ReceiverAllWrapper<Receiver>{std::move(receiver)}) {}
-};
+using WhenAllRangeOperationState =
+    RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>, Sender>;
 
 template <typename Receiver> struct ReceiverRangedAnyWrapper {
     Receiver receiver;
+    ReceiverRangedAnyWrapper(Receiver receiver)
+        : receiver(std::move(receiver)) {}
     template <typename R> void operator()(R &&result) noexcept {
         auto &[order, results] = result;
         size_t index = order[0];
@@ -404,18 +379,8 @@ template <typename Receiver> struct ReceiverRangedAnyWrapper {
 };
 
 template <typename Receiver, typename Sender>
-class WhenAnyRangeOperationState
-    : public RangedParallelAnyOperationState<ReceiverRangedAnyWrapper<Receiver>,
-                                             Sender> {
-public:
-    using Base =
-        RangedParallelAnyOperationState<ReceiverRangedAnyWrapper<Receiver>,
-                                        Sender>;
-
-    WhenAnyRangeOperationState(std::vector<Sender> senders, Receiver receiver)
-        : Base(std::move(senders),
-               ReceiverRangedAnyWrapper<Receiver>{std::move(receiver)}) {}
-};
+using WhenAnyRangeOperationState =
+    RangedParallelAnyOperationState<ReceiverRangedAnyWrapper<Receiver>, Sender>;
 
 template <typename Receiver, unsigned int Flags, typename Sender>
 class RangedLinkOperationState
