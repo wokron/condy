@@ -6,6 +6,7 @@
 #include <cstring>
 #include <doctest/doctest.h>
 #include <sys/eventfd.h>
+#include <vector>
 
 using namespace condy;
 

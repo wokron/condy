@@ -7,6 +7,7 @@
 #include "condy/utils.hpp"
 #include <cstddef>
 #include <stop_token>
+#include <vector>
 
 namespace condy {
 namespace detail {
