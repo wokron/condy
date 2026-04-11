@@ -1,3 +1,4 @@
+#include "condy/awaiter_operations.hpp"
 #include "condy/channel.hpp"
 #include "condy/sender_operations.hpp"
 #include "condy/senders.hpp"
@@ -8,7 +9,7 @@
 
 TEST_CASE("test senders - basic") {
     auto f = []() -> condy::Coro<void> {
-        auto r = co_await condy::detail::make_op_sender(io_uring_prep_nop);
+        auto r = co_await condy::detail::make_op_awaiter(io_uring_prep_nop);
         REQUIRE(r == 0);
     };
     condy::sync_wait(f());
@@ -17,8 +18,8 @@ TEST_CASE("test senders - basic") {
 TEST_CASE("test senders - when_all") {
     auto f = []() -> condy::Coro<void> {
         auto [r1, r2] = co_await (
-            condy::when_all(condy::detail::make_op_sender(io_uring_prep_nop),
-                            condy::detail::make_op_sender(io_uring_prep_nop)));
+            condy::when_all(condy::detail::make_op_awaiter(io_uring_prep_nop),
+                            condy::detail::make_op_awaiter(io_uring_prep_nop)));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
     };
@@ -32,11 +33,12 @@ TEST_CASE("test senders - empty when_all") {
 
 TEST_CASE("test senders - ranged when_all") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto results = co_await (condy::when_all(std::move(senders)));
         for (auto r : results) {
@@ -48,7 +50,7 @@ TEST_CASE("test senders - ranged when_all") {
 
 TEST_CASE("test senders - ranged empty when_all") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         auto results = co_await (condy::when_all(std::move(senders)));
         REQUIRE(results.empty());
@@ -59,8 +61,8 @@ TEST_CASE("test senders - ranged empty when_all") {
 TEST_CASE("test senders - parallel all") {
     auto f = []() -> condy::Coro<void> {
         auto [order, r] = co_await (condy::parallel<condy::ParallelAllSender>(
-            condy::detail::make_op_sender(io_uring_prep_nop),
-            condy::detail::make_op_sender(io_uring_prep_nop)));
+            condy::detail::make_op_awaiter(io_uring_prep_nop),
+            condy::detail::make_op_awaiter(io_uring_prep_nop)));
         REQUIRE(order[0] == 0);
         REQUIRE(order[1] == 1);
         REQUIRE(std::get<0>(r) == 0);
@@ -79,11 +81,12 @@ TEST_CASE("test senders - empty parallell all") {
 
 TEST_CASE("test senders - ranged parallel all") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto [order, results] =
             co_await (condy::parallel<condy::RangedParallelAllSender>(
@@ -98,7 +101,7 @@ TEST_CASE("test senders - ranged parallel all") {
 
 TEST_CASE("test senders - ranged empty parallel all") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         auto [order, r] =
             co_await (condy::parallel<condy::RangedParallelAllSender>(
@@ -116,8 +119,8 @@ TEST_CASE("test senders - when_any") {
             .tv_nsec = 0,
         };
         auto r = co_await (condy::when_any(
-            condy::detail::make_op_sender(io_uring_prep_nop),
-            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
+            condy::detail::make_op_awaiter(io_uring_prep_nop),
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0)));
         REQUIRE(r.index() == 0);
         REQUIRE(std::get<0>(r) == 0);
     };
@@ -126,11 +129,12 @@ TEST_CASE("test senders - when_any") {
 
 TEST_CASE("test senders - ranged when_any") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto [index, results] = co_await (condy::when_any(std::move(senders)));
         REQUIRE(index == 0);
@@ -141,7 +145,7 @@ TEST_CASE("test senders - ranged when_any") {
 
 TEST_CASE("test senders - ranged empty when_any") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         REQUIRE_THROWS_AS(co_await (condy::when_any(std::move(senders))),
                           std::invalid_argument);
@@ -153,9 +157,9 @@ TEST_CASE("test senders - &&") {
     using condy::operators::operator&&;
     auto f = []() -> condy::Coro<void> {
         auto [r1, r2, r3] =
-            co_await (condy::detail::make_op_sender(io_uring_prep_nop) &&
-                      condy::detail::make_op_sender(io_uring_prep_nop) &&
-                      condy::detail::make_op_sender(io_uring_prep_nop));
+            co_await (condy::detail::make_op_awaiter(io_uring_prep_nop) &&
+                      condy::detail::make_op_awaiter(io_uring_prep_nop) &&
+                      condy::detail::make_op_awaiter(io_uring_prep_nop));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
         REQUIRE(r3 == 0);
@@ -170,8 +174,8 @@ TEST_CASE("test senders - parallel any") {
             .tv_nsec = 0,
         };
         auto [order, r] = co_await (condy::parallel<condy::ParallelAnySender>(
-            condy::detail::make_op_sender(io_uring_prep_nop),
-            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0)));
+            condy::detail::make_op_awaiter(io_uring_prep_nop),
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0)));
         REQUIRE(order[0] == 0);
         REQUIRE(std::get<0>(r) == 0);
         REQUIRE(std::get<1>(r) == -ECANCELED);
@@ -181,11 +185,12 @@ TEST_CASE("test senders - parallel any") {
 
 TEST_CASE("test senders - ranged parallel any") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto [order, results] =
             co_await (condy::parallel<condy::RangedParallelAnySender>(
@@ -200,7 +205,7 @@ TEST_CASE("test senders - ranged parallel any") {
 
 TEST_CASE("test senders - ranged empty parallel any") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         auto [order, r] =
             co_await (condy::parallel<condy::RangedParallelAnySender>(
@@ -227,9 +232,9 @@ TEST_CASE("test senders - ||") {
             .tv_nsec = 0,
         };
         auto r = co_await (
-            condy::detail::make_op_sender(io_uring_prep_nop) ||
-            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0) ||
-            condy::detail::make_op_sender(io_uring_prep_nop));
+            condy::detail::make_op_awaiter(io_uring_prep_nop) ||
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0) ||
+            condy::detail::make_op_awaiter(io_uring_prep_nop));
         REQUIRE(r.index() == 0);
         REQUIRE(std::get<0>(r) == 0);
     };
@@ -239,8 +244,8 @@ TEST_CASE("test senders - ||") {
 TEST_CASE("test senders - link") {
     auto f = []() -> condy::Coro<void> {
         auto [r1, r2] = co_await (
-            condy::link(condy::detail::make_op_sender(io_uring_prep_nop),
-                        condy::detail::make_op_sender(io_uring_prep_nop)));
+            condy::link(condy::detail::make_op_awaiter(io_uring_prep_nop),
+                        condy::detail::make_op_awaiter(io_uring_prep_nop)));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
     };
@@ -249,11 +254,12 @@ TEST_CASE("test senders - link") {
 
 TEST_CASE("test senders - ranged link") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto results = co_await (condy::link(std::move(senders)));
         for (auto r : results) {
@@ -267,9 +273,9 @@ TEST_CASE("test senders - >>") {
     using condy::operators::operator>>;
     auto f = []() -> condy::Coro<void> {
         auto [r1, r2, r3] =
-            co_await (condy::detail::make_op_sender(io_uring_prep_nop) >>
-                      condy::detail::make_op_sender(io_uring_prep_nop) >>
-                      condy::detail::make_op_sender(io_uring_prep_nop));
+            co_await (condy::detail::make_op_awaiter(io_uring_prep_nop) >>
+                      condy::detail::make_op_awaiter(io_uring_prep_nop) >>
+                      condy::detail::make_op_awaiter(io_uring_prep_nop));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
         REQUIRE(r3 == 0);
@@ -279,9 +285,9 @@ TEST_CASE("test senders - >>") {
 
 TEST_CASE("test senders - hard_link") {
     auto f = []() -> condy::Coro<void> {
-        auto [r1, r2] = co_await (
-            condy::hard_link(condy::detail::make_op_sender(io_uring_prep_nop),
-                             condy::detail::make_op_sender(io_uring_prep_nop)));
+        auto [r1, r2] = co_await (condy::hard_link(
+            condy::detail::make_op_awaiter(io_uring_prep_nop),
+            condy::detail::make_op_awaiter(io_uring_prep_nop)));
         REQUIRE(r1 == 0);
         REQUIRE(r2 == 0);
     };
@@ -290,11 +296,12 @@ TEST_CASE("test senders - hard_link") {
 
 TEST_CASE("test senders - ranged hard_link") {
     auto f = []() -> condy::Coro<void> {
-        using Op = decltype(condy::detail::make_op_sender(io_uring_prep_nop));
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
         std::vector<Op> senders;
         senders.reserve(5);
         for (int i = 0; i < 5; ++i) {
-            senders.push_back(condy::detail::make_op_sender(io_uring_prep_nop));
+            senders.push_back(
+                condy::detail::make_op_awaiter(io_uring_prep_nop));
         }
         auto results = co_await (condy::hard_link(std::move(senders)));
         for (auto r : results) {
@@ -307,7 +314,7 @@ TEST_CASE("test senders - ranged hard_link") {
 TEST_CASE("test senders - flags") {
     auto f = []() -> condy::Coro<void> {
         auto r = co_await (condy::always_async(
-            condy::detail::make_op_sender(io_uring_prep_nop)));
+            condy::detail::make_op_awaiter(io_uring_prep_nop)));
         REQUIRE(r == 0);
     };
     condy::sync_wait(f());
@@ -380,7 +387,7 @@ TEST_CASE("test channel - channel cancel pop") {
         };
         auto r = co_await (
             ch1.pop() || ch2.pop() ||
-            condy::detail::make_op_sender(io_uring_prep_timeout, &ts, 0, 0));
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0));
         REQUIRE(r.index() == 1);
         REQUIRE(std::get<1>(r).first == 0);
         REQUIRE(std::get<1>(r).second == 42);
