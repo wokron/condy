@@ -16,6 +16,7 @@
 #include <cerrno>
 #include <coroutine>
 #include <cstddef>
+#include <cstdint>
 #include <new>
 #include <optional>
 #include <type_traits>
@@ -61,12 +62,12 @@ public:
     /**
      * @brief Try to push an item into the channel.
      * @param item The item to be pushed into the channel.
-     * @return int 0 if the item was successfully pushed; -EPIPE if the channel
-     * is closed; -EAGAIN if the channel is full.
+     * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
+     * channel is closed; -EAGAIN if the channel is full.
      */
     template <typename U>
         requires std::is_same_v<std::decay_t<U>, T>
-    int try_push(U &&item) noexcept {
+    int32_t try_push(U &&item) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) {
             return -EPIPE;
@@ -79,11 +80,11 @@ public:
 
     /**
      * @brief Try to pop an item from the channel.
-     * @return std::pair<int, T> 0 and the popped item if successful; -EPIPE if
-     * the channel is closed and no more items can be popped; -EAGAIN if the
-     * channel is empty.
+     * @return std::pair<int32_t, T> 0 and the popped item if successful;
+     * -EPIPE if the channel is closed and no more items can be popped;
+     * -EAGAIN if the channel is empty.
      */
-    std::pair<int, T> try_pop() noexcept {
+    std::pair<int32_t, T> try_pop() noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto item = try_pop_inner_();
         if (item.has_value()) {
@@ -193,7 +194,7 @@ private:
     class PushFinishHandle;
     class PopFinishHandle;
 
-    int request_push_(PushFinishHandle *finish_handle) noexcept {
+    int32_t request_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) {
             return -EPIPE;
@@ -212,7 +213,8 @@ private:
         return push_awaiters_.remove(finish_handle);
     }
 
-    std::pair<int, T> request_pop_(PopFinishHandle *finish_handle) noexcept {
+    std::pair<int32_t, T>
+    request_pop_(PopFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto result = try_pop_inner_();
         if (result.has_value()) {
@@ -359,7 +361,7 @@ template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandle
     : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = int;
+    using ReturnType = int32_t;
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
@@ -403,7 +405,7 @@ public:
         }
     }
 
-    void set_result(int result) noexcept { result_ = result; }
+    void set_result(int32_t result) noexcept { result_ = result; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -414,14 +416,14 @@ private:
     Runtime *runtime_ = nullptr;
     T item_;
     bool need_resume_ = false;
-    int result_ = -ENOTRECOVERABLE; // Internal error if not set
+    int32_t result_ = -ENOTRECOVERABLE; // Internal error if not set
 };
 
 template <typename T, size_t N>
 class Channel<T, N>::PopFinishHandle
     : public InvokerAdapter<PopFinishHandle, WorkInvoker> {
 public:
-    using ReturnType = std::pair<int, T>;
+    using ReturnType = std::pair<int32_t, T>;
 
     void cancel([[maybe_unused]] Runtime *runtime) noexcept {
         assert(runtime == runtime_);
@@ -472,9 +474,9 @@ private:
 
 /**
  * @brief Awaiter for pushing an item into the channel.
- * @return int The result of the push operation. 0 if the item was successfully
- * pushed; -EPIPE if the channel is closed; -ECANCELED if the push operation was
- * cancelled.
+ * @return int32_t The result of the push operation. 0 if the item was
+ * successfully pushed; -EPIPE if the channel is closed; -ECANCELED if the push
+ * operation was cancelled.
  */
 template <typename T, size_t N> struct Channel<T, N>::PushAwaiter {
 public:
@@ -491,7 +493,7 @@ public:
     void register_operation(unsigned int /*flags*/) noexcept {
         auto *runtime = detail::Context::current().runtime();
         finish_handle_.init(&channel_, runtime);
-        int r = channel_.request_push_(&finish_handle_);
+        int32_t r = channel_.request_push_(&finish_handle_);
         if (r != -EAGAIN) {
             // Operation completed immediately
             finish_handle_.set_result(r);
@@ -507,7 +509,7 @@ public:
         init_finish_handle();
         finish_handle_.set_invoker(&h.promise());
         finish_handle_.init(&channel_, detail::Context::current().runtime());
-        int r = channel_.request_push_(&finish_handle_);
+        int32_t r = channel_.request_push_(&finish_handle_);
         if (r != -EAGAIN) {
             // Operation completed immediately
             finish_handle_.set_result(r);
@@ -525,9 +527,9 @@ private:
 
 /**
  * @brief Awaiter for popping an item from the channel.
- * @return std::pair<int, T> The result of the pop operation. 0 and the popped
- * item if successful; -EPIPE if the channel is closed; -ECANCELED if the pop
- * operation was cancelled.
+ * @return std::pair<int32_t, T> The result of the pop operation. 0 and the
+ * popped item if successful; -EPIPE if the channel is closed; -ECANCELED if
+ * the pop operation was cancelled.
  */
 template <typename T, size_t N> struct Channel<T, N>::PopAwaiter {
 public:
