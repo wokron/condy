@@ -143,9 +143,6 @@ public:
      */
     PopSender pop() noexcept { return {*this}; }
 
-    PushSender push_sender(T item) { return {*this, std::move(item)}; }
-    PopSender pop_sender() { return {*this}; }
-
     /**
      * @brief Get the capacity of the channel.
      */
