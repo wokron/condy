@@ -363,8 +363,7 @@ public:
 
     PushFinishHandle(T item) : item_(std::move(item)) {}
 
-    void cancel([[maybe_unused]] Runtime *runtime) noexcept {
-        assert(runtime == runtime_);
+    void cancel() noexcept {
         if (channel_->cancel_push_(this)) {
             // Successfully canceled
             assert(result_ == -ENOTRECOVERABLE);
@@ -423,8 +422,7 @@ class Channel<T, N>::PopFinishHandle
 public:
     using ReturnType = std::pair<int32_t, T>;
 
-    void cancel([[maybe_unused]] Runtime *runtime) noexcept {
-        assert(runtime == runtime_);
+    void cancel() noexcept {
         if (channel_->cancel_pop_(this)) {
             // Successfully canceled
             assert(result_.first == -ENOTRECOVERABLE);
@@ -504,7 +502,7 @@ private:
             auto stop_token = receiver_.get_stop_token();
             if (stop_token.stop_possible()) {
                 stop_callback_.emplace(std::move(stop_token),
-                                       Cancellation{this, runtime});
+                                       Cancellation{this});
             }
         }
 
@@ -517,8 +515,7 @@ private:
     private:
         struct Cancellation {
             OperationState *self;
-            Runtime *runtime;
-            void operator()() noexcept { self->finish_handle_.cancel(runtime); }
+            void operator()() noexcept { self->finish_handle_.cancel(); }
         };
 
         Channel &channel_;
@@ -562,7 +559,7 @@ private:
             auto stop_token = receiver_.get_stop_token();
             if (stop_token.stop_possible()) {
                 stop_callback_.emplace(std::move(stop_token),
-                                       Cancellation{this, runtime});
+                                       Cancellation{this});
             }
         }
 
@@ -575,8 +572,7 @@ private:
     private:
         struct Cancellation {
             OperationState *self;
-            Runtime *runtime;
-            void operator()() noexcept { self->finish_handle_.cancel(runtime); }
+            void operator()() noexcept { self->finish_handle_.cancel(); }
         };
 
         Channel &channel_;
