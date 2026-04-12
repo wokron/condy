@@ -105,7 +105,7 @@ public:
         // not been moved into the channel.
         // NOLINTBEGIN(bugprone-use-after-move)
         auto *fake_handle =
-            new (std::nothrow) PushFinishHandle(std::move(item));
+            new (std::nothrow) PushFinishHandleBase(std::move(item));
         // NOLINTEND(bugprone-use-after-move)
         if (!fake_handle) {
             panic_on("Allocation failed for PushFinishHandle");
@@ -188,11 +188,13 @@ public:
     }
 
 private:
-    class PushFinishHandle;
+    class PushFinishHandleBase;
+    template <typename Receiver> class PushFinishHandle;
+
     class PopFinishHandleBase;
     template <typename Receiver> class PopFinishHandle;
 
-    int32_t request_push_(PushFinishHandle *finish_handle) noexcept {
+    int32_t request_push_(PushFinishHandleBase *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) {
             return -EPIPE;
@@ -206,7 +208,7 @@ private:
         return -EAGAIN;
     }
 
-    bool cancel_push_(PushFinishHandle *finish_handle) noexcept {
+    bool cancel_push_(PushFinishHandleBase *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return push_awaiters_.remove(finish_handle);
     }
@@ -325,7 +327,7 @@ private:
             pop_handle->schedule();
         }
         // Cancel all pending push awaiters
-        PushFinishHandle *push_handle = nullptr;
+        PushFinishHandleBase *push_handle = nullptr;
         while ((push_handle = push_awaiters_.pop_front()) != nullptr) {
             assert(full_inner_());
             push_handle->set_result(-EPIPE);
@@ -346,7 +348,7 @@ private:
     using HandleList = IntrusiveDoubleList<Handle, &Handle::link_entry_>;
 
     mutable std::mutex mutex_;
-    HandleList<PushFinishHandle> push_awaiters_;
+    HandleList<PushFinishHandleBase> push_awaiters_;
     HandleList<PopFinishHandleBase> pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
@@ -356,64 +358,89 @@ private:
 };
 
 template <typename T, size_t N>
-class Channel<T, N>::PushFinishHandle
-    : public InvokerAdapter<PushFinishHandle, WorkInvoker> {
+class Channel<T, N>::PushFinishHandleBase : public WorkInvoker {
 public:
-    using ReturnType = int32_t;
-
-    PushFinishHandle(T item) : item_(std::move(item)) {}
-
-    void cancel() noexcept {
-        if (channel_->cancel_push_(this)) {
-            // Successfully canceled
-            assert(result_ == -ENOTRECOVERABLE);
-            result_ = -ECANCELED;
-            need_resume_ = true;
-            runtime_->schedule(this);
-        }
-    }
-
-    ReturnType extract_result() noexcept { return result_; }
-
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
-
-    void invoke() noexcept {
-        if (need_resume_) {
-            runtime_->resume_work();
-        }
-        (*invoker_)();
-    }
-
-public:
-    void init(Channel *channel, Runtime *runtime) noexcept {
-        channel_ = channel;
-        runtime_ = runtime;
-    }
-
-    T &get_item() noexcept { return item_; }
+    PushFinishHandleBase(T item)
+        : WorkInvoker(nullptr), item_(std::move(item)) {} // TODO: remove this
 
     void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
             delete this;
         } else {
-            need_resume_ = true;
             runtime_->schedule(this);
         }
     }
 
-    void set_result(int32_t result) noexcept { result_ = result; }
+    T &get_item() noexcept { return item_; }
+
+    void set_result(int result) noexcept { result_ = result; }
 
 public:
     DoubleLinkEntry link_entry_;
 
-private:
-    Invoker *invoker_ = nullptr;
-    Channel *channel_ = nullptr;
+public:
     Runtime *runtime_ = nullptr;
     T item_;
-    bool need_resume_ = false;
-    int32_t result_ = -ENOTRECOVERABLE; // Internal error if not set
+    int result_ = -ENOTRECOVERABLE; // Internal error if not set
+};
+
+template <typename T, size_t N>
+template <typename Receiver>
+class Channel<T, N>::PushFinishHandle : public PushFinishHandleBase {
+public:
+    PushFinishHandle(Channel &channel, T item, Receiver receiver)
+        : PushFinishHandleBase(std::move(item)), channel_(channel),
+          receiver_(std::move(receiver)) {
+        this->func_ = invoke_static_;
+    }
+
+    void start(Runtime *runtime) noexcept {
+        this->runtime_ = runtime;
+        int r = channel_.request_push_(this);
+        if (r != -EAGAIN) {
+            std::move(receiver_)(r);
+            return;
+        }
+
+        auto stop_token = receiver_.get_stop_token();
+        if (stop_token.stop_possible()) {
+            stop_callback_.emplace(std::move(stop_token), Cancellation{this});
+        }
+    }
+
+private:
+    static void invoke_static_(void *self) noexcept {
+        auto *handle = static_cast<PushFinishHandle *>(self);
+        handle->invoke_();
+    }
+
+    void invoke_() noexcept {
+        stop_callback_.reset();
+        assert(this->runtime_ != nullptr);
+        this->runtime_->resume_work();
+        std::move(receiver_)(this->result_);
+    }
+
+    void cancel_() noexcept {
+        if (channel_.cancel_push_(this)) {
+            // Successfully canceled
+            assert(this->result_ == -ENOTRECOVERABLE);
+            this->result_ = -ECANCELED;
+            assert(this->runtime_ != nullptr);
+            this->runtime_->schedule(this);
+        }
+    }
+
+    struct Cancellation {
+        PushFinishHandle *self;
+        void operator()() noexcept { self->cancel_(); }
+    };
+
+private:
+    Channel &channel_;
+    Receiver receiver_;
+    std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
 template <typename T, size_t N>
@@ -511,46 +538,17 @@ public:
 
 private:
     template <typename Receiver>
-    class OperationState : public InvokerAdapter<OperationState<Receiver>> {
+    class OperationState
+        : public Channel<T, N>::template PushFinishHandle<Receiver> {
     public:
-        OperationState(Channel &channel, T item, Receiver receiver)
-            : channel_(channel), finish_handle_(std::move(item)),
-              receiver_(receiver) {}
+        using Base =
+            typename Channel<T, N>::template PushFinishHandle<Receiver>;
+        using Base::Base;
 
         void start(unsigned int /*flags*/) noexcept {
             auto *runtime = detail::Context::current().runtime();
-            finish_handle_.set_invoker(this);
-            finish_handle_.init(&channel_, runtime);
-            int r = channel_.request_push_(&finish_handle_);
-            if (r != -EAGAIN) {
-                // Operation completed immediately
-                std::move(receiver_)(r);
-                return;
-            }
-
-            auto stop_token = receiver_.get_stop_token();
-            if (stop_token.stop_possible()) {
-                stop_callback_.emplace(std::move(stop_token),
-                                       Cancellation{this});
-            }
+            Base::start(runtime);
         }
-
-        void invoke() noexcept {
-            stop_callback_.reset();
-            auto result = finish_handle_.extract_result();
-            std::move(receiver_)(std::move(result));
-        }
-
-    private:
-        struct Cancellation {
-            OperationState *self;
-            void operator()() noexcept { self->finish_handle_.cancel(); }
-        };
-
-        Channel &channel_;
-        PushFinishHandle finish_handle_;
-        Receiver receiver_;
-        std::optional<std::stop_callback<Cancellation>> stop_callback_;
     };
 
     Channel &channel_;
