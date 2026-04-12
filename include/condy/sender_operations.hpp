@@ -45,22 +45,32 @@ public:
     bool await_ready() const noexcept { return false; }
 
     template <typename Promise>
-    void await_suspend(std::coroutine_handle<Promise> h) noexcept {
+    bool await_suspend(std::coroutine_handle<Promise> h) noexcept {
         operation_state_.accept(
-            [&] { return sender_.connect(Receiver{h, this}); });
+            [&] { return sender_.connect(Receiver{this}); });
         operation_state_.get().start(0);
+        if (handle_ == std::noop_coroutine()) {
+            // The operation completed synchronously, no need to suspend
+            return false;
+        } else {
+            handle_ = h;
+            return true;
+        }
     }
 
-    auto await_resume() noexcept { return std::move(result_type); }
+    auto await_resume() noexcept { return std::move(result_); }
 
 private:
     struct Receiver {
-        std::coroutine_handle<> handle;
         SenderAwaiter *awaiter;
 
         template <typename... Args> void operator()(Sender::ReturnType result) {
-            awaiter->result_type = std::move(result);
-            handle.resume();
+            awaiter->result_ = std::move(result);
+            if (awaiter->handle_) {
+                awaiter->handle_.resume();
+            } else {
+                awaiter->handle_ = std::noop_coroutine();
+            }
         }
 
         std::stop_token get_stop_token() const noexcept { return {}; }
@@ -68,8 +78,9 @@ private:
 
     using OperationState =
         decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    std::coroutine_handle<> handle_ = nullptr;
     RawStorage<OperationState> operation_state_;
-    Sender::ReturnType result_type;
+    Sender::ReturnType result_;
     Sender sender_;
 };
 
@@ -119,7 +130,8 @@ template <std::ranges::range Range> auto when_all(Range &&range) {
 }
 
 template <typename... Senders> auto when_any(Senders &&...senders) {
-    static_assert(sizeof...(Senders) > 0, "when_any requires at least one sender");
+    static_assert(sizeof...(Senders) > 0,
+                  "when_any requires at least one sender");
     return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
 }
 
