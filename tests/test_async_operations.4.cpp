@@ -335,15 +335,15 @@ TEST_CASE("test async_operations - test uring_cmd - nvme passthrough - basic") {
     std::string msg = generate_data(4096);
     alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
-        condy::NVMeResult r1 =
+        auto [status, result] =
             co_await my_cmd_nvme_write(fd, msg.data(), msg.size(), 0);
-        REQUIRE(r1.status == 0);
-        REQUIRE(r1.result == 0);
+        REQUIRE(status == 0);
+        REQUIRE(result == 0);
 
-        condy::NVMeResult r2 =
+        auto [status2, result2] =
             co_await my_cmd_nvme_read(fd, buffer, sizeof(buffer), 0);
-        REQUIRE(r2.status == 0);
-        REQUIRE(r2.result == 0);
+        REQUIRE(status2 == 0);
+        REQUIRE(result2 == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
@@ -374,15 +374,15 @@ TEST_CASE(
         int r = co_await condy::async_files_update(&fd, 1, 0);
         REQUIRE(r == 1);
 
-        condy::NVMeResult r1 = co_await my_cmd_nvme_write(
+        auto [status, result] = co_await my_cmd_nvme_write(
             condy::fixed(0), msg.data(), msg.size(), 0);
-        REQUIRE(r1.status == 0);
-        REQUIRE(r1.result == 0);
+        REQUIRE(status == 0);
+        REQUIRE(result == 0);
 
-        condy::NVMeResult r2 = co_await my_cmd_nvme_read(
+        auto [status2, result2] = co_await my_cmd_nvme_read(
             condy::fixed(0), buffer, sizeof(buffer), 0);
-        REQUIRE(r2.status == 0);
-        REQUIRE(r2.result == 0);
+        REQUIRE(status2 == 0);
+        REQUIRE(result2 == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
@@ -431,7 +431,7 @@ TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
         auto r = co_await condy::async_send(fd, condy::buffer(msg), 0);
         REQUIRE(r == static_cast<ssize_t>(msg.size()));
 
-        std::vector<condy::TxTimestampResult> results;
+        std::vector<std::pair<int32_t, condy::TxTimestampResult>> results;
         co_await (
             condy::async_uring_cmd_multishot<condy::TxTimestampCQEHandler>(
                 SOCKET_URING_OP_TX_TIMESTAMP, fd, [](auto) { /* no-op */ },
@@ -443,9 +443,9 @@ TEST_CASE("test async_operations - test uring_cmd_multishot - tx timestamp") {
                 }) ||
             chan.pop());
         REQUIRE(results.size() == 3);
-        REQUIRE(results[0].tstype == SCM_TSTAMP_SCHED);
-        REQUIRE(results[1].tstype == SCM_TSTAMP_SND);
-        REQUIRE(results[2].tstype == SCM_TSTAMP_ACK);
+        REQUIRE(results[0].second.tstype == SCM_TSTAMP_SCHED);
+        REQUIRE(results[1].second.tstype == SCM_TSTAMP_SND);
+        REQUIRE(results[2].second.tstype == SCM_TSTAMP_ACK);
     };
 
     condy::sync_wait(runtime, func());
@@ -521,15 +521,15 @@ TEST_CASE(
     std::string msg = generate_data(4096);
     alignas(4096) char buffer[4096];
     auto func = [&]() -> condy::Coro<void> {
-        condy::NVMeResult r1 =
+        auto [status, result] =
             co_await my_cmd_nvme_write<true>(fd, msg.data(), msg.size(), 0);
-        REQUIRE(r1.status == 0);
-        REQUIRE(r1.result == 0);
+        REQUIRE(status == 0);
+        REQUIRE(result == 0);
 
-        condy::NVMeResult r2 =
+        auto [status2, result2] =
             co_await my_cmd_nvme_read<true>(fd, buffer, sizeof(buffer), 0);
-        REQUIRE(r2.status == 0);
-        REQUIRE(r2.result == 0);
+        REQUIRE(status2 == 0);
+        REQUIRE(result2 == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());
@@ -562,15 +562,15 @@ TEST_CASE(
         int r = co_await condy::async_files_update(&fd, 1, 0);
         REQUIRE(r == 1);
 
-        condy::NVMeResult r1 = co_await my_cmd_nvme_write<true>(
+        auto [status, result] = co_await my_cmd_nvme_write<true>(
             condy::fixed(0), msg.data(), msg.size(), 0);
-        REQUIRE(r1.status == 0);
-        REQUIRE(r1.result == 0);
+        REQUIRE(status == 0);
+        REQUIRE(result == 0);
 
-        condy::NVMeResult r2 = co_await my_cmd_nvme_read<true>(
+        auto [status2, result2] = co_await my_cmd_nvme_read<true>(
             condy::fixed(0), buffer, sizeof(buffer), 0);
-        REQUIRE(r2.status == 0);
-        REQUIRE(r2.result == 0);
+        REQUIRE(status2 == 0);
+        REQUIRE(result2 == 0);
         REQUIRE(std::string_view(buffer, msg.size()) == msg);
     };
     condy::sync_wait(runtime, func());

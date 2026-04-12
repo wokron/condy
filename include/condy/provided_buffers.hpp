@@ -192,8 +192,8 @@ private:
  * @details A provided buffer queue manages a queue of buffers that can be used
  * in asynchronous operations. User is responsible for pushing buffers into the
  * queue.
- * @returns std::pair<int, BufferInfo> When pass to async operations, the return
- * type will be a pair of the operation result and the @ref BufferInfo.
+ * @returns std::pair<int32_t, BufferInfo> When passed to async operations, the
+ * return type will be a pair of the operation result and the @ref BufferInfo.
  * @note The lifetime of this queue must not exceed the running period of the
  * associated Runtime. The buffers pushed into the queue must remain valid until
  * they are consumed from the queue.
@@ -455,8 +455,8 @@ inline void ProvidedBuffer::reset() noexcept {
  * @details A provided buffer pool manages a pool of buffers that can be used in
  * asynchronous operations. Only receiving operations can obtain buffers from
  * the pool.
- * @returns std::pair<int, ProvidedBuffer> When pass to async operations, the
- * return type will be a pair of the operation result and the @ref
+ * @returns std::pair<int32_t, ProvidedBuffer> When passed to async operations,
+ * the return type will be a pair of the operation result and the @ref
  * ProvidedBuffer.
  * @note The lifetime of this pool must not exceed the running period of the
  * associated Runtime, and the lifetime of any ProvidedBuffer obtained from
