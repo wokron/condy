@@ -14,7 +14,6 @@
 #include "condy/utils.hpp"
 #include <bit>
 #include <cerrno>
-#include <coroutine>
 #include <cstddef>
 #include <cstdint>
 #include <new>
@@ -190,7 +189,8 @@ public:
 
 private:
     class PushFinishHandle;
-    class PopFinishHandle;
+    class PopFinishHandleBase;
+    template <typename Receiver> class PopFinishHandle;
 
     int32_t request_push_(PushFinishHandle *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -212,7 +212,7 @@ private:
     }
 
     std::pair<int32_t, T>
-    request_pop_(PopFinishHandle *finish_handle) noexcept {
+    request_pop_(PopFinishHandleBase *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         auto result = try_pop_inner_();
         if (result.has_value()) {
@@ -227,7 +227,7 @@ private:
         return {-EAGAIN, T()};
     }
 
-    bool cancel_pop_(PopFinishHandle *finish_handle) noexcept {
+    bool cancel_pop_(PopFinishHandleBase *finish_handle) noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
         return pop_awaiters_.remove(finish_handle);
     }
@@ -318,7 +318,7 @@ private:
         }
         closed_ = true;
         // Cancel all pending pop awaiters
-        PopFinishHandle *pop_handle = nullptr;
+        PopFinishHandleBase *pop_handle = nullptr;
         while ((pop_handle = pop_awaiters_.pop_front()) != nullptr) {
             assert(empty_inner_());
             pop_handle->set_result({-EPIPE, T()});
@@ -347,7 +347,7 @@ private:
 
     mutable std::mutex mutex_;
     HandleList<PushFinishHandle> push_awaiters_;
-    HandleList<PopFinishHandle> pop_awaiters_;
+    HandleList<PopFinishHandleBase> pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
     size_t size_ = 0;
@@ -417,55 +417,84 @@ private:
 };
 
 template <typename T, size_t N>
-class Channel<T, N>::PopFinishHandle
-    : public InvokerAdapter<PopFinishHandle, WorkInvoker> {
+class Channel<T, N>::PopFinishHandleBase : public WorkInvoker {
 public:
-    using ReturnType = std::pair<int32_t, T>;
-
-    void cancel() noexcept {
-        if (channel_->cancel_pop_(this)) {
-            // Successfully canceled
-            assert(result_.first == -ENOTRECOVERABLE);
-            result_.first = -ECANCELED;
-            need_resume_ = true;
-            runtime_->schedule(this);
-        }
-    }
-
-    ReturnType extract_result() noexcept { return std::move(result_); }
-
-    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
-
-    void invoke() noexcept {
-        if (need_resume_) {
-            runtime_->resume_work();
-        }
-        (*invoker_)();
-    }
-
-public:
-    void init(Channel *channel, Runtime *runtime) noexcept {
-        channel_ = channel;
-        runtime_ = runtime;
-    }
-
-    void set_result(ReturnType result) noexcept { result_ = std::move(result); }
-
     void schedule() noexcept {
         assert(runtime_ != nullptr);
-        need_resume_ = true;
         runtime_->schedule(this);
+    }
+
+    void set_result(std::pair<int, T> result) noexcept {
+        result_ = std::move(result);
     }
 
 public:
     DoubleLinkEntry link_entry_;
 
-private:
-    Invoker *invoker_ = nullptr;
-    Channel *channel_ = nullptr;
+protected:
+    PopFinishHandleBase() : WorkInvoker(nullptr) {} // TODO: remove this
+
     Runtime *runtime_ = nullptr;
-    ReturnType result_ = {-ENOTRECOVERABLE, T()}; // Internal error if not set
-    bool need_resume_ = false;
+    // Internal error if not set
+    std::pair<int, T> result_ = {-ENOTRECOVERABLE, T()};
+};
+
+template <typename T, size_t N>
+template <typename Receiver>
+class Channel<T, N>::PopFinishHandle : public PopFinishHandleBase {
+public:
+    PopFinishHandle(Channel &channel, Receiver receiver)
+        : channel_(channel), receiver_(std::move(receiver)) {
+        this->func_ = invoke_static_;
+    }
+
+    void start(Runtime *runtime) noexcept {
+        this->runtime_ = runtime;
+        auto item = channel_.request_pop_(this);
+        auto r = item.first;
+        if (r != -EAGAIN) {
+            std::move(receiver_)(std::move(item));
+            return;
+        }
+
+        auto stop_token = receiver_.get_stop_token();
+        if (stop_token.stop_possible()) {
+            stop_callback_.emplace(std::move(stop_token), Cancellation{this});
+        }
+    }
+
+private:
+    static void invoke_static_(void *self) noexcept {
+        auto *handle = static_cast<PopFinishHandle *>(self);
+        handle->invoke_();
+    }
+
+    void invoke_() noexcept {
+        stop_callback_.reset();
+        assert(this->runtime_ != nullptr);
+        this->runtime_->resume_work();
+        std::move(receiver_)(std::move(this->result_));
+    }
+
+    void cancel_() noexcept {
+        if (channel_.cancel_pop_(this)) {
+            // Successfully canceled
+            assert(this->result_.first == -ENOTRECOVERABLE);
+            this->result_.first = -ECANCELED;
+            assert(this->runtime_ != nullptr);
+            this->runtime_->schedule(this);
+        }
+    }
+
+    struct Cancellation {
+        PopFinishHandle *self;
+        void operator()() noexcept { self->cancel_(); }
+    };
+
+private:
+    Channel &channel_;
+    Receiver receiver_;
+    std::optional<std::stop_callback<Cancellation>> stop_callback_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PushSender {
@@ -540,45 +569,16 @@ public:
 
 private:
     template <typename Receiver>
-    class OperationState : public InvokerAdapter<OperationState<Receiver>> {
+    class OperationState
+        : public Channel<T, N>::template PopFinishHandle<Receiver> {
     public:
-        OperationState(Channel &channel, Receiver receiver)
-            : channel_(channel), receiver_(receiver) {}
+        using Base = typename Channel<T, N>::template PopFinishHandle<Receiver>;
+        using Base::Base;
 
         void start(unsigned int /*flags*/) noexcept {
             auto *runtime = detail::Context::current().runtime();
-            finish_handle_.set_invoker(this);
-            finish_handle_.init(&channel_, runtime);
-            auto item = channel_.request_pop_(&finish_handle_);
-            auto r = item.first;
-            if (r != -EAGAIN) {
-                std::move(receiver_)(std::move(item));
-                return;
-            }
-
-            auto stop_token = receiver_.get_stop_token();
-            if (stop_token.stop_possible()) {
-                stop_callback_.emplace(std::move(stop_token),
-                                       Cancellation{this});
-            }
+            Base::start(runtime);
         }
-
-        void invoke() noexcept {
-            stop_callback_.reset();
-            auto result = finish_handle_.extract_result();
-            std::move(receiver_)(std::move(result));
-        }
-
-    private:
-        struct Cancellation {
-            OperationState *self;
-            void operator()() noexcept { self->finish_handle_.cancel(); }
-        };
-
-        Channel &channel_;
-        PopFinishHandle finish_handle_;
-        Receiver receiver_;
-        std::optional<std::stop_callback<Cancellation>> stop_callback_;
     };
 
     Channel &channel_;
