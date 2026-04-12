@@ -497,8 +497,7 @@ private:
             int r = channel_.request_push_(&finish_handle_);
             if (r != -EAGAIN) {
                 // Operation completed immediately
-                finish_handle_.set_result(r);
-                runtime->schedule(&finish_handle_);
+                std::move(receiver_)(r);
                 return;
             }
 
@@ -556,8 +555,7 @@ private:
             auto item = channel_.request_pop_(&finish_handle_);
             auto r = item.first;
             if (r != -EAGAIN) {
-                finish_handle_.set_result(std::move(item));
-                runtime->schedule(&finish_handle_);
+                std::move(receiver_)(std::move(item));
                 return;
             }
 
