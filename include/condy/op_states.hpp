@@ -48,24 +48,20 @@ private:
 template <unsigned int Flags, typename Sender, typename Receiver>
 class FlaggedOpState {
 public:
-    FlaggedOpState(Sender sender, Receiver receiver) {
-        op_state_.accept([&] { return sender.connect(std::move(receiver)); });
-    }
-    ~FlaggedOpState() { op_state_.destroy(); }
+    FlaggedOpState(Sender sender, Receiver receiver)
+        : op_state_(sender.connect(std::move(receiver))) {}
 
     FlaggedOpState(FlaggedOpState &&) = delete;
     FlaggedOpState &operator=(FlaggedOpState &&) = delete;
     FlaggedOpState(const FlaggedOpState &) = delete;
     FlaggedOpState &operator=(const FlaggedOpState &) = delete;
 
-    void start(unsigned int flags) noexcept {
-        op_state_.get().start(flags | Flags);
-    }
+    void start(unsigned int flags) noexcept { op_state_.start(flags | Flags); }
 
 private:
     using OperationState =
         decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
-    RawStorage<OperationState> op_state_;
+    OperationState op_state_;
 };
 
 class WhenAnyCanceller {
@@ -287,7 +283,8 @@ public:
 
     void start(unsigned int flags) noexcept {
         if (op_states_.empty()) {
-            std::move(receiver_)(std::make_pair(order_, results_));
+            std::move(receiver_)(
+                std::make_pair(std::move(order_), std::move(results_)));
         } else {
             canceller_.set_token(receiver_.get_stop_token());
             for (auto &op_state : op_states_) {
@@ -303,7 +300,8 @@ private:
         order_[no] = index;
         results_[index] = std::forward<decltype(result)>(result);
         if (no + 1 == op_states_.size()) {
-            std::move(receiver_)(std::make_pair(order_, results_));
+            std::move(receiver_)(
+                std::make_pair(std::move(order_), std::move(results_)));
         }
     }
 
@@ -340,9 +338,8 @@ template <typename Receiver, typename Sender>
 using RangedParallelAnyOperationState =
     RangedParallelOperationState<Receiver, WhenAnyCanceller, Sender>;
 
-template <typename Receiver, typename Sender>
-using WhenAllRangeOperationState =
-    RangedParallelAllOperationState<ReceiverAllWrapper<Receiver>, Sender>;
+template <typename Receiver>
+using ReceiverRangedAllWrapper = ReceiverAllWrapper<Receiver>;
 
 template <typename Receiver> struct ReceiverRangedAnyWrapper {
     Receiver receiver;
@@ -357,6 +354,10 @@ template <typename Receiver> struct ReceiverRangedAnyWrapper {
         return receiver.get_stop_token();
     }
 };
+
+template <typename Receiver, typename Sender>
+using WhenAllRangeOperationState =
+    RangedParallelAllOperationState<ReceiverRangedAllWrapper<Receiver>, Sender>;
 
 template <typename Receiver, typename Sender>
 using WhenAnyRangeOperationState =
