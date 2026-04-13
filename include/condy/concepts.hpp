@@ -15,9 +15,7 @@ struct io_uring_sqe;
 namespace condy {
 
 class Ring;
-class Invoker;
 class BufferBase;
-class Runtime;
 
 namespace detail {
 

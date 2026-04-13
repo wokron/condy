@@ -13,28 +13,29 @@ namespace condy {
 class Invoker {
 public:
     using Func = void (*)(void *) noexcept;
-    Invoker(Func func) : func_(func) {}
 
     void operator()() noexcept { func_(this); }
 
 protected:
-    Func func_;
+    Func func_ = nullptr;
 };
 
 template <typename T, typename Invoker = Invoker>
 class InvokerAdapter : public Invoker {
 public:
-    InvokerAdapter() : Invoker(&InvokerAdapter::invoke_) {}
+    template <typename... Args>
+    InvokerAdapter(Args &&...args) : Invoker(std::forward<Args>(args)...) {
+        this->func_ = &invoke_static_;
+    }
 
 private:
-    static void invoke_(void *self) noexcept {
+    static void invoke_static_(void *self) noexcept {
         static_cast<T *>(self)->invoke();
     }
 };
 
 class WorkInvoker : public Invoker {
 public:
-    using Invoker::Invoker;
     SingleLinkEntry work_queue_entry_;
 };
 

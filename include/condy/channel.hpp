@@ -360,8 +360,7 @@ private:
 template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandleBase : public WorkInvoker {
 public:
-    PushFinishHandleBase(T item)
-        : WorkInvoker(nullptr), item_(std::move(item)) {} // TODO: remove this
+    PushFinishHandleBase(T item) : item_(std::move(item)) {}
 
     void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
@@ -387,13 +386,15 @@ public:
 
 template <typename T, size_t N>
 template <typename Receiver>
-class Channel<T, N>::PushFinishHandle : public PushFinishHandleBase {
+class Channel<T, N>::PushFinishHandle
+    : public InvokerAdapter<PushFinishHandle<Receiver>, PushFinishHandleBase> {
 public:
+    using Base =
+        InvokerAdapter<PushFinishHandle<Receiver>, PushFinishHandleBase>;
+
     PushFinishHandle(Channel &channel, T item, Receiver receiver)
-        : PushFinishHandleBase(std::move(item)), channel_(channel),
-          receiver_(std::move(receiver)) {
-        this->func_ = invoke_static_;
-    }
+        : Base(std::move(item)), channel_(channel),
+          receiver_(std::move(receiver)) {}
 
     void start(Runtime *runtime) noexcept {
         this->runtime_ = runtime;
@@ -409,19 +410,14 @@ public:
         }
     }
 
-private:
-    static void invoke_static_(void *self) noexcept {
-        auto *handle = static_cast<PushFinishHandle *>(self);
-        handle->invoke_();
-    }
-
-    void invoke_() noexcept {
+    void invoke() noexcept {
         stop_callback_.reset();
         assert(this->runtime_ != nullptr);
         this->runtime_->resume_work();
         std::move(receiver_)(this->result_);
     }
 
+private:
     void cancel_() noexcept {
         if (channel_.cancel_push_(this)) {
             // Successfully canceled
@@ -459,8 +455,6 @@ public:
     DoubleLinkEntry link_entry_;
 
 protected:
-    PopFinishHandleBase() : WorkInvoker(nullptr) {} // TODO: remove this
-
     Runtime *runtime_ = nullptr;
     // Internal error if not set
     std::pair<int, T> result_ = {-ENOTRECOVERABLE, T()};
@@ -468,12 +462,11 @@ protected:
 
 template <typename T, size_t N>
 template <typename Receiver>
-class Channel<T, N>::PopFinishHandle : public PopFinishHandleBase {
+class Channel<T, N>::PopFinishHandle
+    : public InvokerAdapter<PopFinishHandle<Receiver>, PopFinishHandleBase> {
 public:
     PopFinishHandle(Channel &channel, Receiver receiver)
-        : channel_(channel), receiver_(std::move(receiver)) {
-        this->func_ = invoke_static_;
-    }
+        : channel_(channel), receiver_(std::move(receiver)) {}
 
     void start(Runtime *runtime) noexcept {
         this->runtime_ = runtime;
@@ -490,19 +483,14 @@ public:
         }
     }
 
-private:
-    static void invoke_static_(void *self) noexcept {
-        auto *handle = static_cast<PopFinishHandle *>(self);
-        handle->invoke_();
-    }
-
-    void invoke_() noexcept {
+    void invoke() noexcept {
         stop_callback_.reset();
         assert(this->runtime_ != nullptr);
         this->runtime_->resume_work();
         std::move(receiver_)(std::move(this->result_));
     }
 
+private:
     void cancel_() noexcept {
         if (channel_.cancel_pop_(this)) {
             // Successfully canceled
