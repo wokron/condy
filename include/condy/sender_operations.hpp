@@ -38,17 +38,20 @@ namespace detail {
 
 template <typename Sender> class SenderAwaiter {
 public:
-    SenderAwaiter(Sender sender) : sender_(std::move(sender)) {}
+    SenderAwaiter(Sender sender)
+        : operation_state_(std::move(sender).connect(Receiver{this})) {}
 
-    ~SenderAwaiter() { operation_state_.destroy(); }
+    SenderAwaiter(const SenderAwaiter &) = delete;
+    SenderAwaiter &operator=(const SenderAwaiter &) = delete;
+    SenderAwaiter(SenderAwaiter &&) = delete;
+    SenderAwaiter &operator=(SenderAwaiter &&) = delete;
 
+public:
     bool await_ready() const noexcept { return false; }
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> h) noexcept {
-        operation_state_.accept(
-            [&] { return sender_.connect(Receiver{this}); });
-        operation_state_.get().start(0);
+        operation_state_.start(0);
         if (handle_ == std::noop_coroutine()) {
             // The operation completed synchronously, no need to suspend
             return false;
@@ -62,26 +65,27 @@ public:
 
 private:
     struct Receiver {
-        SenderAwaiter *awaiter;
-
-        template <typename... Args> void operator()(Sender::ReturnType result) {
-            awaiter->result_ = std::move(result);
-            if (awaiter->handle_) {
-                awaiter->handle_.resume();
-            } else {
-                awaiter->handle_ = std::noop_coroutine();
-            }
+        SenderAwaiter *self;
+        template <typename R> void operator()(R &&result) noexcept {
+            self->handle_result_(std::forward<R>(result));
         }
-
         std::stop_token get_stop_token() const noexcept { return {}; }
     };
+
+    template <typename R> void handle_result_(R &&result) {
+        result_ = std::forward<R>(result);
+        if (handle_) {
+            handle_.resume();
+        } else {
+            handle_ = std::noop_coroutine();
+        }
+    }
 
     using OperationState =
         decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
     std::coroutine_handle<> handle_ = nullptr;
-    RawStorage<OperationState> operation_state_;
+    OperationState operation_state_;
     Sender::ReturnType result_;
-    Sender sender_;
 };
 
 template <typename Sender> auto as_awaiter(Sender &&sender) {
