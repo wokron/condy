@@ -176,15 +176,8 @@ public:
     }
 
     void add_buffer_back(void *ptr, size_t size) noexcept {
-        if (!device_less_) [[likely]] {
-            if (rq_nr_queued_() == rq_ring_.ring_entries) {
-                flush_rq_();
-            }
-            rq_enqueue_(ptr, size);
-        } else {
-            rq_enqueue_(ptr, size);
-            flush_rq_();
-        }
+        rq_enqueue_(ptr, size);
+        maybe_flush_rq_();
     }
 
 private:
@@ -275,6 +268,12 @@ private:
         [[maybe_unused]] int r =
             io_uring_register_zcrx_ctrl_(ring->ring(), &ctrl);
         assert(r == 0);
+    }
+
+    void maybe_flush_rq_() noexcept {
+        if (rq_nr_queued_() >= rq_ring_.ring_entries || device_less_) {
+            flush_rq_();
+        }
     }
 
 private:
