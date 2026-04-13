@@ -37,7 +37,7 @@ public:
         auto *work = encode_work(&finish_handle_.get(), WorkType::Common);
         io_uring_sqe_set_data(sqe, work);
 
-        finish_handle_.get().maybe_install_cancellation(context.runtime());
+        finish_handle_.get().maybe_set_cancel(context.runtime());
     }
 
 private:

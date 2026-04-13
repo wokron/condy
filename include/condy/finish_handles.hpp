@@ -35,7 +35,7 @@ public:
     OpFinishHandle &operator=(OpFinishHandle &&) = delete;
 
 public:
-    void maybe_install_cancellation(Runtime *runtime) noexcept {
+    void maybe_set_cancel(Runtime *runtime) noexcept {
         auto stop_token = receiver_.get_stop_token();
         if (stop_token.stop_possible()) {
             stop_callback_.emplace(std::move(stop_token),
