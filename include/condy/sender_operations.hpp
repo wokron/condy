@@ -85,7 +85,7 @@ private:
         decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
     std::coroutine_handle<> handle_ = nullptr;
     OperationState operation_state_;
-    Sender::ReturnType result_;
+    typename Sender::ReturnType result_;
 };
 
 template <typename Sender> auto as_awaiter(Sender &&sender) {

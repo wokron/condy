@@ -35,7 +35,7 @@ using RangedParallelAllAwaiter = RangedParallelAllSender<Awaiter>;
  * vector of completion orders and a vector of results from each awaiter.
  */
 template <typename Awaiter>
-using RangedParallelAnyAwaiter = RangedParallelAllSender<Awaiter>;
+using RangedParallelAnyAwaiter = RangedParallelAnySender<Awaiter>;
 
 /**
  * @brief Awaiter to wait for all operations in a range to complete.

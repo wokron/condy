@@ -12,6 +12,7 @@
 #include "condy/runtime.hpp"
 #include <cassert>
 #include <cerrno>
+#include <optional>
 #include <stop_token>
 #include <utility>
 

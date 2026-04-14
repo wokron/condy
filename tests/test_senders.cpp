@@ -3,9 +3,10 @@
 #include "condy/sender_operations.hpp"
 #include "condy/senders.hpp"
 #include "condy/sync_wait.hpp"
+#include <atomic>
 #include <cerrno>
 #include <doctest/doctest.h>
-#include <liburing.h>
+#include <thread>
 
 TEST_CASE("test senders - basic") {
     auto f = []() -> condy::Coro<void> {

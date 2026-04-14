@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstring>
 #include <doctest/doctest.h>
-#include <sys/eventfd.h>
+#include <memory>
 #include <vector>
 
 using namespace condy;

@@ -2,6 +2,10 @@
 
 #include "condy/concepts.hpp"
 #include "condy/op_states.hpp"
+#include <array>
+#include <tuple>
+#include <utility>
+#include <variant>
 
 namespace condy {
 

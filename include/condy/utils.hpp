@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -21,8 +20,10 @@
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)

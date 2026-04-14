@@ -4,8 +4,11 @@
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
 #include "condy/utils.hpp"
+#include <array>
 #include <cstddef>
+#include <optional>
 #include <stop_token>
+#include <tuple>
 #include <vector>
 
 namespace condy {
