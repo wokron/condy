@@ -13,8 +13,8 @@ on:
       - "**.md"
 
 env:
-  KERNEL_VERSION: 6.19
-  LIBURING_VERSION: 2.14
+  KERNEL_VERSION: "7.0"
+  LIBURING_VERSION: "2.14"
 
 jobs:
   build-and-test:
