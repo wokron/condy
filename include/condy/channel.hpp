@@ -118,12 +118,9 @@ public:
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
-     * @return PushAwaiter Awaiter object for the push operation.
-     * @details This function attempts to push the given item into the channel.
-     * If the channel is full, the coroutine will be suspended until space
-     * becomes available. If the channel is closed, the push operation will
-     * return -EPIPE. If this operation is cancelled while waiting, it will
-     * return -ECANCELED.
+     * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
+     * channel is closed; -ECANCELED if the operation was cancelled while
+     * waiting.
      * @warning The item will be moved during the push operation. If the push
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
@@ -133,12 +130,9 @@ public:
     class [[nodiscard]] PopSender;
     /**
      * @brief Pop an item from the channel, awaiting if necessary.
-     * @return PopAwaiter Awaiter object for the pop operation.
-     * @details This function attempts to pop an item from the channel. If the
-     * channel is empty, the coroutine will be suspended until an item becomes
-     * available. If the channel is closed, the pop operation will return
-     * -EPIPE. If this operation is cancelled while waiting, it will return
-     * -ECANCELED.
+     * @return std::pair<int32_t, T> 0 and the popped item if successful; -EPIPE
+     * if the channel is closed and no more items can be popped; -ECANCELED if
+     * the operation was cancelled while waiting.
      */
     PopSender pop() noexcept { return {*this}; }
 
