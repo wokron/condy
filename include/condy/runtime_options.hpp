@@ -91,9 +91,13 @@ public:
      */
     Self &enable_sqpoll(size_t idle_time_ms = 1000,
                         std::optional<uint32_t> cpu = std::nullopt) {
-        if (enable_defer_taskrun_ || enable_coop_taskrun_) {
+        if (enable_defer_taskrun_) {
             throw std::logic_error(
-                "sqpoll cannot be enabled with defer_taskrun or coop_taskrun");
+                "sqpoll cannot be enabled with defer_taskrun");
+        }
+        if (enable_coop_taskrun_) {
+            throw std::logic_error(
+                "sqpoll cannot be enabled with coop_taskrun");
         }
         if (enable_sq_rewind_) {
             throw std::logic_error("sqpoll cannot be enabled with sq_rewind");
@@ -109,9 +113,13 @@ public:
      * @return Self&
      */
     Self &enable_defer_taskrun() {
-        if (enable_sqpoll_ || enable_coop_taskrun_) {
+        if (enable_sqpoll_) {
             throw std::logic_error(
-                "defer_taskrun cannot be enabled with sqpoll or coop_taskrun");
+                "defer_taskrun cannot be enabled with sqpoll");
+        }
+        if (enable_coop_taskrun_) {
+            throw std::logic_error(
+                "defer_taskrun cannot be enabled with coop_taskrun");
         }
         enable_defer_taskrun_ = true;
         return *this;
@@ -151,9 +159,13 @@ public:
      * @return Self&
      */
     Self &enable_coop_taskrun() {
-        if (enable_sqpoll_ || enable_defer_taskrun_) {
+        if (enable_sqpoll_) {
             throw std::logic_error(
-                "coop_taskrun cannot be enabled with sqpoll or defer_taskrun");
+                "coop_taskrun cannot be enabled with sqpoll");
+        }
+        if (enable_defer_taskrun_) {
+            throw std::logic_error(
+                "coop_taskrun cannot be enabled with defer_taskrun");
         }
         enable_coop_taskrun_ = true;
         return *this;
