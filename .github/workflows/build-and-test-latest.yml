@@ -67,7 +67,8 @@ jobs:
             wget
 
           mkdir -p .cache
-          KERNEL_ARCHIVE_URL=https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${{ env.KERNEL_VERSION }}.tar.xz
+          KERNEL_MAJOR=${KERNEL_VERSION%%.*}
+          KERNEL_ARCHIVE_URL=https://cdn.kernel.org/pub/linux/kernel/v${KERNEL_MAJOR}.x/linux-${KERNEL_VERSION}.tar.xz
           bash ./scripts/light-kernel.sh -o .cache/bzImage "$KERNEL_ARCHIVE_URL"
 
       - name: Configure CMake
