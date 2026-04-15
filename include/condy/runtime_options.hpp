@@ -91,9 +91,16 @@ public:
      */
     Self &enable_sqpoll(size_t idle_time_ms = 1000,
                         std::optional<uint32_t> cpu = std::nullopt) {
-        if (enable_defer_taskrun_ || enable_coop_taskrun_) {
+        if (enable_defer_taskrun_) {
             throw std::logic_error(
-                "sqpoll cannot be enabled with defer_taskrun or coop_taskrun");
+                "sqpoll cannot be enabled with defer_taskrun");
+        }
+        if (enable_coop_taskrun_) {
+            throw std::logic_error(
+                "sqpoll cannot be enabled with coop_taskrun");
+        }
+        if (enable_sq_rewind_) {
+            throw std::logic_error("sqpoll cannot be enabled with sq_rewind");
         }
         enable_sqpoll_ = true;
         sqpoll_idle_time_ms_ = idle_time_ms;
@@ -106,9 +113,13 @@ public:
      * @return Self&
      */
     Self &enable_defer_taskrun() {
-        if (enable_sqpoll_ || enable_coop_taskrun_) {
+        if (enable_sqpoll_) {
             throw std::logic_error(
-                "defer_taskrun cannot be enabled with sqpoll or coop_taskrun");
+                "defer_taskrun cannot be enabled with sqpoll");
+        }
+        if (enable_coop_taskrun_) {
+            throw std::logic_error(
+                "defer_taskrun cannot be enabled with coop_taskrun");
         }
         enable_defer_taskrun_ = true;
         return *this;
@@ -148,9 +159,13 @@ public:
      * @return Self&
      */
     Self &enable_coop_taskrun() {
-        if (enable_sqpoll_ || enable_defer_taskrun_) {
+        if (enable_sqpoll_) {
             throw std::logic_error(
-                "coop_taskrun cannot be enabled with sqpoll or defer_taskrun");
+                "coop_taskrun cannot be enabled with sqpoll");
+        }
+        if (enable_defer_taskrun_) {
+            throw std::logic_error(
+                "coop_taskrun cannot be enabled with defer_taskrun");
         }
         enable_coop_taskrun_ = true;
         return *this;
@@ -230,6 +245,19 @@ public:
     }
 #endif
 
+#if !IO_URING_CHECK_VERSION(2, 14) // >= 2.14
+    /**
+     * @brief See IORING_SETUP_SQ_REWIND
+     */
+    Self &enable_sq_rewind() {
+        if (enable_sqpoll_) {
+            throw std::logic_error("sq_rewind cannot be enabled with sqpoll");
+        }
+        enable_sq_rewind_ = true;
+        return *this;
+    }
+#endif
+
 protected:
     size_t event_interval_ = 61;
     bool disable_register_ring_fd_ = false;
@@ -250,6 +278,7 @@ protected:
     bool enable_no_mmap_ = false;
     void *no_mmap_buf_ = nullptr;
     size_t no_mmap_buf_size_ = 0;
+    bool enable_sq_rewind_ = false;
 
     friend class Runtime;
 };
