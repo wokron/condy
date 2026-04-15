@@ -115,6 +115,7 @@ public:
     }
 
     class [[nodiscard]] PushSender;
+    using PushAwaiter = PushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
@@ -125,16 +126,17 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    PushSender push(T item) noexcept { return {*this, std::move(item)}; }
+    PushAwaiter push(T item) noexcept { return {*this, std::move(item)}; }
 
     class [[nodiscard]] PopSender;
+    using PopAwaiter = PopSender;
     /**
      * @brief Pop an item from the channel, awaiting if necessary.
      * @return std::pair<int32_t, T> 0 and the popped item if successful; -EPIPE
      * if the channel is closed and no more items can be popped; -ECANCELED if
      * the operation was cancelled while waiting.
      */
-    PopSender pop() noexcept { return {*this}; }
+    PopAwaiter pop() noexcept { return {*this}; }
 
     /**
      * @brief Get the capacity of the channel.

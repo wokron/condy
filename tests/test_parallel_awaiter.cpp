@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <doctest/doctest.h>
 #include <memory>
+#include <optional>
+#include <stop_token>
 
 namespace {
 

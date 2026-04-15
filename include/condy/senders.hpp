@@ -3,9 +3,11 @@
 #include "condy/concepts.hpp"
 #include "condy/op_states.hpp"
 #include <array>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace condy {
 

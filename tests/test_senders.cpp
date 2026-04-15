@@ -4,9 +4,13 @@
 #include "condy/senders.hpp"
 #include "condy/sync_wait.hpp"
 #include <atomic>
+#include <cassert>
 #include <cerrno>
 #include <doctest/doctest.h>
+#include <stdexcept>
 #include <thread>
+#include <tuple>
+#include <vector>
 
 TEST_CASE("test senders - basic") {
     auto f = []() -> condy::Coro<void> {
@@ -72,7 +76,7 @@ TEST_CASE("test senders - parallel all") {
     condy::sync_wait(f());
 }
 
-TEST_CASE("test senders - empty parallell all") {
+TEST_CASE("test senders - empty parallel all") {
     auto f = []() -> condy::Coro<void> {
         [[maybe_unused]] auto [order, r] =
             co_await (condy::parallel<condy::ParallelAllSender>());

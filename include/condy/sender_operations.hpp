@@ -8,7 +8,7 @@ namespace condy {
 
 template <CQEHandlerLike CQEHandler, PrepFuncLike PrepFunc, typename... Args>
 auto build_op_sender(PrepFunc &&prep_func, Args &&...args) {
-    return OpSender<PrepFunc, CQEHandler, std::decay_t<Args>...>(
+    return OpSender<std::decay_t<PrepFunc>, CQEHandler, std::decay_t<Args>...>(
         std::forward<PrepFunc>(prep_func), std::forward<Args>(args)...);
 }
 

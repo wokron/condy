@@ -128,7 +128,8 @@ public:
 
     void start(unsigned int flags) noexcept {
         if constexpr (sizeof...(Senders) == 0) {
-            std::move(receiver_)(std::make_pair(order_, results_));
+            std::move(receiver_)(
+                std::make_pair(std::move(order_), std::move(results_)));
         } else {
             canceller_.set_token(receiver_.get_stop_token());
             std::apply(
@@ -156,7 +157,8 @@ private:
         std::get<I>(results_) = std::forward<R>(result);
         if (no + 1 == sizeof...(Senders)) {
             canceller_.maybe_reset();
-            std::move(receiver_)(std::make_pair(order_, results_));
+            std::move(receiver_)(
+                std::make_pair(std::move(order_), std::move(results_)));
         }
     }
 
