@@ -6,7 +6,6 @@
 
 #include <concepts>
 #include <cstdint>
-#include <ranges>
 #include <type_traits>
 
 struct io_uring_cqe;
@@ -36,17 +35,6 @@ concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
         handler.extract_result()
     } noexcept -> std::same_as<typename std::decay_t<T>::ReturnType>;
 };
-
-template <typename T>
-concept SenderLike =
-    requires(T sender) { typename std::decay_t<T>::ReturnType; };
-
-template <typename T>
-concept AwaiterLike = SenderLike<T>;
-
-template <typename T>
-concept AwaiterRange =
-    std::ranges::range<T> && AwaiterLike<std::ranges::range_value_t<T>>;
 
 template <typename T>
 concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {

@@ -157,7 +157,9 @@ public:
 
     FinalAwaiter final_suspend() const noexcept { return {}; }
 
-    template <SenderLike T> auto await_transform(T &&value) {
+    template <typename T>
+        requires(requires { typename std::decay_t<T>::ReturnType; })
+    auto await_transform(T &&value) {
         return detail::as_awaiter(std::forward<T>(value));
     }
 
