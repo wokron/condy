@@ -54,7 +54,8 @@ public:
                 return detail::OpSenderOperationState<
                     MultiShotOpFinishHandle<CQEHandler, MultiShotFunc,
                                             Receiver>,
-                    PrepFunc, Receiver>(prep_func_, std::move(receiver),
+                    PrepFunc, Receiver>(std::move(prep_func_),
+                                        std::move(receiver),
                                         std::move(multi_shot_func_),
                                         std::forward<decltype(args)>(args)...);
             },
@@ -82,7 +83,8 @@ public:
             [&](auto &&...args) {
                 return detail::OpSenderOperationState<
                     ZeroCopyOpFinishHandle<CQEHandler, FreeFunc, Receiver>,
-                    PrepFunc, Receiver>(prep_func_, std::move(receiver),
+                    PrepFunc, Receiver>(std::move(prep_func_),
+                                        std::move(receiver),
                                         std::move(free_func_),
                                         std::forward<decltype(args)>(args)...);
             },

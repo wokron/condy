@@ -83,6 +83,7 @@ private:
 
     using OperationState =
         decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    // Await/complete path is serialized, so atomic is not needed here.
     std::coroutine_handle<> handle_ = nullptr;
     OperationState operation_state_;
     typename Sender::ReturnType result_;
