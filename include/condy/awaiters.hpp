@@ -19,6 +19,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <tuple>
 
 namespace condy {
@@ -135,7 +136,11 @@ public:
     using HandleType = Handle;
 
     RangedParallelAwaiterBase(std::vector<Awaiter> awaiters)
-        : awaiters_(std::move(awaiters)) {}
+        : awaiters_(std::move(awaiters)) {
+        if (awaiters_.empty()) {
+            throw std::invalid_argument("Awaiter range cannot be empty");
+        }
+    }
 
 public:
     HandleType *get_handle() noexcept { return &finish_handle_; }
@@ -158,7 +163,7 @@ public:
     }
 
 public:
-    bool await_ready() const noexcept { return awaiters_.empty(); }
+    bool await_ready() const noexcept { return false; }
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
@@ -167,13 +172,9 @@ public:
         register_operation(0);
     }
 
-    typename Handle::ReturnType
-    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
+    typename Handle::ReturnType await_resume() noexcept {
         return finish_handle_.extract_result();
     }
-
-public:
-    void push(Awaiter awaiter) { awaiters_.push_back(std::move(awaiter)); }
 
 protected:
     HandleType finish_handle_;
@@ -220,7 +221,6 @@ using RangedWhenAllAwaiter = RangedParallelAwaiterBase<
  * @brief Awaiter to wait for any operation in a range to complete.
  * @details An awaiter that waits for any operation in a range to complete.
  * @tparam Awaiter The type of the awaiters in the range.
- * @throws std::out_of_range if the range is empty.
  * @return std::pair<size_t, ...> A pair containing the index of the completed
  * awaiter and its result.
  */
@@ -315,8 +315,7 @@ public:
         register_operation(0);
     }
 
-    typename Handle::ReturnType
-    await_resume() noexcept(is_nothrow_extract_result_v<Handle>) {
+    typename Handle::ReturnType await_resume() noexcept {
         return finish_handle_.extract_result();
     }
 

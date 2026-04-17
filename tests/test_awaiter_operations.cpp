@@ -91,24 +91,6 @@ TEST_CASE("test awaiter_operations - test ranged when_all") {
     REQUIRE(unfinished == 0);
 }
 
-TEST_CASE("test awaiter_operations - test when_all with empty range") {
-    size_t unfinished = 1;
-    auto func = [&]() -> condy::Coro<void> {
-        using OpAwaiter =
-            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
-        std::vector<OpAwaiter> awaiters;
-        auto r = co_await condy::when_all(std::move(awaiters));
-        REQUIRE(r.empty());
-        --unfinished;
-    };
-
-    auto coro = func();
-    REQUIRE(unfinished == 1);
-
-    condy::sync_wait(std::move(coro));
-    REQUIRE(unfinished == 0);
-}
-
 TEST_CASE("test awaiter_operations - test ranged when_any") {
     size_t unfinished = 1;
     auto func = [&]() -> condy::Coro<void> {
@@ -142,22 +124,17 @@ TEST_CASE("test awaiter_operations - test ranged when_any") {
     REQUIRE(unfinished == 0);
 }
 
-TEST_CASE("test awaiter_operations - test when_any with empty range") {
-    size_t unfinished = 1;
+TEST_CASE("test awaiter_operations - test empty range") {
     auto func = [&]() -> condy::Coro<void> {
-        using OpAwaiter =
-            decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
-        std::vector<OpAwaiter> awaiters;
-        REQUIRE_THROWS_AS(co_await condy::when_any(std::move(awaiters)),
-                          std::out_of_range);
-        --unfinished;
+        using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
+        REQUIRE_THROWS_AS(co_await condy::when_all(std::vector<Op>{}),
+                          std::invalid_argument);
+        REQUIRE_THROWS_AS(co_await condy::when_any(std::vector<Op>{}),
+                          std::invalid_argument);
     };
 
     auto coro = func();
-    REQUIRE(unfinished == 1);
-
     condy::sync_wait(std::move(coro));
-    REQUIRE(unfinished == 0);
 }
 
 TEST_CASE("test awaiter_operations - test &&") {
@@ -236,10 +213,8 @@ TEST_CASE("test awaiter_operations - ranged awaiter push") {
         auto aw1 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto aw2 = condy::detail::make_op_awaiter(io_uring_prep_nop);
         auto aw3 = condy::detail::make_op_awaiter(io_uring_prep_nop);
-        auto awaiter = condy::when_all(std::vector<decltype(aw1)>{});
-        awaiter.push(aw1);
-        awaiter.push(aw2);
-        awaiter.push(aw3);
+        std::vector<decltype(aw1)> awaiters = {aw1, aw2, aw3};
+        auto awaiter = condy::when_all(std::move(awaiters));
         auto r = co_await awaiter;
         REQUIRE(r.size() == 3);
         REQUIRE(r == std::vector<int>{0, 0, 0});

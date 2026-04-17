@@ -41,6 +41,8 @@ public:
         runtime->cancel(this);
     }
 
+    void set_invoker(Invoker *invoker) noexcept { invoker_ = invoker; }
+
 private:
     static bool handle_static_(void *data, io_uring_cqe *cqe) noexcept {
         auto *self = static_cast<OpFinishHandle *>(data);
@@ -55,6 +57,7 @@ private:
     }
 
 protected:
+    Invoker *invoker_ = nullptr;
     CQEHandler cqe_handler_;
 };
 
@@ -141,10 +144,6 @@ protected:
     Func free_func_;
 };
 
-template <typename T>
-constexpr bool is_nothrow_extract_result_v =
-    noexcept(std::declval<T>().extract_result());
-
 template <bool Cancel, HandleLike Handle> class RangedParallelFinishHandle {
 public:
     using ChildReturnType = typename Handle::ReturnType;
@@ -173,7 +172,7 @@ public:
         }
     }
 
-    ReturnType extract_result() noexcept(is_nothrow_extract_result_v<Handle>) {
+    ReturnType extract_result() noexcept {
         std::vector<ChildReturnType> result;
         result.reserve(handles_.size());
         for (size_t i = 0; i < handles_.size(); i++) {
@@ -236,7 +235,7 @@ public:
     using Base = RangedParallelAllFinishHandle<Handle>;
     using ReturnType = std::vector<typename Handle::ReturnType>;
 
-    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
+    ReturnType extract_result() noexcept {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -249,12 +248,11 @@ public:
     using ChildReturnType = typename Handle::ReturnType;
     using ReturnType = std::pair<size_t, ChildReturnType>;
 
-    ReturnType extract_result() {
+    ReturnType extract_result() noexcept {
         auto r = Base::extract_result();
         auto &[order, results] = r;
-        // May throw out_of_range if the range is empty, which is expected and
-        // should be handled by caller.
-        auto idx = order.at(0);
+        assert(!order.empty());
+        auto idx = order[0];
         return std::make_pair(idx, std::move(results[idx]));
     }
 };
@@ -280,8 +278,7 @@ public:
         }
     }
 
-    ReturnType
-    extract_result() noexcept((is_nothrow_extract_result_v<Handles> && ...)) {
+    ReturnType extract_result() noexcept {
         auto result = std::apply(
             [](auto *...handle_ptrs) {
                 return std::make_tuple(handle_ptrs->extract_result()...);
@@ -374,7 +371,7 @@ public:
     using Base = ParallelAllFinishHandle<Handles...>;
     using ReturnType = std::tuple<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
+    ReturnType extract_result() noexcept {
         auto r = Base::extract_result();
         return std::move(r.second);
     }
@@ -386,7 +383,7 @@ public:
     using Base = ParallelAnyFinishHandle<Handles...>;
     using ReturnType = std::variant<typename Handles::ReturnType...>;
 
-    ReturnType extract_result() noexcept(noexcept(Base::extract_result())) {
+    ReturnType extract_result() noexcept {
         auto r = Base::extract_result();
         auto &[order, results] = r;
         return tuple_at_(results, order[0]);
