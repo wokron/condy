@@ -204,34 +204,21 @@ private:
 [[noreturn]] inline void unreachable() { __builtin_unreachable(); }
 #endif
 
-namespace detail {
-
-template <typename T> struct tuple_to_variant_traits;
-
-template <typename... Ts> struct tuple_to_variant_traits<std::tuple<Ts...>> {
-    using type = std::variant<Ts...>;
-    static constexpr size_t value = sizeof...(Ts);
-};
-
-} // namespace detail
-
-template <size_t Idx = 0> auto tuple_at(auto &results, size_t idx) {
-    using Traits =
-        detail::tuple_to_variant_traits<std::decay_t<decltype(results)>>;
-    using ReturnType = typename Traits::type;
-    if constexpr (Idx < Traits::value) {
+template <size_t Idx = 0, typename... Ts>
+std::variant<Ts...> tuple_at(std::tuple<Ts...> &results, size_t idx) {
+    if constexpr (Idx < sizeof...(Ts)) {
         if (idx == Idx) {
-            return ReturnType{std::in_place_index<Idx>,
-                              std::move(std::get<Idx>(results))};
+            return std::variant<Ts...>{std::in_place_index<Idx>,
+                                       std::move(std::get<Idx>(results))};
         } else {
-            return tuple_at<Idx + 1>(results, idx);
+            return tuple_at<Idx + 1, Ts...>(results, idx);
         }
     } else {
         // Should not reach here, but we need to make compiler happy.
         // Throwing an exception will lead to wrong optimization.
         assert(false && "Index out of bounds");
-        return ReturnType{std::in_place_index<0>,
-                          std::move(std::get<0>(results))};
+        return std::variant<Ts...>{std::in_place_index<0>,
+                                   std::move(std::get<0>(results))};
     }
 }
 
