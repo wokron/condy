@@ -5,7 +5,6 @@
 #include "condy/context.hpp"
 #include "condy/ring.hpp"
 #include "condy/utils.hpp"
-#include <utility>
 
 namespace condy {
 
@@ -14,56 +13,7 @@ namespace condy {
 
 class ZeroCopyRxBufferPool;
 
-struct ZeroCopyRxBuffer : public BufferBase {
-public:
-    ZeroCopyRxBuffer() = default;
-    ZeroCopyRxBuffer(void *data, size_t size, ZeroCopyRxBufferPool *pool)
-        : data_(data), size_(size), pool_(pool) {}
-    ZeroCopyRxBuffer(ZeroCopyRxBuffer &&other) noexcept
-        : data_(std::exchange(other.data_, nullptr)),
-          size_(std::exchange(other.size_, 0)),
-          pool_(std::exchange(other.pool_, nullptr)) {}
-    ZeroCopyRxBuffer &operator=(ZeroCopyRxBuffer &&other) noexcept {
-        if (this != &other) {
-            reset();
-            data_ = std::exchange(other.data_, nullptr);
-            size_ = std::exchange(other.size_, 0);
-            pool_ = std::exchange(other.pool_, nullptr);
-        }
-        return *this;
-    }
-
-    ~ZeroCopyRxBuffer() { reset(); }
-
-    ZeroCopyRxBuffer(const ZeroCopyRxBuffer &) = delete;
-    ZeroCopyRxBuffer &operator=(const ZeroCopyRxBuffer &) = delete;
-
-public:
-    /**
-     * @brief Get the data pointer of the buffer
-     */
-    void *data() const noexcept { return data_; }
-
-    /** *
-     * @brief Get the size of the buffer
-     */
-    size_t size() const noexcept { return size_; }
-
-    /**
-     * @brief Reset the buffer, returning it to the pool if owned
-     */
-    void reset() noexcept;
-
-    /**
-     * @brief Check if the buffer owns a buffer from a pool.
-     */
-    bool owns_buffer() const noexcept { return pool_ != nullptr; }
-
-private:
-    void *data_ = nullptr;
-    size_t size_ = 0;
-    ZeroCopyRxBufferPool *pool_ = nullptr;
-};
+using ZeroCopyRxBuffer = detail::ManagedBuffer<ZeroCopyRxBufferPool>;
 
 struct ZeroCopyRxArea {
     void *addr = nullptr;
@@ -285,15 +235,6 @@ private:
     uint64_t area_token_;
     bool device_less_ = false;
 };
-
-inline void ZeroCopyRxBuffer::reset() noexcept {
-    if (pool_ != nullptr) {
-        pool_->add_buffer_back(data_, size_);
-    }
-    data_ = nullptr;
-    size_ = 0;
-    pool_ = nullptr;
-}
 
 #endif
 

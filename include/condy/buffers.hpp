@@ -14,6 +14,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <sys/uio.h>
+#include <utility>
 #include <vector>
 
 namespace condy {
@@ -189,5 +190,67 @@ inline MutableBuffer buffer(std::span<PodType, N> sp) noexcept {
     return MutableBuffer(static_cast<void *>(sp.data()),
                          sp.size() * sizeof(PodType));
 }
+
+namespace detail {
+
+template <typename BufferPool> struct ManagedBuffer : public BufferBase {
+public:
+    ManagedBuffer() = default;
+    ManagedBuffer(void *data, size_t size, BufferPool *pool)
+        : data_(data), size_(size), pool_(pool) {}
+    ManagedBuffer(ManagedBuffer &&other) noexcept
+        : data_(std::exchange(other.data_, nullptr)),
+          size_(std::exchange(other.size_, 0)),
+          pool_(std::exchange(other.pool_, nullptr)) {}
+    ManagedBuffer &operator=(ManagedBuffer &&other) noexcept {
+        if (this != &other) {
+            reset();
+            data_ = std::exchange(other.data_, nullptr);
+            size_ = std::exchange(other.size_, 0);
+            pool_ = std::exchange(other.pool_, nullptr);
+        }
+        return *this;
+    }
+
+    ~ManagedBuffer() { reset(); }
+
+    ManagedBuffer(const ManagedBuffer &) = delete;
+    ManagedBuffer &operator=(const ManagedBuffer &) = delete;
+
+public:
+    /**
+     * @brief Get the data pointer of the buffer
+     */
+    void *data() const noexcept { return data_; }
+
+    /** *
+     * @brief Get the size of the buffer
+     */
+    size_t size() const noexcept { return size_; }
+
+    /**
+     * @brief Reset the buffer, returning it to the pool if owned
+     */
+    void reset() noexcept {
+        if (pool_ != nullptr) {
+            pool_->add_buffer_back(data_, size_);
+        }
+        data_ = nullptr;
+        size_ = 0;
+        pool_ = nullptr;
+    }
+
+    /**
+     * @brief Check if the buffer owns a buffer from a pool.
+     */
+    bool owns_buffer() const noexcept { return pool_ != nullptr; }
+
+private:
+    void *data_ = nullptr;
+    size_t size_ = 0;
+    BufferPool *pool_ = nullptr;
+};
+
+} // namespace detail
 
 } // namespace condy

@@ -227,57 +227,7 @@ class BundledProvidedBufferPool;
  * @note The lifetime of the provided buffer must not exceed the lifetime of the
  * provided buffer pool it is associated with.
  */
-struct ProvidedBuffer : public BufferBase {
-public:
-    ProvidedBuffer() = default;
-    ProvidedBuffer(void *data, size_t size,
-                   detail::BundledProvidedBufferPool *pool)
-        : data_(data), size_(size), pool_(pool) {}
-    ProvidedBuffer(ProvidedBuffer &&other) noexcept
-        : data_(std::exchange(other.data_, nullptr)),
-          size_(std::exchange(other.size_, 0)),
-          pool_(std::exchange(other.pool_, nullptr)) {}
-    ProvidedBuffer &operator=(ProvidedBuffer &&other) noexcept {
-        if (this != &other) {
-            reset();
-            data_ = std::exchange(other.data_, nullptr);
-            size_ = std::exchange(other.size_, 0);
-            pool_ = std::exchange(other.pool_, nullptr);
-        }
-        return *this;
-    }
-
-    ~ProvidedBuffer() { reset(); }
-
-    ProvidedBuffer(const ProvidedBuffer &) = delete;
-    ProvidedBuffer &operator=(const ProvidedBuffer &) = delete;
-
-public:
-    /**
-     * @brief Get the data pointer of the provided buffer
-     */
-    void *data() const noexcept { return data_; }
-
-    /** *
-     * @brief Get the size of the provided buffer
-     */
-    size_t size() const noexcept { return size_; }
-
-    /**
-     * @brief Reset the provided buffer, returning it to the pool if owned
-     */
-    void reset() noexcept;
-
-    /**
-     * @brief Check if the provided buffer owns a buffer from a pool.
-     */
-    bool owns_buffer() const noexcept { return pool_ != nullptr; }
-
-private:
-    void *data_ = nullptr;
-    size_t size_ = 0;
-    detail::BundledProvidedBufferPool *pool_ = nullptr;
-};
+using ProvidedBuffer = detail::ManagedBuffer<detail::BundledProvidedBufferPool>;
 
 namespace detail {
 
@@ -397,7 +347,8 @@ public:
         return buffers;
     }
 
-    void add_buffer_back(void *ptr) noexcept {
+    void add_buffer_back(void *ptr, [[maybe_unused]] size_t size) noexcept {
+        assert(size <= buffer_size_);
         char *base = get_buffers_base_();
         assert(ptr >= base);
         size_t offset = static_cast<char *>(ptr) - base;
@@ -436,15 +387,6 @@ private:
 };
 
 } // namespace detail
-
-inline void ProvidedBuffer::reset() noexcept {
-    if (pool_ != nullptr) {
-        pool_->add_buffer_back(data_);
-    }
-    data_ = nullptr;
-    size_ = 0;
-    pool_ = nullptr;
-}
 
 /**
  * @brief Provided buffer pool.
