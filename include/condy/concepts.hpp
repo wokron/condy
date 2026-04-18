@@ -28,8 +28,9 @@ concept PrepFuncLike = requires(T prep_func, Ring *ring) {
 };
 
 template <typename T>
-concept CQEHandlerLike =
-    requires(T handler, io_uring_cqe *cqe) { handler(cqe); };
+concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
+    { handler(cqe) } noexcept;
+};
 
 template <typename T>
 concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {

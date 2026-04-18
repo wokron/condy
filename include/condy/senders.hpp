@@ -10,6 +10,7 @@
 #include <array>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -18,7 +19,7 @@ namespace condy {
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler> class OpSender {
 public:
-    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
+    using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
     OpSender(PrepFunc func, CQEHandler cqe_handler)
         : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)) {}
@@ -39,7 +40,7 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc>
 class MultiShotOpSender {
 public:
-    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
+    using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
     MultiShotOpSender(PrepFunc func, CQEHandler cqe_handler,
                       MultiShotFunc multi_shot_func)
@@ -62,7 +63,7 @@ private:
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
 class ZeroCopyOpSender {
 public:
-    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
+    using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
     ZeroCopyOpSender(PrepFunc func, CQEHandler cqe_handler, FreeFunc free_func)
         : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)),

@@ -21,8 +21,6 @@ namespace condy {
 template <CQEHandlerLike CQEHandler, typename Receiver>
 class OpFinishHandle : public OpFinishHandleBase {
 public:
-    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
-
     OpFinishHandle(CQEHandler cqe_handler, Receiver receiver)
         : cqe_handler_(std::move(cqe_handler)), receiver_(std::move(receiver)) {
         this->handle_func_ = handle_static_;
