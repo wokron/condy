@@ -2,9 +2,7 @@
  * @file cqe_handler.hpp
  * @brief Definitions of CQE handlers
  * @details This file defines a series of CQE handlers, which are responsible
- * for processing the completion of asynchronous operations. Each handler
- * defines a `handle_cqe` method to process the CQE and an `extract_result`
- * method to retrieve the result of the operation.
+ * for processing the completion of asynchronous operations.
  */
 
 #pragma once
@@ -45,16 +43,8 @@ inline bool check_cqe32([[maybe_unused]] io_uring_cqe *cqe) {
  * @return int32_t The result of the operation, which is the value of `cqe->res`
  * for the corresponding CQE.
  */
-class SimpleCQEHandler {
-public:
-    using ReturnType = int32_t;
-
-    void handle_cqe(io_uring_cqe *cqe) noexcept { res_ = cqe->res; }
-
-    ReturnType extract_result() noexcept { return res_; }
-
-private:
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
+struct SimpleCQEHandler {
+    int32_t operator()(io_uring_cqe *cqe) noexcept { return cqe->res; }
 };
 
 /**
@@ -66,22 +56,14 @@ private:
  */
 template <BufferRingLike Br> class SelectBufferCQEHandler {
 public:
-    using ReturnType = std::pair<int32_t, typename Br::ReturnType>;
-
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 
-    void handle_cqe(io_uring_cqe *cqe) noexcept {
-        res_ = cqe->res;
-        buffer_ = buffers_->handle_finish(cqe);
+    std::pair<int32_t, typename Br::ReturnType>
+    operator()(io_uring_cqe *cqe) noexcept {
+        return {cqe->res, buffers_->handle_finish(cqe)};
     }
 
-    ReturnType extract_result() noexcept { return {res_, std::move(buffer_)}; }
-
 private:
-    using BufferType = typename Br::ReturnType;
-
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
-    BufferType buffer_ = {};
     Br *buffers_;
 };
 
@@ -91,22 +73,12 @@ private:
  * @return std::pair<int32_t, uint64_t> A pair containing the status and result
  * of the NVMe command.
  */
-class NVMePassthruCQEHandler {
-public:
-    using ReturnType = std::pair<int32_t, uint64_t>;
-
-    void handle_cqe(io_uring_cqe *cqe) noexcept {
+struct NVMePassthruCQEHandler {
+    std::pair<int32_t, uint64_t> operator()(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for NVMe passthrough");
-        res_ = cqe->res;
-        nvme_result_ = cqe->big_cqe[0];
+        return {cqe->res, cqe->big_cqe[0]};
     }
-
-    ReturnType extract_result() noexcept { return {res_, nvme_result_}; }
-
-private:
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
-    uint64_t nvme_result_ = 0;
 };
 
 #if !IO_URING_CHECK_VERSION(2, 12) // >= 2.12
@@ -138,25 +110,18 @@ struct TxTimestampResult {
  * @return std::pair<int32_t, TxTimestampResult> Result of the TX timestamp
  * operation.
  */
-class TxTimestampCQEHandler {
-public:
-    using ReturnType = std::pair<int32_t, TxTimestampResult>;
-
-    void handle_cqe(io_uring_cqe *cqe) noexcept {
+struct TxTimestampCQEHandler {
+    std::pair<int32_t, TxTimestampResult>
+    operator()(io_uring_cqe *cqe) noexcept {
         assert(detail::check_cqe32(cqe) &&
                "Expected big CQE for TX timestamp operations");
-        res_ = cqe->res;
-        result_.tstype =
+        TxTimestampResult result;
+        result.tstype =
             static_cast<int>(cqe->flags >> IORING_TIMESTAMP_TYPE_SHIFT);
-        result_.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
-        result_.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
+        result.hwts = cqe->flags & IORING_CQE_F_TSTAMP_HW;
+        result.ts = *reinterpret_cast<io_timespec *>(cqe + 1);
+        return {cqe->res, result};
     }
-
-    ReturnType extract_result() noexcept { return {res_, result_}; }
-
-private:
-    int32_t res_ = -ENOTRECOVERABLE; // Internal error if not set
-    TxTimestampResult result_;
 };
 #endif
 

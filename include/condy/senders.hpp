@@ -20,7 +20,7 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename... HandleArgs>
 class OpSender {
 public:
-    using ReturnType = typename CQEHandler::ReturnType;
+    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
     OpSender(PrepFunc func, HandleArgs... args)
         : prep_func_(std::move(func)), handle_args_(std::move(args)...) {}
@@ -45,7 +45,7 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc, typename... HandleArgs>
 class MultiShotOpSender {
 public:
-    using ReturnType = typename CQEHandler::ReturnType;
+    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
     MultiShotOpSender(PrepFunc func, MultiShotFunc multi_shot_func,
                       HandleArgs... args)
@@ -77,7 +77,7 @@ template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
           typename... HandleArgs>
 class ZeroCopyOpSender {
 public:
-    using ReturnType = typename CQEHandler::ReturnType;
+    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
     ZeroCopyOpSender(PrepFunc func, FreeFunc free_func, HandleArgs... args)
         : prep_func_(std::move(func)), free_func_(std::move(free_func)),

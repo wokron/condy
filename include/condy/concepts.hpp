@@ -28,13 +28,8 @@ concept PrepFuncLike = requires(T prep_func, Ring *ring) {
 };
 
 template <typename T>
-concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
-    typename std::decay_t<T>::ReturnType;
-    { handler.handle_cqe(cqe) } noexcept -> std::same_as<void>;
-    {
-        handler.extract_result()
-    } noexcept -> std::same_as<typename std::decay_t<T>::ReturnType>;
-};
+concept CQEHandlerLike =
+    requires(T handler, io_uring_cqe *cqe) { handler(cqe); };
 
 template <typename T>
 concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {

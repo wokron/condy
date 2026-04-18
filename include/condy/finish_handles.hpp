@@ -21,7 +21,7 @@ namespace condy {
 template <CQEHandlerLike CQEHandler, typename Receiver>
 class OpFinishHandle : public OpFinishHandleBase {
 public:
-    using ReturnType = typename CQEHandler::ReturnType;
+    using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
     template <typename... Args>
     OpFinishHandle(Receiver receiver, Args &&...args)
@@ -64,8 +64,7 @@ private:
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {
         stop_callback_.reset();
-        cqe_handler_.handle_cqe(cqe);
-        std::move(receiver_)(cqe_handler_.extract_result());
+        std::move(receiver_)(cqe_handler_(cqe));
     }
 
     CQEHandler cqe_handler_;
@@ -93,8 +92,7 @@ private:
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            this->cqe_handler_.handle_cqe(cqe);
-            func_(this->cqe_handler_.extract_result());
+            func_(this->cqe_handler_(cqe));
             return false;
         } else {
             this->finish_(cqe);
