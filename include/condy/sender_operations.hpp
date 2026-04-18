@@ -96,19 +96,38 @@ template <typename Sender> auto as_awaiter(Sender &&sender) {
 
 } // namespace detail
 
+/**
+ * @brief Decorates an operation with specific io_uring sqe flags.
+ * @tparam Flags The io_uring sqe flags to set.
+ * @param sender The operation to decorate.
+ */
 template <unsigned int Flags, typename Sender> auto flag(Sender &&sender) {
     return FlaggedOpSender<Flags, std::decay_t<Sender>>(
         std::forward<Sender>(sender));
 }
 
+/**
+ * @brief Mark an operation as drain operation.
+ * @param sender The operation to mark as drain.
+ */
 template <typename Sender> auto drain(Sender &&sender) {
     return flag<IOSQE_IO_DRAIN>(std::forward<Sender>(sender));
 }
 
+/**
+ * @brief Mark an operation to always execute asynchronously.
+ * @param sender The operation to mark as always async.
+ */
 template <typename Sender> auto always_async(Sender &&sender) {
     return flag<IOSQE_ASYNC>(std::forward<Sender>(sender));
 }
 
+/**
+ * @brief Compose multiple operations into a single sender that executes them in
+ * parallel.
+ * @tparam SenderType The type of sender to compose into.
+ * @param senders The operations to compose.
+ */
 template <template <typename... Senders> typename SenderType,
           typename... Senders>
 auto parallel(Senders &&...senders) {
@@ -116,6 +135,12 @@ auto parallel(Senders &&...senders) {
         std::forward<Senders>(senders)...);
 }
 
+/**
+ * @brief Compose multiple operations from a range into a single operation that
+ * executes them in parallel.
+ * @tparam RangedSenderType The type of sender to compose into.
+ * @param range The range of operations to compose.
+ */
 template <template <typename Sender> typename RangedSenderType,
           std::ranges::range Range>
 auto parallel(Range &&range) {
@@ -126,69 +151,130 @@ auto parallel(Range &&range) {
     return RangedSenderType<SenderType>(std::move(senders));
 }
 
+/**
+ * @brief Compose multiple operations into a single operation that completes
+ * when all of them complete.
+ * @param senders The operations to compose.
+ */
 template <typename... Senders> auto when_all(Senders &&...senders) {
     return parallel<WhenAllSender>(std::forward<Senders>(senders)...);
 }
 
+/**
+ * @brief Compose multiple operations from a range into a single operation that
+ * completes when all of them complete.
+ * @param range The range of operations to compose.
+ */
 template <std::ranges::range Range> auto when_all(Range &&range) {
     return parallel<RangedWhenAllSender>(std::forward<Range>(range));
 }
 
+/**
+ * @brief Compose multiple operations into a single operation that completes
+ * when any of them complete.
+ * @param senders The operations to compose.
+ */
 template <typename... Senders> auto when_any(Senders &&...senders) {
     static_assert(sizeof...(Senders) > 0,
                   "when_any requires at least one sender");
     return parallel<WhenAnySender>(std::forward<Senders>(senders)...);
 }
 
+/**
+ * @brief Compose multiple operations from a range into a single operation that
+ * completes when any of them complete.
+ * @param range The range of operations to compose.
+ */
 template <std::ranges::range Range> auto when_any(Range &&range) {
     return parallel<RangedWhenAnySender>(std::forward<Range>(range));
 }
 
+/**
+ * @brief Compose multiple operations into a single operation that executes them
+ * in sequence.
+ * @param senders The operations to compose.
+ */
 template <typename... Senders> auto link(Senders &&...senders) {
     return parallel<LinkSender>(std::forward<Senders>(senders)...);
 }
 
+/**
+ * @brief Compose multiple operations from a range into a single operation that
+ * executes them in sequence.
+ * @param range The range of operations to compose.
+ */
 template <std::ranges::range Range> auto link(Range &&range) {
     return parallel<RangedLinkSender>(std::forward<Range>(range));
 }
 
+/**
+ * @brief Compose multiple operations into a single operation that executes them
+ * in sequence and continues even if one of them fails.
+ * @param senders The operations to compose.
+ */
 template <typename... Senders> auto hard_link(Senders &&...senders) {
     return parallel<HardLinkSender>(std::forward<Senders>(senders)...);
 }
 
+/**
+ * @brief Compose multiple operations from a range into a single operation that
+ * executes them in sequence and continues even if one of them fails.
+ * @param range The range of operations to compose.
+ */
 template <std::ranges::range Range> auto hard_link(Range &&range) {
     return parallel<RangedHardLinkSender>(std::forward<Range>(range));
 }
 
+/**
+ * @brief Operators for composing operations.
+ */
 namespace operators {
 
+/**
+ * @brief Operator overloads version of condy::when_all
+ */
 template <typename Sender1, typename Sender2>
 auto operator&&(Sender1 s1, Sender2 s2) {
     return when_all(std::move(s1), std::move(s2));
 }
 
+/**
+ * @brief Operator overloads version of condy::when_all
+ */
 template <typename S, typename... Ss>
 auto operator&&(WhenAllSender<Ss...> aws, S sender) {
     return WhenAllSender<Ss..., std::decay_t<S>>(std::move(aws),
                                                  std::move(sender));
 }
 
+/**
+ * @brief Operator overloads version of condy::when_any
+ */
 template <typename Sender1, typename Sender2>
 auto operator||(Sender1 s1, Sender2 s2) {
     return when_any(std::move(s1), std::move(s2));
 }
 
+/**
+ * @brief Operator overloads version of condy::when_any
+ */
 template <typename S, typename... Ss>
 auto operator||(WhenAnySender<Ss...> aws, S sender) {
     return WhenAnySender<Ss..., std::decay_t<S>>(std::move(aws),
                                                  std::move(sender));
 }
 
+/**
+ * @brief Operator overloads version of condy::link
+ */
 template <typename Sender1, typename Sender2>
 auto operator>>(Sender1 s1, Sender2 s2) {
     return link(std::move(s1), std::move(s2));
 }
 
+/**
+ * @brief Operator overloads version of condy::link
+ */
 template <typename S, typename... Ss>
 auto operator>>(LinkSender<Ss...> aws, S sender) {
     return LinkSender<Ss..., std::decay_t<S>>(std::move(aws),
