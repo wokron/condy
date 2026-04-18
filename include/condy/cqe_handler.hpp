@@ -51,16 +51,16 @@ struct SimpleCQEHandler {
  * @brief A CQE handler that returns the selected buffers based on the result of
  * the CQE.
  * @tparam Br The buffer ring type
- * @return std::pair<int32_t, typename Br::ReturnType> A pair containing the
- * result of the operation (the value of `cqe->res`) and the selected buffers.
+ * @return std::pair<int32_t, BufferType> A pair containing the
+ * result of the operation (the value of `cqe->res`) and the selected buffer,
+ * whose type is determined by the buffer ring.
  */
 template <BufferRingLike Br> class SelectBufferCQEHandler {
 public:
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 
-    std::pair<int32_t, typename Br::ReturnType>
-    operator()(io_uring_cqe *cqe) noexcept {
-        return {cqe->res, buffers_->handle_finish(cqe)};
+    auto operator()(io_uring_cqe *cqe) noexcept {
+        return std::make_pair(cqe->res, buffers_->handle_finish(cqe));
     }
 
 private:

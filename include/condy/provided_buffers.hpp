@@ -46,8 +46,6 @@ namespace detail {
 
 class BundledProvidedBufferQueue {
 public:
-    using ReturnType = BufferInfo;
-
     BundledProvidedBufferQueue(uint32_t capacity, unsigned int flags)
         : capacity_(std::bit_ceil(capacity)), buf_lens_(capacity_, 0) {
         auto &context = detail::Context::current();
@@ -137,18 +135,18 @@ public:
 public:
     uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+    BufferInfo handle_finish(io_uring_cqe *cqe) noexcept {
         assert(cqe != nullptr);
         int32_t res = cqe->res;
         uint32_t flags = cqe->flags;
 
         if (!(flags & IORING_CQE_F_BUFFER)) {
-            return ReturnType{0, 0};
+            return BufferInfo{0, 0};
         }
 
         assert(res > 0);
 
-        ReturnType result = {
+        BufferInfo result = {
             .bid = static_cast<uint16_t>(flags >> IORING_CQE_BUFFER_SHIFT),
             .num_buffers = 0,
         };
@@ -209,7 +207,7 @@ public:
     ProvidedBufferQueue(uint32_t capacity, unsigned int flags = 0)
         : BundledProvidedBufferQueue(capacity, flags) {}
 
-    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+    BufferInfo handle_finish(io_uring_cqe *cqe) noexcept {
         assert(cqe != nullptr);
         auto result = BundledProvidedBufferQueue::handle_finish(cqe);
         assert(result.num_buffers <= 1);
@@ -285,8 +283,6 @@ namespace detail {
 
 class BundledProvidedBufferPool {
 public:
-    using ReturnType = std::vector<ProvidedBuffer>;
-
     BundledProvidedBufferPool(uint32_t num_buffers, size_t buffer_size,
                               unsigned int flags)
         : num_buffers_(std::bit_ceil(num_buffers)), buffer_size_(buffer_size) {
@@ -361,7 +357,7 @@ public:
 public:
     uint16_t bgid() const noexcept { return bgid_; }
 
-    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+    std::vector<ProvidedBuffer> handle_finish(io_uring_cqe *cqe) noexcept {
         assert(cqe != nullptr);
         int32_t res = cqe->res;
         uint32_t flags = cqe->flags;
@@ -464,8 +460,6 @@ inline void ProvidedBuffer::reset() noexcept {
  */
 class ProvidedBufferPool : public detail::BundledProvidedBufferPool {
 public:
-    using ReturnType = ProvidedBuffer;
-
     /**
      * @brief Construct a new ProvidedBufferPool object in current Runtime.
      * @param num_buffers Number of buffers to allocate in the pool.
@@ -478,11 +472,11 @@ public:
         : BundledProvidedBufferPool(num_buffers, buffer_size, flags) {}
 
 public:
-    ReturnType handle_finish(io_uring_cqe *cqe) noexcept {
+    ProvidedBuffer handle_finish(io_uring_cqe *cqe) noexcept {
         assert(cqe != nullptr);
         auto buffers = BundledProvidedBufferPool::handle_finish(cqe);
         if (buffers.empty()) {
-            return ReturnType();
+            return ProvidedBuffer();
         }
         assert(buffers.size() == 1);
         return std::move(buffers[0]);

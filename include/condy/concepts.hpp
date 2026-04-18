@@ -34,11 +34,8 @@ concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
 
 template <typename T>
 concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {
-    typename std::decay_t<T>::ReturnType;
     { br.bgid() } -> std::same_as<uint16_t>;
-    {
-        br.handle_finish(cqe)
-    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
+    { br.handle_finish(cqe) };
 };
 
 template <typename T>
