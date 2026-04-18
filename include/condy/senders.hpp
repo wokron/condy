@@ -1,3 +1,8 @@
+/**
+ * @file senders.hpp
+ * @brief Sender types for composing asynchronous operations.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"

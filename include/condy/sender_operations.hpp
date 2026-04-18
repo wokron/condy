@@ -1,3 +1,8 @@
+/**
+ * @file sender_operations.hpp
+ * @brief Helper functions for composing asynchronous operations.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"

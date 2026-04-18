@@ -1,3 +1,8 @@
+/**
+ * @file op_states.hpp
+ * @brief Operation state implementations for various operations.
+ */
+
 #pragma once
 
 #include "condy/concepts.hpp"
