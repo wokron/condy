@@ -21,12 +21,8 @@ namespace condy {
 template <CQEHandlerLike CQEHandler, typename Receiver>
 class OpFinishHandle : public OpFinishHandleBase {
 public:
-    using ReturnType = typename CQEHandler::ReturnType;
-
-    template <typename... Args>
-    OpFinishHandle(Receiver receiver, Args &&...args)
-        : cqe_handler_(std::forward<Args>(args)...),
-          receiver_(std::move(receiver)) {
+    OpFinishHandle(CQEHandler cqe_handler, Receiver receiver)
+        : cqe_handler_(std::move(cqe_handler)), receiver_(std::move(receiver)) {
         this->handle_func_ = handle_static_;
     }
 
@@ -64,8 +60,7 @@ private:
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {
         stop_callback_.reset();
-        cqe_handler_.handle_cqe(cqe);
-        std::move(receiver_)(cqe_handler_.extract_result());
+        std::move(receiver_)(cqe_handler_(cqe));
     }
 
     CQEHandler cqe_handler_;
@@ -76,10 +71,10 @@ protected:
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
 class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
-    template <typename... Args>
-    MultiShotOpFinishHandle(Receiver receiver, Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
-                                               std::forward<Args>(args)...),
+    MultiShotOpFinishHandle(CQEHandler cqe_handler, Receiver receiver,
+                            Func func)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(cqe_handler),
+                                               std::move(receiver)),
           func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
@@ -93,8 +88,7 @@ private:
     bool handle_impl_(io_uring_cqe *cqe) noexcept
     /* fake override */ {
         if (cqe->flags & IORING_CQE_F_MORE) {
-            this->cqe_handler_.handle_cqe(cqe);
-            func_(this->cqe_handler_.extract_result());
+            func_(this->cqe_handler_(cqe));
             return false;
         } else {
             this->finish_(cqe);
@@ -109,10 +103,9 @@ protected:
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
 class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
-    template <typename... Args>
-    ZeroCopyOpFinishHandle(Receiver receiver, Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
-                                               std::forward<Args>(args)...),
+    ZeroCopyOpFinishHandle(CQEHandler cqe_handler, Receiver receiver, Func func)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(cqe_handler),
+                                               std::move(receiver)),
           free_func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }

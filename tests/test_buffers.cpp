@@ -141,7 +141,7 @@ TEST_CASE("test buffers - provided buffer queue usage") {
 
     r = -1;
 
-    condy::ProvidedBufferQueue::ReturnType ret;
+    condy::BufferInfo ret;
 
     size_t reaped = 0;
     while (reaped < 1) {
@@ -349,7 +349,7 @@ TEST_CASE("test buffers - provided buffer pool usage") {
 
     r = -1;
 
-    condy::ProvidedBufferPool::ReturnType ret;
+    condy::ProvidedBuffer ret;
 
     size_t reaped = 0;
     while (reaped < 1) {

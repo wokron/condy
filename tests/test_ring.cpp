@@ -45,7 +45,8 @@ TEST_CASE("test ring - register and complete ops") {
     constexpr size_t num_ops = 4;
     std::vector<std::unique_ptr<Handle>> handles;
     for (size_t i = 0; i < num_ops; i++) {
-        handles.push_back(std::make_unique<Handle>(receiver));
+        handles.push_back(
+            std::make_unique<Handle>(condy::SimpleCQEHandler(), receiver));
         auto &handle = handles.back();
         auto *sqe = ring.get_sqe();
         io_uring_prep_nop(sqe);
@@ -88,7 +89,8 @@ TEST_CASE("test ring - cancel ops") {
     constexpr size_t num_ops = 8;
     std::vector<std::unique_ptr<Handle>> handles;
     for (size_t i = 0; i < num_ops; i++) {
-        handles.push_back(std::make_unique<Handle>(receiver));
+        handles.push_back(
+            std::make_unique<Handle>(condy::SimpleCQEHandler(), receiver));
         auto &handle = handles.back();
         auto *sqe = ring.get_sqe();
         if (i % 2 == 0) {
