@@ -16,88 +16,69 @@
 
 namespace condy {
 
-template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
-          typename... HandleArgs>
-class OpSender {
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler> class OpSender {
 public:
     using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
-    OpSender(PrepFunc func, HandleArgs... args)
-        : prep_func_(std::move(func)), handle_args_(std::move(args)...) {}
+    OpSender(PrepFunc func, CQEHandler cqe_handler)
+        : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
-        return std::apply(
-            [&](auto &&...args) {
-                return detail::OpSenderOperationState<
-                    OpFinishHandle<CQEHandler, Receiver>, PrepFunc>(
-                    prep_func_, std::move(receiver),
-                    std::forward<decltype(args)>(args)...);
-            },
-            std::move(handle_args_));
+        return detail::OpSenderOperationState<
+            OpFinishHandle<CQEHandler, Receiver>, PrepFunc>(
+            std::move(prep_func_), std::move(cqe_handler_),
+            std::move(receiver));
     }
 
 private:
     PrepFunc prep_func_;
-    std::tuple<HandleArgs...> handle_args_;
+    CQEHandler cqe_handler_;
 };
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
-          typename MultiShotFunc, typename... HandleArgs>
+          typename MultiShotFunc>
 class MultiShotOpSender {
 public:
     using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
-    MultiShotOpSender(PrepFunc func, MultiShotFunc multi_shot_func,
-                      HandleArgs... args)
-        : prep_func_(std::move(func)),
-          multi_shot_func_(std::move(multi_shot_func)),
-          handle_args_(std::move(args)...) {}
+    MultiShotOpSender(PrepFunc func, CQEHandler cqe_handler,
+                      MultiShotFunc multi_shot_func)
+        : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)),
+          multi_shot_func_(std::move(multi_shot_func)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
-        return std::apply(
-            [&](auto &&...args) {
-                return detail::OpSenderOperationState<
-                    MultiShotOpFinishHandle<CQEHandler, MultiShotFunc,
-                                            Receiver>,
-                    PrepFunc>(std::move(prep_func_), std::move(receiver),
-                              std::move(multi_shot_func_),
-                              std::forward<decltype(args)>(args)...);
-            },
-            std::move(handle_args_));
+        return detail::OpSenderOperationState<
+            MultiShotOpFinishHandle<CQEHandler, MultiShotFunc, Receiver>,
+            PrepFunc>(std::move(prep_func_), std::move(cqe_handler_),
+                      std::move(receiver), std::move(multi_shot_func_));
     }
 
 private:
     PrepFunc prep_func_;
+    CQEHandler cqe_handler_;
     MultiShotFunc multi_shot_func_;
-    std::tuple<HandleArgs...> handle_args_;
 };
 
-template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc,
-          typename... HandleArgs>
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
 class ZeroCopyOpSender {
 public:
     using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
-    ZeroCopyOpSender(PrepFunc func, FreeFunc free_func, HandleArgs... args)
-        : prep_func_(std::move(func)), free_func_(std::move(free_func)),
-          handle_args_(std::move(args)...) {}
+    ZeroCopyOpSender(PrepFunc func, CQEHandler cqe_handler, FreeFunc free_func)
+        : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)),
+          free_func_(std::move(free_func)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
-        return std::apply(
-            [&](auto &&...args) {
-                return detail::OpSenderOperationState<
-                    ZeroCopyOpFinishHandle<CQEHandler, FreeFunc, Receiver>,
-                    PrepFunc>(std::move(prep_func_), std::move(receiver),
-                              std::move(free_func_),
-                              std::forward<decltype(args)>(args)...);
-            },
-            std::move(handle_args_));
+        return detail::OpSenderOperationState<
+            ZeroCopyOpFinishHandle<CQEHandler, FreeFunc, Receiver>, PrepFunc>(
+            std::move(prep_func_), std::move(cqe_handler_), std::move(receiver),
+            std::move(free_func_));
     }
 
 private:
     PrepFunc prep_func_;
+    CQEHandler cqe_handler_;
     FreeFunc free_func_;
-    std::tuple<HandleArgs...> handle_args_;
 };
 
 template <unsigned int Flags, typename Sender> class FlaggedOpSender {

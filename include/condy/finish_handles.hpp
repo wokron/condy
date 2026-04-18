@@ -23,10 +23,8 @@ class OpFinishHandle : public OpFinishHandleBase {
 public:
     using ReturnType = decltype(std::declval<CQEHandler>()(nullptr));
 
-    template <typename... Args>
-    OpFinishHandle(Receiver receiver, Args &&...args)
-        : cqe_handler_(std::forward<Args>(args)...),
-          receiver_(std::move(receiver)) {
+    OpFinishHandle(CQEHandler cqe_handler, Receiver receiver)
+        : cqe_handler_(std::move(cqe_handler)), receiver_(std::move(receiver)) {
         this->handle_func_ = handle_static_;
     }
 
@@ -75,10 +73,10 @@ protected:
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
 class MultiShotOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
-    template <typename... Args>
-    MultiShotOpFinishHandle(Receiver receiver, Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
-                                               std::forward<Args>(args)...),
+    MultiShotOpFinishHandle(CQEHandler cqe_handler, Receiver receiver,
+                            Func func)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(cqe_handler),
+                                               std::move(receiver)),
           func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
@@ -107,10 +105,9 @@ protected:
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>
 class ZeroCopyOpFinishHandle : public OpFinishHandle<CQEHandler, Receiver> {
 public:
-    template <typename... Args>
-    ZeroCopyOpFinishHandle(Receiver receiver, Func func, Args &&...args)
-        : OpFinishHandle<CQEHandler, Receiver>(std::move(receiver),
-                                               std::forward<Args>(args)...),
+    ZeroCopyOpFinishHandle(CQEHandler cqe_handler, Receiver receiver, Func func)
+        : OpFinishHandle<CQEHandler, Receiver>(std::move(cqe_handler),
+                                               std::move(receiver)),
           free_func_(std::move(func)) {
         this->handle_func_ = handle_static_;
     }
