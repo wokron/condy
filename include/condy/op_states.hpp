@@ -19,15 +19,12 @@
 namespace condy {
 namespace detail {
 
-template <typename Handle, PrepFuncLike Func, typename Receiver>
-class OpSenderOperationState {
+template <typename Handle, PrepFuncLike Func> class OpSenderOperationState {
 public:
     template <typename... HandleArgs>
-    OpSenderOperationState(Func prep_func, Receiver receiver,
-                           HandleArgs &&...handle_args)
+    OpSenderOperationState(Func prep_func, HandleArgs &&...handle_args)
         : prep_func_(std::move(prep_func)),
-          finish_handle_(std::move(receiver),
-                         std::forward<HandleArgs>(handle_args)...) {}
+          finish_handle_(std::forward<HandleArgs>(handle_args)...) {}
 
     OpSenderOperationState(OpSenderOperationState &&) = delete;
     OpSenderOperationState &operator=(OpSenderOperationState &&) = delete;
