@@ -13,7 +13,6 @@ namespace condy {
 
 class Ring;
 class Runtime;
-class WorkInvoker;
 
 namespace detail {
 

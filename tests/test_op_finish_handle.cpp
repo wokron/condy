@@ -1,7 +1,6 @@
 #include "condy/context.hpp"
 #include "condy/cqe_handler.hpp"
 #include "condy/finish_handles.hpp"
-#include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <cstddef>
 #include <cstring>
@@ -9,21 +8,19 @@
 
 namespace {
 
-struct SetFinishInvoker : public condy::InvokerAdapter<SetFinishInvoker> {
-    void invoke() { finished = true; }
-    bool finished = false;
+struct MockReceiver {
+    void operator()(int res) {
+        r = res;
+        invoke_count++;
+    }
+    std::stop_token get_stop_token() { return {}; }
+    size_t &invoke_count;
+    int &r;
 };
 
-struct SetUnfinishedInvoker
-    : public condy::InvokerAdapter<SetUnfinishedInvoker> {
-    SetUnfinishedInvoker(size_t &unfinished_ref) : unfinished(unfinished_ref) {}
-    void invoke() { unfinished--; }
-    size_t &unfinished;
-};
-
-void event_loop(size_t &unfinished) {
+void event_loop(size_t &count, size_t expected) {
     auto *ring = condy::detail::Context::current().ring();
-    while (unfinished > 0) {
+    while (count != expected) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
             auto [data, type] = condy::decode_work(io_uring_cqe_get_data(cqe));
@@ -50,9 +47,11 @@ TEST_CASE("test op_finish_handle - basic usage") {
 
     context.init(&ring, &runtime);
 
-    SetFinishInvoker invoker;
-    condy::OpFinishHandle<condy::SimpleCQEHandler> handle;
-    handle.set_invoker(&invoker);
+    size_t invoke_count = 0;
+    int r = 0;
+    MockReceiver receiver{invoke_count, r};
+    condy::OpFinishHandle<condy::SimpleCQEHandler, MockReceiver> handle(
+        receiver);
 
     auto *sqe = ring.get_sqe();
     io_uring_prep_nop(sqe);
@@ -67,16 +66,13 @@ TEST_CASE("test op_finish_handle - basic usage") {
         handle_ptr->handle(&mock_cqe);
     });
 
-    REQUIRE(invoker.finished);
-    REQUIRE(handle.extract_result() == 42);
+    REQUIRE(invoke_count == 1);
+    REQUIRE(r == 42);
 
     context.reset();
 }
 
 TEST_CASE("test op_finish_handle - concurrent ops") {
-    size_t unfinished = 2;
-    SetUnfinishedInvoker invoker{unfinished};
-
     condy::Ring ring;
     io_uring_params params{};
     std::memset(&params, 0, sizeof(params));
@@ -84,9 +80,12 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     auto &context = condy::detail::Context::current();
     context.init(&ring, &runtime);
 
-    condy::OpFinishHandle<condy::SimpleCQEHandler> handle1, handle2;
-    handle1.set_invoker(&invoker);
-    handle2.set_invoker(&invoker);
+    size_t invoke_count = 0;
+    int r = 0;
+    MockReceiver receiver{invoke_count, r};
+    condy::OpFinishHandle<condy::SimpleCQEHandler, MockReceiver> handle1(
+        receiver),
+        handle2(receiver);
 
     auto *sqe1 = ring.get_sqe();
     io_uring_prep_nop(sqe1);
@@ -96,66 +95,66 @@ TEST_CASE("test op_finish_handle - concurrent ops") {
     io_uring_prep_nop(sqe2);
     io_uring_sqe_set_data(sqe2, &handle2);
 
-    event_loop(invoker.unfinished);
+    event_loop(invoke_count, 2);
 
-    REQUIRE(unfinished == 0);
+    REQUIRE(invoke_count == 2);
 
     context.reset();
 }
 
-namespace {
-
-struct SetFinishWorkInvoker
-    : public condy::InvokerAdapter<SetFinishWorkInvoker, condy::WorkInvoker> {
-    void invoke() { finished = true; }
-    bool finished = false;
-    int result = -1;
-};
-
-} // namespace
-
 TEST_CASE("test op_finish_handle - multishot op") {
-    SetFinishWorkInvoker invoker;
-
-    auto func = [&](int res) {
-        invoker.result = res;
-        invoker();
-    };
-
-    condy::MultiShotOpFinishHandle<condy::SimpleCQEHandler, decltype(func)>
-        handle(func);
-    REQUIRE(!invoker.finished);
-    io_uring_cqe cqe{};
-    cqe.res = 1;
-    cqe.flags |= IORING_CQE_F_MORE;       // Indicate more results to come
-    auto op_finish = handle.handle(&cqe); // Multishot
-    REQUIRE(invoker.finished);
-    REQUIRE(invoker.result == 1);
-    REQUIRE(!op_finish);
-}
-
-TEST_CASE("test op_finish_handle - zero copy op") {
-    SetFinishWorkInvoker invoker;
+    size_t invoke_count = 0;
+    int r = 0;
+    MockReceiver receiver{invoke_count, r};
 
     int res = -1;
     auto func = [&](int r) { res = r; };
 
-    auto *handle = new condy::ZeroCopyOpFinishHandle<condy::SimpleCQEHandler,
-                                                     decltype(func)>(func);
-    handle->set_invoker(&invoker);
-    REQUIRE(!invoker.finished);
+    condy::MultiShotOpFinishHandle<condy::SimpleCQEHandler, decltype(func),
+                                   MockReceiver>
+        handle(receiver, func);
+    REQUIRE(invoke_count == 0);
+    io_uring_cqe cqe{};
+    cqe.res = 42;
+    cqe.flags |= IORING_CQE_F_MORE;       // Indicate more results to come
+    auto op_finish = handle.handle(&cqe); // Multishot
+    REQUIRE(!op_finish);
+    REQUIRE(res == 42);
+    REQUIRE(invoke_count == 0);
+
+    io_uring_cqe cqe2{};
+    cqe2.res = 43;
+    res = -1;
+    op_finish = handle.handle(&cqe2); // Finish
+    REQUIRE(op_finish);
+    REQUIRE(res == -1);
+    REQUIRE(invoke_count == 1);
+}
+
+TEST_CASE("test op_finish_handle - zero copy op") {
+    size_t invoke_count = 0;
+    int r = 0;
+    MockReceiver receiver{invoke_count, r};
+
+    int res = -1;
+    auto func = [&](int r) { res = r; };
+
+    auto *handle = new condy::ZeroCopyOpFinishHandle<
+        condy::SimpleCQEHandler, decltype(func), MockReceiver>(receiver, func);
+
+    REQUIRE(invoke_count == 0);
     io_uring_cqe cqe{};
     cqe.res = 1;
     cqe.flags |= IORING_CQE_F_MORE; // Indicate more results to come
     auto op_finish1 = handle->handle(&cqe);
     REQUIRE(!op_finish1);
-    REQUIRE(invoker.finished);
-    REQUIRE(handle->extract_result() == 1);
+    REQUIRE(invoke_count == 1);
     REQUIRE(res == -1);
     io_uring_cqe cqe2{};
     cqe2.res = 2;
     cqe2.flags |= IORING_CQE_F_NOTIF;
     auto op_finish2 = handle->handle(&cqe2);
     REQUIRE(op_finish2);
+    REQUIRE(invoke_count == 1);
     REQUIRE(res == 2);
 }

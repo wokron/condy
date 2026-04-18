@@ -5,11 +5,8 @@
 #pragma once
 
 #include <concepts>
-#include <coroutine>
 #include <cstdint>
-#include <ranges>
 #include <type_traits>
-#include <utility>
 
 struct io_uring_cqe;
 struct io_uring_sqe;
@@ -17,31 +14,13 @@ struct io_uring_sqe;
 namespace condy {
 
 class Ring;
-class Invoker;
 class BufferBase;
-class Runtime;
 
 namespace detail {
 
 struct FixedFd;
 
 } // namespace detail
-
-template <typename T>
-concept HandleLike = requires(T handle, Invoker *invoker, Runtime *runtime) {
-    typename std::decay_t<T>::ReturnType;
-    { handle.set_invoker(invoker) } -> std::same_as<void>;
-    {
-        handle.extract_result()
-    } -> std::same_as<typename std::decay_t<T>::ReturnType>;
-    { handle.cancel(runtime) } -> std::same_as<void>;
-};
-
-template <typename T>
-concept OpFinishHandleLike =
-    HandleLike<T> && requires(T handle, io_uring_cqe *cqe) {
-        { handle.handle(cqe) } -> std::same_as<bool>;
-    };
 
 template <typename T>
 concept PrepFuncLike = requires(T prep_func, Ring *ring) {
@@ -56,25 +35,6 @@ concept CQEHandlerLike = requires(T handler, io_uring_cqe *cqe) {
         handler.extract_result()
     } noexcept -> std::same_as<typename std::decay_t<T>::ReturnType>;
 };
-
-template <typename T>
-concept AwaiterLike = requires(T awaiter) {
-    typename std::decay_t<T>::HandleType;
-    {
-        awaiter.get_handle()
-    } -> std::same_as<typename std::decay_t<T>::HandleType *>;
-    { awaiter.init_finish_handle() } -> std::same_as<void>;
-    { awaiter.register_operation(0) } -> std::same_as<void>;
-    { awaiter.await_ready() } noexcept -> std::same_as<bool>;
-    { awaiter.await_suspend(std::declval<std::coroutine_handle<>>()) } noexcept;
-    {
-        awaiter.await_resume()
-    } -> std::same_as<typename std::decay_t<T>::HandleType::ReturnType>;
-};
-
-template <typename T>
-concept AwaiterRange =
-    std::ranges::range<T> && AwaiterLike<std::ranges::range_value_t<T>>;
 
 template <typename T>
 concept BufferRingLike = requires(T br, io_uring_cqe *cqe) {

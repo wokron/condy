@@ -23,12 +23,12 @@ namespace detail {
 class BundledProvidedBufferQueue;
 class BundledProvidedBufferPool;
 
-template <AwaiterLike Awaiter>
+template <typename Awaiter>
 auto maybe_flag_fixed_fd(Awaiter &&op, const FixedFd &) {
     return flag<IOSQE_FIXED_FILE>(std::forward<Awaiter>(op));
 }
 
-template <AwaiterLike Awaiter> auto maybe_flag_fixed_fd(Awaiter &&op, int) {
+template <typename Awaiter> auto maybe_flag_fixed_fd(Awaiter &&op, int) {
     return std::forward<Awaiter>(op);
 }
 

@@ -127,8 +127,6 @@ TEST_CASE("test awaiter_operations - test ranged when_any") {
 TEST_CASE("test awaiter_operations - test empty range") {
     auto func = [&]() -> condy::Coro<void> {
         using Op = decltype(condy::detail::make_op_awaiter(io_uring_prep_nop));
-        REQUIRE_THROWS_AS(co_await condy::when_all(std::vector<Op>{}),
-                          std::invalid_argument);
         REQUIRE_THROWS_AS(co_await condy::when_any(std::vector<Op>{}),
                           std::invalid_argument);
     };

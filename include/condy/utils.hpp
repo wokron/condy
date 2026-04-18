@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -21,8 +20,10 @@
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
@@ -202,5 +203,23 @@ private:
 #else
 [[noreturn]] inline void unreachable() { __builtin_unreachable(); }
 #endif
+
+template <size_t Idx = 0, typename... Ts>
+std::variant<Ts...> tuple_at(std::tuple<Ts...> &results, size_t idx) {
+    if constexpr (Idx < sizeof...(Ts)) {
+        if (idx == Idx) {
+            return std::variant<Ts...>{std::in_place_index<Idx>,
+                                       std::move(std::get<Idx>(results))};
+        } else {
+            return tuple_at<Idx + 1, Ts...>(results, idx);
+        }
+    } else {
+        // Should not reach here, but we need to make compiler happy.
+        // Throwing an exception will lead to wrong optimization.
+        assert(false && "Index out of bounds");
+        return std::variant<Ts...>{std::in_place_index<0>,
+                                   std::move(std::get<0>(results))};
+    }
+}
 
 } // namespace condy

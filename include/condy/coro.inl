@@ -5,8 +5,10 @@
 
 #pragma once
 
+#include "condy/concepts.hpp"
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
+#include "condy/sender_operations.hpp"
 #include "condy/utils.hpp"
 #include <atomic>
 #include <coroutine>
@@ -154,6 +156,16 @@ public:
     };
 
     FinalAwaiter final_suspend() const noexcept { return {}; }
+
+    template <typename T>
+        requires(requires { typename std::decay_t<T>::ReturnType; })
+    auto await_transform(T &&value) {
+        return detail::as_awaiter(std::forward<T>(value));
+    }
+
+    template <typename T> T &&await_transform(T &&value) {
+        return std::forward<T>(value);
+    }
 
 public:
     // Should be called before task is scheduled
