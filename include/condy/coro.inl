@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "condy/concepts.hpp"
 #include "condy/coro.hpp"
 #include "condy/invoker.hpp"
 #include "condy/sender_operations.hpp"

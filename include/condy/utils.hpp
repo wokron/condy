@@ -214,11 +214,16 @@ std::variant<Ts...> tuple_at(std::tuple<Ts...> &results, size_t idx) {
             return tuple_at<Idx + 1, Ts...>(results, idx);
         }
     } else {
-        // Should not reach here, but we need to make compiler happy.
-        // Throwing an exception will lead to wrong optimization.
+#ifdef __clang__
+        // Should not reach here, but clang can misoptimize this path if we
+        // mark it as unreachable. Confirmed fixed in clang 20.1.8, but the
+        // exact cause was not investigated.
         assert(false && "Index out of bounds");
         return std::variant<Ts...>{std::in_place_index<0>,
                                    std::move(std::get<0>(results))};
+#else
+        panic_on("Index out of bounds in tuple_at");
+#endif
     }
 }
 
