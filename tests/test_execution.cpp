@@ -1,3 +1,4 @@
+#include "condy/async_operations.hpp"
 #include "condy/execution.hpp"
 #include "condy/runtime.hpp"
 #include <doctest/doctest.h>
@@ -24,6 +25,27 @@ TEST_CASE("test execution - schedule") {
     REQUIRE(executed);
     REQUIRE(thread_id == runtime_thread_id);
     REQUIRE(runtime_thread_id != std::this_thread::get_id());
+
+    runtime.allow_exit();
+    runtime_thread.join();
+}
+
+TEST_CASE("test execution - sender") {
+    condy::Runtime runtime;
+    std::thread runtime_thread([&] { runtime.run(); });
+
+    auto scheduler = condy::get_scheduler(runtime);
+
+    bool executed = false;
+    ex::sender auto sender =
+        ex::schedule(scheduler) | ex::let_value([&] {
+            executed = true;
+            return condy::detail::as_sender(condy::async_nop());
+        });
+
+    auto [r] = ex::sync_wait(sender).value();
+    REQUIRE(executed);
+    REQUIRE(r == 0);
 
     runtime.allow_exit();
     runtime_thread.join();
