@@ -57,6 +57,10 @@ private:
         void operator()() noexcept { runtime->cancel(self); }
     };
 
+    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using StopCallbackType =
+        typename stop_callback_of<TokenType>::template type<Cancellation>;
+
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {
         stop_callback_.reset();
@@ -65,7 +69,7 @@ protected:
 
     CQEHandler cqe_handler_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>

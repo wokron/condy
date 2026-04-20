@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "condy/concepts.hpp"
 #include "condy/context.hpp"
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
@@ -429,10 +430,14 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
+    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using StopCallbackType =
+        typename stop_callback_of<TokenType>::template type<Cancellation>;
+
 private:
     Channel &channel_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <typename T, size_t N>
@@ -502,10 +507,14 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
+    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using StopCallbackType =
+        typename stop_callback_of<TokenType>::template type<Cancellation>;
+
 private:
     Channel &channel_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PushSender {
