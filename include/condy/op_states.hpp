@@ -71,15 +71,14 @@ private:
 
 class WhenAnyCanceller {
 public:
-    void set_token(std::stop_token token) noexcept {
+    std::stop_token chain_token(std::stop_token token) noexcept {
         if (token.stop_possible()) {
             stop_callback_.emplace(std::move(token), Cancellation{this});
         }
+        return stop_source_.get_token();
     }
 
     void maybe_request_stop() noexcept { stop_source_.request_stop(); }
-
-    std::stop_token get_token() noexcept { return stop_source_.get_token(); }
 
     void maybe_reset() noexcept { stop_callback_.reset(); }
 
@@ -96,18 +95,13 @@ private:
 
 class WhenAllCanceller {
 public:
-    void set_token(std::stop_token token) noexcept {
-        stop_token_ = std::move(token);
+    std::stop_token chain_token(std::stop_token token) noexcept {
+        return token;
     }
-
-    std::stop_token get_token() const noexcept { return stop_token_; }
 
     void maybe_request_stop() noexcept {}
 
     void maybe_reset() noexcept {}
-
-private:
-    std::stop_token stop_token_;
 };
 
 template <typename Receiver, typename Canceller, typename... Senders>
@@ -115,8 +109,8 @@ class ParallelOperationState {
 public:
     ParallelOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : receiver_(std::move(receiver)) {
-        canceller_.set_token(receiver_.get_stop_token());
-        connect_senders_(senders);
+        auto next_token = canceller_.chain_token(receiver_.get_stop_token());
+        connect_senders_(senders, next_token);
     }
 
     ParallelOperationState(ParallelOperationState &&) = delete;
@@ -134,7 +128,6 @@ public:
             std::move(receiver_)(
                 std::make_pair(std::move(order_), std::move(results_)));
         } else {
-
             std::apply(
                 [&](auto &&...states) { (states.get().start(flags), ...); },
                 op_states_);
@@ -143,13 +136,14 @@ public:
 
 private:
     template <size_t I = 0>
-    void connect_senders_(std::tuple<Senders...> &senders) noexcept {
+    void connect_senders_(std::tuple<Senders...> &senders,
+                          const std::stop_token &token) noexcept {
         if constexpr (I < sizeof...(Senders)) {
             std::get<I>(op_states_).accept([&] {
                 return std::move(std::get<I>(senders))
-                    .connect(ChildReceiver<I>{this, canceller_.get_token()});
+                    .connect(ChildReceiver<I>{this, token});
             });
-            connect_senders_<I + 1>(senders);
+            connect_senders_<I + 1>(senders, token);
         }
     }
 
@@ -263,11 +257,11 @@ public:
     RangedParallelOperationState(std::vector<Sender> senders, Receiver receiver)
         : op_states_(senders.size()), order_(senders.size()),
           results_(senders.size()), receiver_(std::move(receiver)) {
-        canceller_.set_token(receiver_.get_stop_token());
+        auto next_token = canceller_.chain_token(receiver_.get_stop_token());
         for (size_t i = 0; i < senders.size(); ++i) {
             op_states_[i].accept([&] {
                 return std::move(senders[i])
-                    .connect(ChildReceiver{this, i, canceller_.get_token()});
+                    .connect(ChildReceiver{this, i, next_token});
             });
         }
     }
