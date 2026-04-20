@@ -1,3 +1,4 @@
+#include "condy/concepts.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
 #include <condy/awaiters.hpp>
@@ -6,7 +7,6 @@
 #include <doctest/doctest.h>
 #include <memory>
 #include <optional>
-#include <stop_token>
 
 namespace {
 
@@ -48,6 +48,7 @@ struct SimpleSender {
                        Receiver receiver)
             : handle_ptr_(std::move(handle_ptr)),
               receiver_(std::move(receiver)) {}
+
         void start(unsigned int) {
             handle_ptr_->set_invoker(this);
             auto stop_token = receiver_.get_stop_token();
@@ -56,6 +57,7 @@ struct SimpleSender {
                                        Cancellation{this});
             }
         }
+
         void invoke() {
             int res = handle_ptr_->extract_result();
             std::move(receiver_)(res);
@@ -67,9 +69,13 @@ struct SimpleSender {
         };
         void cancel_() { handle_ptr_->cancel(nullptr); }
 
+        using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+        using StopCallbackType =
+            condy::stop_callback_of<TokenType>::template type<Cancellation>;
+
         std::shared_ptr<SimpleFinishHandle> handle_ptr_;
         Receiver receiver_;
-        std::optional<std::stop_callback<Cancellation>> stop_callback_;
+        std::optional<StopCallbackType> stop_callback_;
     };
 
     // Use ptr to make handle accessible outside of ParallelAwaiter
