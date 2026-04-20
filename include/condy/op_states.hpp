@@ -69,9 +69,11 @@ private:
     OperationState op_state_;
 };
 
-class WhenAnyCanceller {
+template <typename Receiver> class WhenAnyCanceller {
 public:
-    template <typename TokenType> auto chain_token(TokenType token) noexcept {
+    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+
+    auto chain_token(TokenType token) noexcept {
         if (token.stop_possible()) {
             stop_callback_.emplace(std::move(token), Cancellation{this});
         }
@@ -89,15 +91,18 @@ private:
     };
     void cancel_() noexcept { stop_source_.request_stop(); }
 
+    using StopCallbackType =
+        typename stop_callback_of<TokenType>::template type<Cancellation>;
+
     std::stop_source stop_source_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
-class WhenAllCanceller {
+template <typename Receiver> class WhenAllCanceller {
 public:
-    template <typename TokenType> auto chain_token(TokenType token) noexcept {
-        return token;
-    }
+    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+
+    auto chain_token(TokenType token) noexcept { return token; }
 
     void maybe_request_stop() noexcept {}
 
@@ -194,11 +199,11 @@ protected:
 
 template <typename Receiver, typename... Senders>
 using ParallelAnyOperationState =
-    ParallelOperationState<Receiver, WhenAnyCanceller, Senders...>;
+    ParallelOperationState<Receiver, WhenAnyCanceller<Receiver>, Senders...>;
 
 template <typename Receiver, typename... Senders>
 using ParallelAllOperationState =
-    ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
+    ParallelOperationState<Receiver, WhenAllCanceller<Receiver>, Senders...>;
 
 template <typename Receiver> struct ReceiverAllWrapper {
     Receiver receiver;
@@ -337,11 +342,11 @@ protected:
 
 template <typename Receiver, typename Sender>
 using RangedParallelAllOperationState =
-    RangedParallelOperationState<Receiver, WhenAllCanceller, Sender>;
+    RangedParallelOperationState<Receiver, WhenAllCanceller<Receiver>, Sender>;
 
 template <typename Receiver, typename Sender>
 using RangedParallelAnyOperationState =
-    RangedParallelOperationState<Receiver, WhenAnyCanceller, Sender>;
+    RangedParallelOperationState<Receiver, WhenAnyCanceller<Receiver>, Sender>;
 
 template <typename Receiver>
 using ReceiverRangedAllWrapper = ReceiverAllWrapper<Receiver>;

@@ -55,16 +55,16 @@ template <typename T, typename Callback>
 concept HasStopCallback =
     requires { typename T::template callback_type<Callback>; };
 
-template <typename T, typename Callback> struct stop_callback_of;
+template <typename T, typename Callback> struct stop_callback_traits;
 template <typename T, typename Callback>
     requires HasStopCallback<T, Callback>
-struct stop_callback_of<T, Callback> {
+struct stop_callback_traits<T, Callback> {
     using type = typename T::template callback_type<Callback>;
 };
 template <typename T, typename Callback>
     requires(!HasStopCallback<T, Callback> &&
              std::is_same_v<T, std::stop_token>)
-struct stop_callback_of<T, Callback> {
+struct stop_callback_traits<T, Callback> {
     using type = std::stop_callback<Callback>;
 };
 
@@ -72,7 +72,7 @@ struct stop_callback_of<T, Callback> {
 
 template <typename T> struct stop_callback_of {
     template <typename Callback>
-    using type = typename detail::stop_callback_of<T, Callback>::type;
+    using type = typename detail::stop_callback_traits<T, Callback>::type;
 };
 
 } // namespace condy
