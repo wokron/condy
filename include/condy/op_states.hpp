@@ -71,7 +71,7 @@ private:
 
 class WhenAnyCanceller {
 public:
-    std::stop_token chain_token(std::stop_token token) noexcept {
+    template <typename TokenType> auto chain_token(TokenType token) noexcept {
         if (token.stop_possible()) {
             stop_callback_.emplace(std::move(token), Cancellation{this});
         }
@@ -95,7 +95,7 @@ private:
 
 class WhenAllCanceller {
 public:
-    std::stop_token chain_token(std::stop_token token) noexcept {
+    template <typename TokenType> auto chain_token(TokenType token) noexcept {
         return token;
     }
 
@@ -135,9 +135,14 @@ public:
     }
 
 private:
+    using ReceiverTokenType =
+        decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = decltype(std::declval<Canceller>().chain_token(
+        std::declval<ReceiverTokenType>()));
+
     template <size_t I = 0>
     void connect_senders_(std::tuple<Senders...> &senders,
-                          const std::stop_token &token) noexcept {
+                          const TokenType &token) noexcept {
         if constexpr (I < sizeof...(Senders)) {
             std::get<I>(op_states_).accept([&] {
                 return std::move(std::get<I>(senders))
@@ -161,7 +166,7 @@ private:
 
     template <size_t I> struct ChildReceiver {
         ParallelOperationState *self;
-        std::stop_token stop_token;
+        TokenType stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_<I>(std::forward<R>(result));
         }
@@ -291,6 +296,11 @@ public:
     }
 
 private:
+    using ReceiverTokenType =
+        decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = decltype(std::declval<Canceller>().chain_token(
+        std::declval<ReceiverTokenType>()));
+
     void receive_(size_t index, auto &&result) noexcept {
         canceller_.maybe_request_stop();
         size_t no = completed_count_++;
@@ -305,7 +315,7 @@ private:
     struct ChildReceiver {
         RangedParallelOperationState *self;
         size_t index;
-        std::stop_token stop_token;
+        TokenType stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_(index, std::forward<R>(result));
         }
