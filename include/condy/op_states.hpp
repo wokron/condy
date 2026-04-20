@@ -170,7 +170,7 @@ private:
             self->receive_<I>(std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept {
+        auto get_stop_token() const noexcept {
             return self->canceller_.get_token();
         }
     };
@@ -209,9 +209,7 @@ template <typename Receiver> struct ReceiverAllWrapper {
         auto &[order, results] = result;
         std::move(receiver)(std::move(results));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver> struct ReceiverAnyWrapper {
@@ -222,9 +220,7 @@ template <typename Receiver> struct ReceiverAnyWrapper {
         size_t index = order[0];
         std::move(receiver)(tuple_at(results, index));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver, typename... Senders>
@@ -319,7 +315,7 @@ private:
             self->receive_(index, std::forward<R>(result));
         }
 
-        std::stop_token get_stop_token() const noexcept {
+        auto get_stop_token() const noexcept {
             return self->canceller_.get_token();
         }
     };
@@ -357,9 +353,7 @@ template <typename Receiver> struct ReceiverRangedAnyWrapper {
         size_t index = order[0];
         std::move(receiver)(std::make_pair(index, std::move(results[index])));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver, typename Sender>
