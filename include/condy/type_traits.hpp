@@ -5,6 +5,8 @@
 #pragma once
 
 #include <stop_token>
+#include <type_traits>
+#include <utility>
 
 namespace condy {
 
@@ -35,9 +37,10 @@ using stop_callback_t =
 
 template <typename Sender, typename Receiver>
 using operation_state_t =
-    decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    decltype(std::declval<Sender &&>().connect(std::declval<Receiver &&>()));
 
 template <typename Receiver>
-using stop_token_t = decltype(std::declval<Receiver>().get_stop_token());
+using stop_token_t =
+    std::remove_cvref_t<decltype(std::declval<Receiver &>().get_stop_token())>;
 
 } // namespace condy

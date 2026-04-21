@@ -135,8 +135,9 @@ public:
     }
 
 private:
-    using TokenType = decltype(std::declval<Canceller>().chain_token(
-        std::declval<stop_token_t<Receiver>>()));
+    using TokenType =
+        std::remove_cvref_t<decltype(std::declval<Canceller &>().chain_token(
+            std::declval<stop_token_t<Receiver>>()))>;
 
     template <size_t I = 0>
     void connect_senders_(std::tuple<Senders...> &senders,
@@ -295,8 +296,9 @@ public:
     }
 
 private:
-    using TokenType = decltype(std::declval<Canceller>().chain_token(
-        std::declval<stop_token_t<Receiver>>()));
+    using TokenType =
+        std::remove_cvref_t<decltype(std::declval<Canceller &>().chain_token(
+            std::declval<stop_token_t<Receiver>>()))>;
 
     template <typename R> void receive_(size_t index, R &&result) noexcept {
         canceller_.maybe_request_stop();

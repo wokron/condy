@@ -69,7 +69,7 @@ struct SimpleSender {
         };
         void cancel_() { handle_ptr_->cancel(nullptr); }
 
-        using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+        using TokenType = condy::stop_token_t<Receiver>;
         using StopCallbackType =
             condy::stop_callback_t<TokenType, Cancellation>;
 
