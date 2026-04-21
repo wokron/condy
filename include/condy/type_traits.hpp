@@ -29,10 +29,9 @@ struct stop_callback_traits<T, Callback> {
 
 } // namespace detail
 
-template <typename T> struct stop_callback_of {
-    template <typename Callback>
-    using type = typename detail::stop_callback_traits<T, Callback>::type;
-};
+template <typename T, typename Callback>
+using stop_callback_t =
+    typename detail::stop_callback_traits<T, Callback>::type;
 
 template <typename Sender, typename Receiver>
 using operation_state_t =

@@ -91,8 +91,7 @@ private:
     };
     void cancel_() noexcept { stop_source_.request_stop(); }
 
-    using StopCallbackType =
-        typename stop_callback_of<TokenType>::template type<Cancellation>;
+    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
 
     std::stop_source stop_source_;
     std::optional<StopCallbackType> stop_callback_;

@@ -71,7 +71,7 @@ struct SimpleSender {
 
         using TokenType = decltype(std::declval<Receiver>().get_stop_token());
         using StopCallbackType =
-            condy::stop_callback_of<TokenType>::template type<Cancellation>;
+            condy::stop_callback_t<TokenType, Cancellation>;
 
         std::shared_ptr<SimpleFinishHandle> handle_ptr_;
         Receiver receiver_;

@@ -58,8 +58,7 @@ private:
     };
 
     using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType =
-        typename stop_callback_of<TokenType>::template type<Cancellation>;
+    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
 
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {

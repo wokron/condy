@@ -430,8 +430,7 @@ private:
     };
 
     using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType =
-        typename stop_callback_of<TokenType>::template type<Cancellation>;
+    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
 
 private:
     Channel &channel_;
@@ -507,8 +506,7 @@ private:
     };
 
     using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType =
-        typename stop_callback_of<TokenType>::template type<Cancellation>;
+    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
 
 private:
     Channel &channel_;
