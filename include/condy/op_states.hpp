@@ -8,6 +8,7 @@
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/utils.hpp"
 #include <array>
 #include <cstddef>

@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include "condy/concepts.hpp"
 #include "condy/context.hpp"
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/utils.hpp"
 #include <bit>
 #include <cerrno>
@@ -19,7 +19,6 @@
 #include <cstdint>
 #include <new>
 #include <optional>
-#include <stop_token>
 #include <type_traits>
 
 namespace condy {

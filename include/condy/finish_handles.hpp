@@ -10,10 +10,10 @@
 
 #include "condy/concepts.hpp"
 #include "condy/runtime.hpp"
+#include "condy/type_traits.hpp"
 #include <cassert>
 #include <cerrno>
 #include <optional>
-#include <stop_token>
 #include <utility>
 
 namespace condy {
