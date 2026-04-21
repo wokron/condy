@@ -34,4 +34,8 @@ template <typename T> struct stop_callback_of {
     using type = typename detail::stop_callback_traits<T, Callback>::type;
 };
 
+template <typename Sender, typename Receiver>
+using operation_state_t =
+    decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+
 } // namespace condy

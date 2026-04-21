@@ -65,8 +65,7 @@ public:
     void start(unsigned int flags) noexcept { op_state_.start(flags | Flags); }
 
 private:
-    using OperationState =
-        decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    using OperationState = operation_state_t<Sender, Receiver>;
     OperationState op_state_;
 };
 
@@ -182,9 +181,8 @@ private:
     template <typename T> struct operation_state_traits;
     template <size_t... Is>
     struct operation_state_traits<std::index_sequence<Is...>> {
-        using type =
-            std::tuple<RawStorage<decltype(std::declval<Senders>().connect(
-                std::declval<ChildReceiver<Is>>()))>...>;
+        using type = std::tuple<
+            RawStorage<operation_state_t<Senders, ChildReceiver<Is>>>...>;
     };
     using OperationStates = typename operation_state_traits<
         std::make_index_sequence<sizeof...(Senders)>>::type;
@@ -329,8 +327,7 @@ private:
     };
 
     using OperationStates =
-        std::vector<RawStorage<decltype(std::declval<Sender>().connect(
-            std::declval<ChildReceiver>()))>>;
+        std::vector<RawStorage<operation_state_t<Sender, ChildReceiver>>>;
 
 protected:
     OperationStates op_states_;
