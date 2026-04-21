@@ -429,7 +429,7 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
-    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = stop_token_t<Receiver>;
     using StopCallbackType =
         typename stop_callback_of<TokenType>::template type<Cancellation>;
 
@@ -506,7 +506,7 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
-    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = stop_token_t<Receiver>;
     using StopCallbackType =
         typename stop_callback_of<TokenType>::template type<Cancellation>;
 

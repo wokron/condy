@@ -71,7 +71,7 @@ private:
 
 template <typename Receiver> class WhenAnyCanceller {
 public:
-    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = stop_token_t<Receiver>;
 
     auto chain_token(TokenType token) noexcept {
         if (token.stop_possible()) {
@@ -100,7 +100,7 @@ private:
 
 template <typename Receiver> class WhenAllCanceller {
 public:
-    using TokenType = decltype(std::declval<Receiver>().get_stop_token());
+    using TokenType = stop_token_t<Receiver>;
 
     auto chain_token(TokenType token) noexcept { return token; }
 
@@ -140,8 +140,7 @@ public:
     }
 
 private:
-    using ReceiverTokenType =
-        decltype(std::declval<Receiver>().get_stop_token());
+    using ReceiverTokenType = stop_token_t<Receiver>;
     using TokenType = decltype(std::declval<Canceller>().chain_token(
         std::declval<ReceiverTokenType>()));
 
@@ -300,8 +299,7 @@ public:
     }
 
 private:
-    using ReceiverTokenType =
-        decltype(std::declval<Receiver>().get_stop_token());
+    using ReceiverTokenType = stop_token_t<Receiver>;
     using TokenType = decltype(std::declval<Canceller>().chain_token(
         std::declval<ReceiverTokenType>()));
 

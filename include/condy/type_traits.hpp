@@ -38,4 +38,7 @@ template <typename Sender, typename Receiver>
 using operation_state_t =
     decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
 
+template <typename Receiver>
+using stop_token_t = decltype(std::declval<Receiver>().get_stop_token());
+
 } // namespace condy
