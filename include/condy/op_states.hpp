@@ -69,10 +69,8 @@ private:
     OperationState op_state_;
 };
 
-template <typename Receiver> class WhenAnyCanceller {
+template <typename TokenType> class WhenAnyCanceller {
 public:
-    using TokenType = stop_token_t<Receiver>;
-
     auto chain_token(TokenType token) noexcept {
         if (token.stop_possible()) {
             stop_callback_.emplace(std::move(token), Cancellation{this});
@@ -97,10 +95,8 @@ private:
     std::optional<StopCallbackType> stop_callback_;
 };
 
-template <typename Receiver> class WhenAllCanceller {
+template <typename TokenType> class WhenAllCanceller {
 public:
-    using TokenType = stop_token_t<Receiver>;
-
     auto chain_token(TokenType token) noexcept { return token; }
 
     void maybe_request_stop() noexcept {}
@@ -139,9 +135,8 @@ public:
     }
 
 private:
-    using ReceiverTokenType = stop_token_t<Receiver>;
     using TokenType = decltype(std::declval<Canceller>().chain_token(
-        std::declval<ReceiverTokenType>()));
+        std::declval<stop_token_t<Receiver>>()));
 
     template <size_t I = 0>
     void connect_senders_(std::tuple<Senders...> &senders,
@@ -196,11 +191,13 @@ protected:
 
 template <typename Receiver, typename... Senders>
 using ParallelAnyOperationState =
-    ParallelOperationState<Receiver, WhenAnyCanceller<Receiver>, Senders...>;
+    ParallelOperationState<Receiver, WhenAnyCanceller<stop_token_t<Receiver>>,
+                           Senders...>;
 
 template <typename Receiver, typename... Senders>
 using ParallelAllOperationState =
-    ParallelOperationState<Receiver, WhenAllCanceller<Receiver>, Senders...>;
+    ParallelOperationState<Receiver, WhenAllCanceller<stop_token_t<Receiver>>,
+                           Senders...>;
 
 template <typename Receiver> struct ReceiverAllWrapper {
     Receiver receiver;
@@ -298,15 +295,14 @@ public:
     }
 
 private:
-    using ReceiverTokenType = stop_token_t<Receiver>;
     using TokenType = decltype(std::declval<Canceller>().chain_token(
-        std::declval<ReceiverTokenType>()));
+        std::declval<stop_token_t<Receiver>>()));
 
-    void receive_(size_t index, auto &&result) noexcept {
+    template <typename R> void receive_(size_t index, R &&result) noexcept {
         canceller_.maybe_request_stop();
         size_t no = completed_count_++;
         order_[no] = index;
-        results_[index] = std::forward<decltype(result)>(result);
+        results_[index] = std::forward<R>(result);
         if (no + 1 == op_states_.size()) {
             std::move(receiver_)(
                 std::make_pair(std::move(order_), std::move(results_)));
@@ -336,12 +332,12 @@ protected:
 };
 
 template <typename Receiver, typename Sender>
-using RangedParallelAllOperationState =
-    RangedParallelOperationState<Receiver, WhenAllCanceller<Receiver>, Sender>;
+using RangedParallelAllOperationState = RangedParallelOperationState<
+    Receiver, WhenAllCanceller<stop_token_t<Receiver>>, Sender>;
 
 template <typename Receiver, typename Sender>
-using RangedParallelAnyOperationState =
-    RangedParallelOperationState<Receiver, WhenAnyCanceller<Receiver>, Sender>;
+using RangedParallelAnyOperationState = RangedParallelOperationState<
+    Receiver, WhenAnyCanceller<stop_token_t<Receiver>>, Sender>;
 
 template <typename Receiver>
 using ReceiverRangedAllWrapper = ReceiverAllWrapper<Receiver>;

@@ -57,8 +57,8 @@ private:
         void operator()() noexcept { runtime->cancel(self); }
     };
 
-    using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
 
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {

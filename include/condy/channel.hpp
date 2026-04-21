@@ -429,8 +429,8 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
-    using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
 
 private:
     Channel &channel_;
@@ -505,8 +505,8 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
-    using TokenType = stop_token_t<Receiver>;
-    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
 
 private:
     Channel &channel_;
