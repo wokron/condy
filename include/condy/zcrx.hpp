@@ -35,8 +35,7 @@ public:
     // Device-less constructor, DO NOT use this in production code if you don't
     // know what you are doing.
     ZeroCopyRxBufferPool(uint32_t rq_entries, const ZeroCopyRxArea &area)
-        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, 2) {
-        // TODO: flags should be an enum class
+        : ZeroCopyRxBufferPool(0, 0, rq_entries, area, ZCRX_REG_NODEV) {
         device_less_ = true;
     }
 
