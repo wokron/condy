@@ -277,6 +277,10 @@ public:
         tsan_release(&request);
         schedule_msg_ring_(curr_runtime,
                            encode_work(&request, WorkType::Cancel));
+        if (curr_runtime != nullptr) {
+            // Ensure the cancel msg is submitted.
+            curr_runtime->ring_.submit();
+        }
         // Block until the runtime thread has submitted the cancel SQE. This is
         // important to prevent address reuse of the same data pointer, which
         // can lead to incorrect cancellation or other bugs.
