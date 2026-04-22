@@ -10,10 +10,10 @@
 
 #include "condy/concepts.hpp"
 #include "condy/runtime.hpp"
+#include "condy/type_traits.hpp"
 #include <cassert>
 #include <cerrno>
 #include <optional>
-#include <stop_token>
 #include <utility>
 
 namespace condy {
@@ -57,6 +57,9 @@ private:
         void operator()() noexcept { runtime->cancel(self); }
     };
 
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
+
 protected:
     void finish_(io_uring_cqe *cqe) noexcept {
         stop_callback_.reset();
@@ -65,7 +68,7 @@ protected:
 
     CQEHandler cqe_handler_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <CQEHandlerLike CQEHandler, typename Func, typename Receiver>

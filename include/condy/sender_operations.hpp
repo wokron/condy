@@ -42,6 +42,19 @@ auto build_zero_copy_op_sender(PrepFunc &&func, FreeFunc &&free_func,
 
 namespace detail {
 
+struct NeverStopToken {
+public:
+    template <typename> struct callback_type {
+        constexpr explicit callback_type(NeverStopToken, auto &&) noexcept {}
+    };
+
+    static constexpr bool stop_requested() noexcept { return false; }
+
+    static constexpr bool stop_possible() noexcept { return false; }
+
+    constexpr bool operator==(NeverStopToken const &) const noexcept = default;
+};
+
 template <typename Sender> class SenderAwaiter {
 public:
     SenderAwaiter(Sender sender)
@@ -75,7 +88,7 @@ private:
         template <typename R> void operator()(R &&result) noexcept {
             self->handle_result_(std::forward<R>(result));
         }
-        std::stop_token get_stop_token() const noexcept { return {}; }
+        NeverStopToken get_stop_token() const noexcept { return {}; }
     };
 
     template <typename R> void handle_result_(R &&result) {
@@ -87,8 +100,7 @@ private:
         }
     }
 
-    using OperationState =
-        decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    using OperationState = operation_state_t<Sender, Receiver>;
     // Await/complete path is serialized, so atomic is not needed here.
     std::coroutine_handle<> handle_ = nullptr;
     OperationState operation_state_;

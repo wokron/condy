@@ -8,6 +8,7 @@
 #include "condy/concepts.hpp"
 #include "condy/condy_uring.hpp"
 #include "condy/finish_handles.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/utils.hpp"
 #include <array>
 #include <cstddef>
@@ -64,22 +65,20 @@ public:
     void start(unsigned int flags) noexcept { op_state_.start(flags | Flags); }
 
 private:
-    using OperationState =
-        decltype(std::declval<Sender>().connect(std::declval<Receiver>()));
+    using OperationState = operation_state_t<Sender, Receiver>;
     OperationState op_state_;
 };
 
-class WhenAnyCanceller {
+template <typename TokenType> class WhenAnyCanceller {
 public:
-    void set_token(std::stop_token token) noexcept {
+    auto chain_token(TokenType token) noexcept {
         if (token.stop_possible()) {
             stop_callback_.emplace(std::move(token), Cancellation{this});
         }
+        return stop_source_.get_token();
     }
 
     void maybe_request_stop() noexcept { stop_source_.request_stop(); }
-
-    std::stop_token get_token() noexcept { return stop_source_.get_token(); }
 
     void maybe_reset() noexcept { stop_callback_.reset(); }
 
@@ -90,24 +89,19 @@ private:
     };
     void cancel_() noexcept { stop_source_.request_stop(); }
 
+    using StopCallbackType = stop_callback_t<TokenType, Cancellation>;
+
     std::stop_source stop_source_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
-class WhenAllCanceller {
+template <typename TokenType> class WhenAllCanceller {
 public:
-    void set_token(std::stop_token token) noexcept {
-        stop_token_ = std::move(token);
-    }
-
-    std::stop_token get_token() const noexcept { return stop_token_; }
+    auto chain_token(TokenType token) noexcept { return token; }
 
     void maybe_request_stop() noexcept {}
 
     void maybe_reset() noexcept {}
-
-private:
-    std::stop_token stop_token_;
 };
 
 template <typename Receiver, typename Canceller, typename... Senders>
@@ -115,7 +109,8 @@ class ParallelOperationState {
 public:
     ParallelOperationState(std::tuple<Senders...> senders, Receiver receiver)
         : receiver_(std::move(receiver)) {
-        connect_senders_(senders);
+        auto next_token = canceller_.chain_token(receiver_.get_stop_token());
+        connect_senders_(senders, next_token);
     }
 
     ParallelOperationState(ParallelOperationState &&) = delete;
@@ -133,7 +128,6 @@ public:
             std::move(receiver_)(
                 std::make_pair(std::move(order_), std::move(results_)));
         } else {
-            canceller_.set_token(receiver_.get_stop_token());
             std::apply(
                 [&](auto &&...states) { (states.get().start(flags), ...); },
                 op_states_);
@@ -141,14 +135,19 @@ public:
     }
 
 private:
+    using TokenType =
+        std::remove_cvref_t<decltype(std::declval<Canceller &>().chain_token(
+            std::declval<stop_token_t<Receiver>>()))>;
+
     template <size_t I = 0>
-    void connect_senders_(std::tuple<Senders...> &senders) noexcept {
+    void connect_senders_(std::tuple<Senders...> &senders,
+                          const TokenType &token) noexcept {
         if constexpr (I < sizeof...(Senders)) {
             std::get<I>(op_states_).accept([&] {
                 return std::move(std::get<I>(senders))
-                    .connect(ChildReceiver<I>{this});
+                    .connect(ChildReceiver<I>{this, token});
             });
-            connect_senders_<I + 1>(senders);
+            connect_senders_<I + 1>(senders, token);
         }
     }
 
@@ -166,21 +165,18 @@ private:
 
     template <size_t I> struct ChildReceiver {
         ParallelOperationState *self;
+        TokenType stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_<I>(std::forward<R>(result));
         }
-
-        std::stop_token get_stop_token() const noexcept {
-            return self->canceller_.get_token();
-        }
+        auto get_stop_token() const noexcept { return stop_token; }
     };
 
     template <typename T> struct operation_state_traits;
     template <size_t... Is>
     struct operation_state_traits<std::index_sequence<Is...>> {
-        using type =
-            std::tuple<RawStorage<decltype(std::declval<Senders>().connect(
-                std::declval<ChildReceiver<Is>>()))>...>;
+        using type = std::tuple<
+            RawStorage<operation_state_t<Senders, ChildReceiver<Is>>>...>;
     };
     using OperationStates = typename operation_state_traits<
         std::make_index_sequence<sizeof...(Senders)>>::type;
@@ -196,11 +192,13 @@ protected:
 
 template <typename Receiver, typename... Senders>
 using ParallelAnyOperationState =
-    ParallelOperationState<Receiver, WhenAnyCanceller, Senders...>;
+    ParallelOperationState<Receiver, WhenAnyCanceller<stop_token_t<Receiver>>,
+                           Senders...>;
 
 template <typename Receiver, typename... Senders>
 using ParallelAllOperationState =
-    ParallelOperationState<Receiver, WhenAllCanceller, Senders...>;
+    ParallelOperationState<Receiver, WhenAllCanceller<stop_token_t<Receiver>>,
+                           Senders...>;
 
 template <typename Receiver> struct ReceiverAllWrapper {
     Receiver receiver;
@@ -209,9 +207,7 @@ template <typename Receiver> struct ReceiverAllWrapper {
         auto &[order, results] = result;
         std::move(receiver)(std::move(results));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver> struct ReceiverAnyWrapper {
@@ -222,9 +218,7 @@ template <typename Receiver> struct ReceiverAnyWrapper {
         size_t index = order[0];
         std::move(receiver)(tuple_at(results, index));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver, typename... Senders>
@@ -268,9 +262,11 @@ public:
     RangedParallelOperationState(std::vector<Sender> senders, Receiver receiver)
         : op_states_(senders.size()), order_(senders.size()),
           results_(senders.size()), receiver_(std::move(receiver)) {
+        auto next_token = canceller_.chain_token(receiver_.get_stop_token());
         for (size_t i = 0; i < senders.size(); ++i) {
             op_states_[i].accept([&] {
-                return std::move(senders[i]).connect(ChildReceiver{this, i});
+                return std::move(senders[i])
+                    .connect(ChildReceiver{this, i, next_token});
             });
         }
     }
@@ -293,7 +289,6 @@ public:
             std::move(receiver_)(
                 std::make_pair(std::move(order_), std::move(results_)));
         } else {
-            canceller_.set_token(receiver_.get_stop_token());
             for (auto &op_state : op_states_) {
                 op_state.get().start(flags);
             }
@@ -301,11 +296,15 @@ public:
     }
 
 private:
-    void receive_(size_t index, auto &&result) noexcept {
+    using TokenType =
+        std::remove_cvref_t<decltype(std::declval<Canceller &>().chain_token(
+            std::declval<stop_token_t<Receiver>>()))>;
+
+    template <typename R> void receive_(size_t index, R &&result) noexcept {
         canceller_.maybe_request_stop();
         size_t no = completed_count_++;
         order_[no] = index;
-        results_[index] = std::forward<decltype(result)>(result);
+        results_[index] = std::forward<R>(result);
         if (no + 1 == op_states_.size()) {
             std::move(receiver_)(
                 std::make_pair(std::move(order_), std::move(results_)));
@@ -315,18 +314,15 @@ private:
     struct ChildReceiver {
         RangedParallelOperationState *self;
         size_t index;
+        TokenType stop_token;
         template <typename R> void operator()(R &&result) noexcept {
             self->receive_(index, std::forward<R>(result));
         }
-
-        std::stop_token get_stop_token() const noexcept {
-            return self->canceller_.get_token();
-        }
+        auto get_stop_token() const noexcept { return stop_token; }
     };
 
     using OperationStates =
-        std::vector<RawStorage<decltype(std::declval<Sender>().connect(
-            std::declval<ChildReceiver>()))>>;
+        std::vector<RawStorage<operation_state_t<Sender, ChildReceiver>>>;
 
 protected:
     OperationStates op_states_;
@@ -338,12 +334,12 @@ protected:
 };
 
 template <typename Receiver, typename Sender>
-using RangedParallelAllOperationState =
-    RangedParallelOperationState<Receiver, WhenAllCanceller, Sender>;
+using RangedParallelAllOperationState = RangedParallelOperationState<
+    Receiver, WhenAllCanceller<stop_token_t<Receiver>>, Sender>;
 
 template <typename Receiver, typename Sender>
-using RangedParallelAnyOperationState =
-    RangedParallelOperationState<Receiver, WhenAnyCanceller, Sender>;
+using RangedParallelAnyOperationState = RangedParallelOperationState<
+    Receiver, WhenAnyCanceller<stop_token_t<Receiver>>, Sender>;
 
 template <typename Receiver>
 using ReceiverRangedAllWrapper = ReceiverAllWrapper<Receiver>;
@@ -357,9 +353,7 @@ template <typename Receiver> struct ReceiverRangedAnyWrapper {
         size_t index = order[0];
         std::move(receiver)(std::make_pair(index, std::move(results[index])));
     }
-    std::stop_token get_stop_token() const noexcept {
-        return receiver.get_stop_token();
-    }
+    auto get_stop_token() const noexcept { return receiver.get_stop_token(); }
 };
 
 template <typename Receiver, typename Sender>

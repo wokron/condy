@@ -11,6 +11,7 @@
 #include "condy/intrusive.hpp"
 #include "condy/invoker.hpp"
 #include "condy/runtime.hpp"
+#include "condy/type_traits.hpp"
 #include "condy/utils.hpp"
 #include <bit>
 #include <cerrno>
@@ -18,7 +19,6 @@
 #include <cstdint>
 #include <new>
 #include <optional>
-#include <stop_token>
 #include <type_traits>
 
 namespace condy {
@@ -429,10 +429,13 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
+
 private:
     Channel &channel_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <typename T, size_t N>
@@ -502,10 +505,13 @@ private:
         void operator()() noexcept { self->cancel_(); }
     };
 
+    using StopCallbackType =
+        stop_callback_t<stop_token_t<Receiver>, Cancellation>;
+
 private:
     Channel &channel_;
     Receiver receiver_;
-    std::optional<std::stop_callback<Cancellation>> stop_callback_;
+    std::optional<StopCallbackType> stop_callback_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PushSender {
