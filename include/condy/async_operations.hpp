@@ -702,7 +702,7 @@ inline auto async_recv_multishot(Fd sockfd, Buffer &buf, int flags,
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+#if !IO_URING_CHECK_VERSION(2, 15) // >= 2.15
 
 namespace detail {
 

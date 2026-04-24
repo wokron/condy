@@ -1082,7 +1082,7 @@ TEST_CASE("test async_operations - test pipe - direct") {
 }
 #endif
 
-#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+#if !IO_URING_CHECK_VERSION(2, 15) // >= 2.15
 TEST_CASE("test async_operations - test recv - zc multishot") {
     int sv[2];
     create_tcp_socketpair(sv);

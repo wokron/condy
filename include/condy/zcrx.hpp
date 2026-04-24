@@ -8,8 +8,7 @@
 
 namespace condy {
 
-// TODO: Maybe we need greater version requirements here
-#if !IO_URING_CHECK_VERSION(2, 10) // >= 2.10
+#if !IO_URING_CHECK_VERSION(2, 15) // >= 2.15
 
 class ZeroCopyRxBufferPool;
 
