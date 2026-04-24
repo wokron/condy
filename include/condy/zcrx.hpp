@@ -12,21 +12,55 @@ namespace condy {
 
 class ZeroCopyRxBufferPool;
 
+/**
+ * @brief Buffer from a ZeroCopyRxBufferPool.
+ * @details This buffer type is used for buffers obtained from a
+ * ZeroCopyRxBufferPool. It automatically returns the buffer to the pool when it
+ * is out of scope.
+ * @note The lifetime of the buffer must not exceed the lifetime of the
+ * ZeroCopyRxBufferPool it is associated with.
+ */
 using ZeroCopyRxBuffer = detail::ManagedBuffer<ZeroCopyRxBufferPool>;
 
+/**
+ * @brief Area for zero-copy receive buffers.
+ */
 struct ZeroCopyRxArea {
     void *addr = nullptr;
     size_t size;
 };
 
+/**
+ * @brief Area for zero-copy receive buffers using DMA-BUF.
+ */
 struct ZeroCopyRxDMABufArea {
     int dmabuf_fd;
     size_t offset;
     size_t size;
 };
 
+/**
+ * @brief Buffer pool for zero-copy receive buffers.
+ * @details This buffer pool utilizes the io_uring zcrx feature to provide
+ * zero-copy receive buffers. It can be used to receive data directly into
+ * user-space buffers without copying, which can improve performance for
+ * high-throughput network applications.
+ * @returns std::pair<int32_t, ZeroCopyRxBuffer> When passed to async
+ * operations, the return type will be a pair of the operation result and the
+ * @ref ZeroCopyRxBuffer.
+ * @note The lifetime of this pool must not exceed the running period of the
+ * associated Runtime, and the lifetime of any ZeroCopyRxBuffer obtained from
+ * this pool must not exceed the lifetime of this pool.
+ */
 class ZeroCopyRxBufferPool {
 public:
+    /**
+     * @brief Construct a new Zero Copy Rx Buffer Pool object
+     * @param if_idx Network interface index to register the buffer pool with.
+     * @param if_rxq Receive queue index to register the buffer pool with.
+     * @param rq_entries Number of receive queue entries.
+     * @param area Area for zero-copy receive buffers.
+     */
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          const ZeroCopyRxArea &area)
         : ZeroCopyRxBufferPool(if_idx, if_rxq, rq_entries, area, 0) {}
@@ -38,6 +72,13 @@ public:
         device_less_ = true;
     }
 
+    /**
+     * @brief Construct a new Zero Copy Rx Buffer Pool object
+     * @param if_idx Network interface index to register the buffer pool with.
+     * @param if_rxq Receive queue index to register the buffer pool with.
+     * @param rq_entries Number of receive queue entries.
+     * @param area Area for zero-copy receive buffers using DMA-BUF.
+     */
     ZeroCopyRxBufferPool(uint32_t if_idx, uint32_t if_rxq, uint32_t rq_entries,
                          const ZeroCopyRxDMABufArea &area) {
         area_size_ = 0;
