@@ -7,7 +7,9 @@
 #include <cassert>
 #include <cerrno>
 #include <doctest/doctest.h>
+#include <functional>
 #include <stdexcept>
+#include <stop_token>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -377,7 +379,7 @@ TEST_CASE("test senders - channel basic") {
     REQUIRE(finished == (num_producers + num_consumers));
 }
 
-TEST_CASE("test channel - channel cancel pop") {
+TEST_CASE("test senders - channel cancel pop") {
     using condy::operators::operator||;
 
     condy::Runtime runtime;
@@ -411,4 +413,149 @@ TEST_CASE("test channel - channel cancel pop") {
 
     t.join();
     REQUIRE(finished);
+}
+
+namespace {
+
+struct WithCancelReceiver {
+    std::function<void(int)> callback;
+    std::stop_token token;
+    void operator()(int result) noexcept { callback(result); }
+    auto get_stop_token() const noexcept { return token; }
+};
+
+} // namespace
+
+TEST_CASE("test senders - cancel from other task") {
+    condy::Runtime runtime;
+    condy::Channel<int> channel(1);
+    std::stop_source stop_source;
+
+    auto cancel_task = [&]() -> condy::Coro<void> {
+        stop_source.request_stop();
+        co_return;
+    };
+    auto func = [&]() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60ll * 60ll,
+            .tv_nsec = 0,
+        };
+        auto aw =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto t = condy::co_spawn(runtime, cancel_task());
+        auto op_state = aw.connect(WithCancelReceiver{
+            .callback =
+                [&](int result) { CHECK(channel.try_push(result) == 0); },
+            .token = stop_source.get_token(),
+        });
+        op_state.start(0);
+        auto [r, item] = co_await channel.pop();
+        REQUIRE(r == 0);
+        REQUIRE(item == -ECANCELED);
+        co_await t;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    runtime.allow_exit();
+    runtime.run();
+}
+
+TEST_CASE("test senders - cancel from other thread") {
+    condy::Runtime runtime;
+    condy::Channel<int> channel(1);
+    std::stop_source stop_source;
+
+    std::atomic_bool r1_started = false;
+
+    auto notify_task = [&]() -> condy::Coro<void> {
+        r1_started = true;
+        r1_started.notify_one();
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60ll * 60ll,
+            .tv_nsec = 0,
+        };
+        auto aw =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto t = condy::co_spawn(runtime, notify_task());
+        auto op_state = aw.connect(WithCancelReceiver{
+            .callback =
+                [&](int result) { REQUIRE(channel.try_push(result) == 0); },
+            .token = stop_source.get_token(),
+        });
+        op_state.start(0);
+        auto [r, item] = co_await channel.pop();
+        REQUIRE(r == 0);
+        REQUIRE(item == -ECANCELED);
+        co_await t;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    std::thread t1([&]() {
+        runtime.allow_exit();
+        runtime.run();
+    });
+
+    r1_started.wait(false);
+
+    stop_source.request_stop();
+
+    t1.join();
+}
+
+TEST_CASE("test senders - cancel from other runtime thread") {
+    condy::Runtime runtime;
+    condy::Channel<int> channel(1);
+    std::stop_source stop_source;
+
+    std::atomic_bool r1_started = false;
+
+    auto notify_task = [&]() -> condy::Coro<void> {
+        r1_started = true;
+        r1_started.notify_one();
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        __kernel_timespec ts{
+            .tv_sec = 60ll * 60ll,
+            .tv_nsec = 0,
+        };
+        auto aw =
+            condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
+        auto t = condy::co_spawn(runtime, notify_task());
+        auto op_state = aw.connect(WithCancelReceiver{
+            .callback =
+                [&](int result) { REQUIRE(channel.try_push(result) == 0); },
+            .token = stop_source.get_token(),
+        });
+        op_state.start(0);
+        auto [r, item] = co_await channel.pop();
+        REQUIRE(r == 0);
+        REQUIRE(item == -ECANCELED);
+        co_await t;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    std::thread t1([&]() {
+        runtime.allow_exit();
+        runtime.run();
+    });
+
+    r1_started.wait(false);
+
+    auto cancel_task = [&]() -> condy::Coro<void> {
+        stop_source.request_stop();
+        co_return;
+    };
+
+    condy::sync_wait(cancel_task());
+
+    t1.join();
 }
