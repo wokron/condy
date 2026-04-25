@@ -294,17 +294,9 @@ private:
 
     bool no_buffer_() const noexcept { return buffer_.capacity() == 0; }
 
-    bool empty_inner_() const noexcept {
-        if (no_buffer_()) {
-            return true;
-        }
-        return size_inner_() == 0;
-    }
+    bool empty_inner_() const noexcept { return size_inner_() == 0; }
 
     bool full_inner_() const noexcept {
-        if (no_buffer_()) {
-            return true;
-        }
         return size_inner_() == buffer_.capacity();
     }
 
