@@ -149,7 +149,7 @@ public:
      */
     size_t size() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        return size_;
+        return size_inner_();
     }
 
     /**
@@ -158,7 +158,7 @@ public:
      */
     bool empty() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        return size_ == 0;
+        return empty_inner_();
     }
 
     /**
@@ -281,7 +281,6 @@ private:
         auto mask = buffer_.capacity() - 1;
         buffer_[tail_ & mask].construct(std::forward<U>(item));
         tail_++;
-        size_++;
     }
 
     T pop_inner_() noexcept {
@@ -290,7 +289,6 @@ private:
         T item = std::move(buffer_[head_ & mask].get());
         buffer_[head_ & mask].destroy();
         head_++;
-        size_--;
         return item;
     }
 
@@ -300,14 +298,14 @@ private:
         if (no_buffer_()) {
             return true;
         }
-        return size_ == 0;
+        return size_inner_() == 0;
     }
 
     bool full_inner_() const noexcept {
         if (no_buffer_()) {
             return true;
         }
-        return size_ == buffer_.capacity();
+        return size_inner_() == buffer_.capacity();
     }
 
     void push_close_inner_() noexcept {
@@ -335,9 +333,10 @@ private:
         while (!empty_inner_()) {
             pop_inner_();
         }
-        assert(size_ == 0);
         assert(head_ == tail_);
     }
+
+    size_t size_inner_() const noexcept { return tail_ - head_; }
 
 private:
     template <typename Handle>
@@ -348,7 +347,6 @@ private:
     HandleList<PopFinishHandleBase> pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
-    size_t size_ = 0;
     SmallArray<RawStorage<T>, N> buffer_;
     bool closed_ = false;
 };
