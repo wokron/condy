@@ -359,7 +359,7 @@ public:
 
     T &get_item() noexcept { return item_; }
 
-    void set_result(int result) noexcept { result_ = result; }
+    void set_result(int32_t result) noexcept { result_ = result; }
 
 public:
     DoubleLinkEntry link_entry_;
@@ -367,7 +367,7 @@ public:
 public:
     Runtime *runtime_ = nullptr;
     T item_;
-    int result_ = -ENOTRECOVERABLE; // Internal error if not set
+    int32_t result_ = -ENOTRECOVERABLE; // Internal error if not set
 };
 
 template <typename T, size_t N>
@@ -384,7 +384,7 @@ public:
 
     void start(Runtime *runtime) noexcept {
         this->runtime_ = runtime;
-        int r = channel_.request_push_(this);
+        int32_t r = channel_.request_push_(this);
         if (r != -EAGAIN) {
             std::move(receiver_)(r);
             return;
@@ -436,7 +436,7 @@ public:
         runtime_->schedule(this);
     }
 
-    void set_result(std::pair<int, T> result) noexcept {
+    void set_result(std::pair<int32_t, T> result) noexcept {
         result_ = std::move(result);
     }
 
@@ -446,7 +446,7 @@ public:
 protected:
     Runtime *runtime_ = nullptr;
     // Internal error if not set
-    std::pair<int, T> result_ = {-ENOTRECOVERABLE, T()};
+    std::pair<int32_t, T> result_ = {-ENOTRECOVERABLE, T()};
 };
 
 template <typename T, size_t N>
