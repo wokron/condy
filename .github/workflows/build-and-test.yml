@@ -61,5 +61,6 @@ jobs:
 
       - name: Run Benchmarks
         timeout-minutes: 5
+        if: matrix.build-type == 'Release'
         working-directory: ${{github.workspace}}
         run: bash scripts/run-bench.sh -t 60 build/benchmarks
