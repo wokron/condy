@@ -23,7 +23,8 @@ void event_loop(size_t &count, size_t expected) {
     while (count != expected) {
         ring->submit();
         ring->reap_completions([&](io_uring_cqe *cqe) {
-            auto [data, type] = condy::decode_work(io_uring_cqe_get_data(cqe));
+            auto [data, type] =
+                condy::decode_work(io_uring_cqe_get_data64(cqe));
             if (type == condy::WorkType::Ignore) {
                 return;
             }

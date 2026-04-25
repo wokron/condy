@@ -11,6 +11,7 @@
 #include "condy/concepts.hpp"
 #include "condy/runtime.hpp"
 #include "condy/type_traits.hpp"
+#include "condy/work_type.hpp"
 #include <cassert>
 #include <cerrno>
 #include <optional>
@@ -54,7 +55,9 @@ private:
     struct Cancellation {
         OpFinishHandle *self;
         Runtime *runtime;
-        void operator()() noexcept { runtime->cancel(self); }
+        void operator()() noexcept {
+            runtime->cancel(encode_work(self, WorkType::Common));
+        }
     };
 
     using StopCallbackType =

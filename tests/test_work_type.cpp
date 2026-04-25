@@ -1,5 +1,4 @@
 #include "condy/work_type.hpp"
-#include <cstdint>
 #include <doctest/doctest.h>
 
 namespace {
@@ -11,9 +10,7 @@ struct A {
 void test_type(condy::WorkType type) {
     A a;
     void *addr = &a;
-    REQUIRE(reinterpret_cast<intptr_t>(addr) % 8 == 0);
-    void *work_addr = condy::encode_work(addr, type);
-    // REQUIRE(addr != work_addr);
+    auto work_addr = condy::encode_work(&a, type);
 
     auto [origin_addr, decoded_type] = condy::decode_work(work_addr);
     REQUIRE(origin_addr == addr);
