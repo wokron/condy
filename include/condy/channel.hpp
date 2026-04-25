@@ -138,14 +138,13 @@ public:
     CopyPushSender push(const T &item) noexcept { return {*this, item}; }
 
     class [[nodiscard]] PopSender;
-    using PopAwaiter = PopSender;
     /**
      * @brief Pop an item from the channel, awaiting if necessary.
      * @return std::pair<int32_t, T> 0 and the popped item if successful; -EPIPE
      * if the channel is closed and no more items can be popped; -ECANCELED if
      * the operation was cancelled while waiting.
      */
-    PopAwaiter pop() noexcept { return {*this}; }
+    PopSender pop() noexcept { return {*this}; }
 
     /**
      * @brief Get the capacity of the channel.
