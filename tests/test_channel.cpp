@@ -274,6 +274,34 @@ TEST_CASE("test channel - channel cancel push") {
     REQUIRE(finished);
 }
 
+TEST_CASE("test channel - channel cancel push move only") {
+    using condy::operators::operator||;
+
+    condy::Runtime runtime(options);
+    condy::Channel<std::unique_ptr<int>> ch1(0);
+
+    bool finished = false;
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto ptr = std::make_unique<int>(42);
+        auto r = co_await (ch1.push(std::move(ptr)) || condy::async_nop());
+        REQUIRE(r.index() == 1);
+        // ptr should not be moved since push is canceled
+        REQUIRE(ptr != nullptr);
+        finished = true;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    std::thread t([&]() {
+        runtime.allow_exit();
+        runtime.run();
+    });
+
+    t.join();
+    REQUIRE(finished);
+}
+
 TEST_CASE("test channel - move only type") {
     condy::Channel<std::unique_ptr<int>> channel(2);
 
