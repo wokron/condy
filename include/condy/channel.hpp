@@ -126,6 +126,17 @@ public:
     }
 
     class [[nodiscard]] MovePushSender;
+    /**
+     * @brief Push an item into the channel, awaiting if necessary.
+     * @param item The item to be pushed into the channel.
+     * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
+     * channel is closed; -ECANCELED if the operation was cancelled while
+     * waiting.
+     * @note If the operation is cancelled while waiting, the item will not be
+     * moved.
+     */
+    MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
+
     class [[nodiscard]] CopyPushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
@@ -134,7 +145,6 @@ public:
      * channel is closed; -ECANCELED if the operation was cancelled while
      * waiting.
      */
-    MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
     CopyPushSender push(const T &item) noexcept { return {*this, item}; }
 
     class [[nodiscard]] PopSender;
