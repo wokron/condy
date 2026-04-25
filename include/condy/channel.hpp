@@ -134,7 +134,11 @@ public:
      * channel is closed; -ECANCELED if the operation was cancelled while
      * waiting.
      */
-    CopyPushSender push(const T &item) noexcept { return {*this, item}; }
+    CopyPushSender push(const T &item) noexcept
+        requires std::copy_constructible<T>
+    {
+        return {*this, item};
+    }
 
     class [[nodiscard]] PopSender;
     /**
