@@ -101,17 +101,6 @@ public:
         if (try_push_inner_(std::move(item))) [[likely]] {
             return;
         }
-
-        class FakePushFinishHandle : public PushFinishHandleBase {
-        public:
-            FakePushFinishHandle(T &&item)
-                : PushFinishHandleBase(item_copy_),
-                  item_copy_(std::move(item)) {}
-
-        private:
-            T item_copy_;
-        };
-
         // This is safe because if try_push_inner_ returns false, the item has
         // not been moved into the channel.
         // NOLINTBEGIN(bugprone-use-after-move)
@@ -204,6 +193,7 @@ public:
 private:
     class PushFinishHandleBase;
     template <typename Receiver> class PushFinishHandle;
+    class FakePushFinishHandle;
 
     class PopFinishHandleBase;
     template <typename Receiver> class PopFinishHandle;
@@ -369,7 +359,8 @@ public:
     void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
-            delete this;
+            auto *this_fake = static_cast<FakePushFinishHandle *>(this);
+            delete this_fake;
         } else {
             runtime_->schedule(this);
         }
@@ -443,6 +434,16 @@ private:
     Channel &channel_;
     Receiver receiver_;
     std::optional<StopCallbackType> stop_callback_;
+};
+
+template <typename T, size_t N>
+class Channel<T, N>::FakePushFinishHandle : public PushFinishHandleBase {
+public:
+    FakePushFinishHandle(T &&item)
+        : PushFinishHandleBase(item_copy_), item_copy_(std::move(item)) {}
+
+private:
+    T item_copy_;
 };
 
 template <typename T, size_t N>
