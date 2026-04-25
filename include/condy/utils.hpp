@@ -161,7 +161,7 @@ template <typename M, typename T>
 T *container_of(M T::*member, M *ptr) noexcept {
     auto offset = offset_of(member);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    return reinterpret_cast<T *>(reinterpret_cast<intptr_t>(ptr) - offset);
+    return reinterpret_cast<T *>(reinterpret_cast<uintptr_t>(ptr) - offset);
 }
 
 template <typename T, T From = 0, T To = std::numeric_limits<T>::max()>
