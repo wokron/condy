@@ -101,17 +101,18 @@ public:
         if (try_push_inner_(std::move(item))) [[likely]] {
             return;
         }
-        // This is safe because if try_push_inner_ returns false, the item has
-        // not been moved into the channel.
-        // NOLINTBEGIN(bugprone-use-after-move)
-        auto *fake_handle =
-            new (std::nothrow) PushFinishHandleBase(std::move(item));
-        // NOLINTEND(bugprone-use-after-move)
-        if (!fake_handle) {
-            panic_on("Allocation failed for PushFinishHandle");
-        }
-        assert(pop_awaiters_.empty());
-        push_awaiters_.push_back(fake_handle);
+        // TODO: re-enable this
+        // // This is safe because if try_push_inner_ returns false, the item has
+        // // not been moved into the channel.
+        // // NOLINTBEGIN(bugprone-use-after-move)
+        // auto *fake_handle =
+        //     new (std::nothrow) PushFinishHandleBase(std::move(item));
+        // // NOLINTEND(bugprone-use-after-move)
+        // if (!fake_handle) {
+        //     panic_on("Allocation failed for PushFinishHandle");
+        // }
+        // assert(pop_awaiters_.empty());
+        // push_awaiters_.push_back(fake_handle);
     }
 
     class [[nodiscard]] PushSender;
@@ -126,7 +127,7 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    PushAwaiter push(T item) noexcept { return {*this, std::move(item)}; }
+    PushAwaiter push(T &&item) noexcept { return {*this, std::move(item)}; }
 
     class [[nodiscard]] PopSender;
     using PopAwaiter = PopSender;
@@ -346,7 +347,7 @@ private:
 template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandleBase : public WorkInvoker {
 public:
-    PushFinishHandleBase(T item) : item_(std::move(item)) {}
+    PushFinishHandleBase(T &item) : item_(item) {}
 
     void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
@@ -366,7 +367,7 @@ public:
 
 public:
     Runtime *runtime_ = nullptr;
-    T item_;
+    T &item_;
     int32_t result_ = -ENOTRECOVERABLE; // Internal error if not set
 };
 
@@ -378,9 +379,8 @@ public:
     using Base =
         InvokerAdapter<PushFinishHandle<Receiver>, PushFinishHandleBase>;
 
-    PushFinishHandle(Channel &channel, T item, Receiver receiver)
-        : Base(std::move(item)), channel_(channel),
-          receiver_(std::move(receiver)) {}
+    PushFinishHandle(Channel &channel, T &item, Receiver receiver)
+        : Base(item), channel_(channel), receiver_(std::move(receiver)) {}
 
     void start(Runtime *runtime) noexcept {
         this->runtime_ = runtime;
@@ -508,7 +508,7 @@ template <typename T, size_t N> class Channel<T, N>::PushSender {
 public:
     using ReturnType = int32_t;
 
-    PushSender(Channel &channel, T item)
+    PushSender(Channel &channel, T &&item)
         : channel_(channel), item_(std::move(item)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
@@ -523,7 +523,8 @@ private:
     public:
         using Base =
             typename Channel<T, N>::template PushFinishHandle<Receiver>;
-        using Base::Base;
+        OperationState(Channel &channel, T &&item, Receiver receiver)
+            : Base(channel, item, std::move(receiver)) {}
 
         void start(unsigned int /*flags*/) noexcept {
             auto *runtime = detail::Context::current().runtime();
@@ -532,7 +533,7 @@ private:
     };
 
     Channel &channel_;
-    T item_;
+    T &&item_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PopSender {
