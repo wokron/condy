@@ -291,6 +291,41 @@ TEST_CASE("test channel - move only type") {
     REQUIRE(*item2 == 43);
 }
 
+TEST_CASE("test channel - push with copy") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(2);
+
+    const size_t max_items = 10;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
+            REQUIRE(item == static_cast<int>(i));
+        }
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(consumer());
+        for (size_t i = 0; i < max_items; ++i) {
+            int item = static_cast<int>(i);
+            auto aw = channel.push(item);
+            static_assert(std::is_same_v<decltype(aw),
+                                         condy::Channel<int>::CopyPushSender>);
+            co_await aw;
+        }
+        co_await std::move(t);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.allow_exit();
+    runtime.run();
+
+    task.wait();
+}
+
 TEST_CASE("test channel - move only in coroutine") {
     condy::Runtime runtime(options);
     condy::Channel<std::unique_ptr<int>> channel(2);

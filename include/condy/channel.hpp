@@ -102,7 +102,8 @@ public:
             return;
         }
         // TODO: re-enable this
-        // // This is safe because if try_push_inner_ returns false, the item has
+        // // This is safe because if try_push_inner_ returns false, the item
+        // has
         // // not been moved into the channel.
         // // NOLINTBEGIN(bugprone-use-after-move)
         // auto *fake_handle =
@@ -117,6 +118,7 @@ public:
 
     class [[nodiscard]] PushSender;
     using PushAwaiter = PushSender;
+    class [[nodiscard]] CopyPushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
@@ -128,6 +130,7 @@ public:
      * will not be pushed into the channel.
      */
     PushAwaiter push(T &&item) noexcept { return {*this, std::move(item)}; }
+    CopyPushSender push(const T &item) noexcept { return {*this, item}; }
 
     class [[nodiscard]] PopSender;
     using PopAwaiter = PopSender;
@@ -534,6 +537,41 @@ private:
 
     Channel &channel_;
     T &&item_;
+};
+
+template <typename T, size_t N> class Channel<T, N>::CopyPushSender {
+public:
+    using ReturnType = int32_t;
+
+    CopyPushSender(Channel &channel, const T &item)
+        : channel_(channel), item_(item) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return OperationState<Receiver>(channel_, item_, std::move(receiver));
+    }
+
+private:
+    template <typename Receiver>
+    class OperationState
+        : public Channel<T, N>::template PushFinishHandle<Receiver> {
+    public:
+        using Base =
+            typename Channel<T, N>::template PushFinishHandle<Receiver>;
+        OperationState(Channel &channel, const T &item, Receiver receiver)
+            : Base(channel, item_copy_, std::move(receiver)), item_copy_(item) {
+        }
+
+        void start(unsigned int /*flags*/) noexcept {
+            auto *runtime = detail::Context::current().runtime();
+            Base::start(runtime);
+        }
+
+    private:
+        T item_copy_;
+    };
+
+    Channel &channel_;
+    const T &item_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PopSender {
