@@ -116,8 +116,7 @@ public:
         // push_awaiters_.push_back(fake_handle);
     }
 
-    class [[nodiscard]] PushSender;
-    using PushAwaiter = PushSender;
+    class [[nodiscard]] MovePushSender;
     class [[nodiscard]] CopyPushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
@@ -129,7 +128,7 @@ public:
      * operation is cancelled, the moved item will be destroyed immediately and
      * will not be pushed into the channel.
      */
-    PushAwaiter push(T &&item) noexcept { return {*this, std::move(item)}; }
+    MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
     CopyPushSender push(const T &item) noexcept { return {*this, item}; }
 
     class [[nodiscard]] PopSender;
@@ -507,11 +506,11 @@ private:
     std::optional<StopCallbackType> stop_callback_;
 };
 
-template <typename T, size_t N> class Channel<T, N>::PushSender {
+template <typename T, size_t N> class Channel<T, N>::MovePushSender {
 public:
     using ReturnType = int32_t;
 
-    PushSender(Channel &channel, T &&item)
+    MovePushSender(Channel &channel, T &&item)
         : channel_(channel), item_(std::move(item)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
