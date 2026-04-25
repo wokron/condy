@@ -124,9 +124,6 @@ public:
      * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
      * channel is closed; -ECANCELED if the operation was cancelled while
      * waiting.
-     * @warning The item will be moved during the push operation. If the push
-     * operation is cancelled, the moved item will be destroyed immediately and
-     * will not be pushed into the channel.
      */
     MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
     CopyPushSender push(const T &item) noexcept { return {*this, item}; }
