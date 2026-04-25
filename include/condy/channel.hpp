@@ -123,6 +123,9 @@ public:
      * waiting.
      * @note If the operation is cancelled while waiting, the item will not be
      * moved.
+     * @note This operation holds a reference to the item, so the caller must
+     * ensure that the lifetime of the item must not be shorter than this
+     * asynchronous operation.
      */
     MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
 
