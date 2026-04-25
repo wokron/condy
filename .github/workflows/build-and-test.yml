@@ -61,15 +61,6 @@ jobs:
 
       - name: Run Benchmarks
         timeout-minutes: 5
-        working-directory: ${{github.workspace}}/build/benchmarks
-        run: |
-          set -e
-          ALL_BENCHMARKS="channel overhead post spawn_tasks"
-          for BENCHMARK in $ALL_BENCHMARKS; do
-            echo "::group::Running benchmark: $BENCHMARK"
-            timeout 60s ./$BENCHMARK || {
-              echo "::error::$BENCHMARK failed or timed out"
-              continue
-            }
-            echo "::endgroup::"
-          done
+        if: matrix.build-type == 'Release'
+        working-directory: ${{github.workspace}}
+        run: bash scripts/run-bench.sh -t 60 build/benchmarks
