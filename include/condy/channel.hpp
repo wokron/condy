@@ -101,19 +101,28 @@ public:
         if (try_push_inner_(std::move(item))) [[likely]] {
             return;
         }
-        // TODO: re-enable this
-        // // This is safe because if try_push_inner_ returns false, the item
-        // has
-        // // not been moved into the channel.
-        // // NOLINTBEGIN(bugprone-use-after-move)
-        // auto *fake_handle =
-        //     new (std::nothrow) PushFinishHandleBase(std::move(item));
-        // // NOLINTEND(bugprone-use-after-move)
-        // if (!fake_handle) {
-        //     panic_on("Allocation failed for PushFinishHandle");
-        // }
-        // assert(pop_awaiters_.empty());
-        // push_awaiters_.push_back(fake_handle);
+
+        class FakePushFinishHandle : public PushFinishHandleBase {
+        public:
+            FakePushFinishHandle(T &&item)
+                : PushFinishHandleBase(item_copy_),
+                  item_copy_(std::move(item)) {}
+
+        private:
+            T item_copy_;
+        };
+
+        // This is safe because if try_push_inner_ returns false, the item has
+        // not been moved into the channel.
+        // NOLINTBEGIN(bugprone-use-after-move)
+        auto *fake_handle =
+            new (std::nothrow) FakePushFinishHandle(std::move(item));
+        // NOLINTEND(bugprone-use-after-move)
+        if (!fake_handle) {
+            panic_on("Allocation failed for PushFinishHandle");
+        }
+        assert(pop_awaiters_.empty());
+        push_awaiters_.push_back(fake_handle);
     }
 
     class [[nodiscard]] MovePushSender;

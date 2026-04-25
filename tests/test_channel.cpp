@@ -678,32 +678,31 @@ TEST_CASE("test channel - cross runtimes with unbuffered channel") {
     t2.join();
 }
 
-// TODO: re-enable this test after implementing force_push
-// TEST_CASE("test channel - force push") {
-//     condy::Channel<int> channel(2);
+TEST_CASE("test channel - force push") {
+    condy::Channel<int> channel(2);
 
-//     REQUIRE(channel.try_push(1) == 0);
-//     REQUIRE(channel.try_push(2) == 0);
-//     REQUIRE(channel.try_push(3) == -EAGAIN);
+    REQUIRE(channel.try_push(1) == 0);
+    REQUIRE(channel.try_push(2) == 0);
+    REQUIRE(channel.try_push(3) == -EAGAIN);
 
-//     for (size_t i = 0; i < 10; i++) {
-//         channel.force_push(static_cast<int>(i + 3));
-//     }
+    for (size_t i = 0; i < 10; i++) {
+        channel.force_push(static_cast<int>(i + 3));
+    }
 
-//     // Force pushed items act just like a waiting coroutine push
-//     REQUIRE(channel.size() == 2);
+    // Force pushed items act just like a waiting coroutine push
+    REQUIRE(channel.size() == 2);
 
-//     for (size_t i = 0; i < 12; i++) {
-//         auto [r, item] = channel.try_pop();
-//         REQUIRE(r == 0);
-//         REQUIRE(item == static_cast<int>(i + 1));
-//     }
+    for (size_t i = 0; i < 12; i++) {
+        auto [r, item] = channel.try_pop();
+        REQUIRE(r == 0);
+        REQUIRE(item == static_cast<int>(i + 1));
+    }
 
-//     REQUIRE(channel.size() == 0);
+    REQUIRE(channel.size() == 0);
 
-//     channel.force_push(42);
-//     REQUIRE(channel.size() == 1);
-// }
+    channel.force_push(42);
+    REQUIRE(channel.size() == 1);
+}
 
 namespace {
 
