@@ -64,7 +64,7 @@ inline int sync_msg_ring(io_uring_sqe *sqe_data) noexcept {
 
 class CancelRequest {
 public:
-    CancelRequest(void *data) : data_(data) {}
+    CancelRequest(uintptr_t data) : data_(data) {}
 
     void wait() noexcept {
         while (!finished_.load(std::memory_order_acquire)) {
@@ -77,10 +77,10 @@ public:
         finished_.notify_one();
     }
 
-    void *data() const noexcept { return data_; }
+    uintptr_t data() const noexcept { return data_; }
 
 private:
-    void *data_;
+    uintptr_t data_;
     std::atomic_bool finished_ = false;
 };
 
@@ -258,9 +258,7 @@ public:
     }
 
     // Internal use only. Schedule a cancel request for the given data.
-    void cancel(void *data) noexcept {
-        // Ensure align of 8 for encoding
-        assert(reinterpret_cast<intptr_t>(data) % 8 == 0);
+    void cancel(uintptr_t data) noexcept {
         auto *curr_runtime = detail::Context::current().runtime();
         if (curr_runtime == this) {
             io_uring_sqe *sqe = ring_.get_sqe();
@@ -367,7 +365,7 @@ public:
     auto &settings() noexcept { return ring_.settings(); }
 
 private:
-    void schedule_msg_ring_(Runtime *curr_runtime, void *data) noexcept {
+    void schedule_msg_ring_(Runtime *curr_runtime, uintptr_t data) noexcept {
         int ring_fd = this->ring_.ring()->ring_fd;
         if (curr_runtime != nullptr) {
             io_uring_sqe *sqe = curr_runtime->ring_.get_sqe();
@@ -404,15 +402,14 @@ private:
     }
 
     static void prep_msg_ring_(int ring_fd, io_uring_sqe *sqe,
-                               void *data) noexcept {
-        io_uring_prep_msg_ring(sqe, ring_fd, 0,
-                               reinterpret_cast<uint64_t>(data), 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Schedule));
+                               uintptr_t data) noexcept {
+        io_uring_prep_msg_ring(sqe, ring_fd, 0, data, 0);
+        io_uring_sqe_set_data64(sqe, encode_work(nullptr, WorkType::Schedule));
     }
 
-    static void prep_cancel_(io_uring_sqe *sqe, void *data) noexcept {
-        io_uring_prep_cancel(sqe, data, 0);
-        io_uring_sqe_set_data(sqe, encode_work(nullptr, WorkType::Ignore));
+    static void prep_cancel_(io_uring_sqe *sqe, uintptr_t data) noexcept {
+        io_uring_prep_cancel64(sqe, data, 0);
+        io_uring_sqe_set_data64(sqe, encode_work(nullptr, WorkType::Ignore));
         io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
     }
 
@@ -435,8 +432,7 @@ private:
     }
 
     void process_cqe_(io_uring_cqe *cqe) noexcept {
-        auto *data_raw = io_uring_cqe_get_data(cqe);
-        auto [data, type] = decode_work(data_raw);
+        auto [data, type] = decode_work(io_uring_cqe_get_data64(cqe));
 
         if (type == WorkType::Ignore) {
             // No-op
