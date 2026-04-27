@@ -16,3 +16,6 @@
 
 - [link-cp.cpp](link-cp_8cpp_source.html)
     Implements concurrent file copying using features like fixed file descriptors, fixed buffers, and link operations, supporting `O_DIRECT` IO. Achieves up to 2x performance improvement compared to `cp`.
+
+- [queue.cpp](queue_8cpp_source.html)
+    Similar to futex-semaphore.cpp but implements producer-consumer queue through `condy::AsyncFutex`
