@@ -28,6 +28,7 @@ public:
           tail_(std::exchange(other.tail_, nullptr)) {}
     IntrusiveSingleList &operator=(IntrusiveSingleList &&other) noexcept {
         if (this != &other) {
+            assert(empty());
             head_ = std::exchange(other.head_, nullptr);
             tail_ = std::exchange(other.tail_, nullptr);
         }
@@ -37,6 +38,7 @@ public:
     IntrusiveSingleList(const IntrusiveSingleList &) = delete;
     IntrusiveSingleList &operator=(const IntrusiveSingleList &) = delete;
 
+public:
     void push_back(T *item) noexcept {
         assert(item != nullptr);
         SingleLinkEntry *entry = &(item->*Member);
@@ -87,7 +89,22 @@ private:
 template <typename T, DoubleLinkEntry T::*Member> class IntrusiveDoubleList {
 public:
     IntrusiveDoubleList() = default;
+    IntrusiveDoubleList(IntrusiveDoubleList &&other) noexcept
+        : head_(std::exchange(other.head_, nullptr)),
+          tail_(std::exchange(other.tail_, nullptr)) {}
+    IntrusiveDoubleList &operator=(IntrusiveDoubleList &&other) noexcept {
+        if (this != &other) {
+            assert(empty());
+            head_ = std::exchange(other.head_, nullptr);
+            tail_ = std::exchange(other.tail_, nullptr);
+        }
+        return *this;
+    }
 
+    IntrusiveDoubleList(const IntrusiveDoubleList &) = delete;
+    IntrusiveDoubleList &operator=(const IntrusiveDoubleList &) = delete;
+
+public:
     void push_back(T *item) noexcept {
         assert(item != nullptr);
         DoubleLinkEntry *entry = &(item->*Member);
