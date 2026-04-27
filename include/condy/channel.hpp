@@ -105,7 +105,7 @@ public:
         // not been moved into the channel.
         // NOLINTBEGIN(bugprone-use-after-move)
         auto *fake_handle =
-            new (std::nothrow) PushFinishHandleBase(std::move(item));
+            new (std::nothrow) FakePushFinishHandle(std::move(item));
         // NOLINTEND(bugprone-use-after-move)
         if (!fake_handle) {
             panic_on("Allocation failed for PushFinishHandle");
@@ -114,29 +114,43 @@ public:
         push_awaiters_.push_back(fake_handle);
     }
 
-    class [[nodiscard]] PushSender;
-    using PushAwaiter = PushSender;
+    class [[nodiscard]] MovePushSender;
     /**
      * @brief Push an item into the channel, awaiting if necessary.
      * @param item The item to be pushed into the channel.
      * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
      * channel is closed; -ECANCELED if the operation was cancelled while
      * waiting.
-     * @warning The item will be moved during the push operation. If the push
-     * operation is cancelled, the moved item will be destroyed immediately and
-     * will not be pushed into the channel.
+     * @note If the operation is cancelled while waiting, the item will not be
+     * moved.
+     * @note This operation holds a reference to the item, so the caller must
+     * ensure that the lifetime of the item must not be shorter than this
+     * asynchronous operation.
      */
-    PushAwaiter push(T item) noexcept { return {*this, std::move(item)}; }
+    MovePushSender push(T &&item) noexcept { return {*this, std::move(item)}; }
+
+    class [[nodiscard]] CopyPushSender;
+    /**
+     * @brief Push an item into the channel, awaiting if necessary.
+     * @param item The item to be pushed into the channel.
+     * @return int32_t 0 if the item was successfully pushed; -EPIPE if the
+     * channel is closed; -ECANCELED if the operation was cancelled while
+     * waiting.
+     */
+    CopyPushSender push(const T &item) noexcept
+        requires std::copy_constructible<T>
+    {
+        return {*this, item};
+    }
 
     class [[nodiscard]] PopSender;
-    using PopAwaiter = PopSender;
     /**
      * @brief Pop an item from the channel, awaiting if necessary.
      * @return std::pair<int32_t, T> 0 and the popped item if successful; -EPIPE
      * if the channel is closed and no more items can be popped; -ECANCELED if
      * the operation was cancelled while waiting.
      */
-    PopAwaiter pop() noexcept { return {*this}; }
+    PopSender pop() noexcept { return {*this}; }
 
     /**
      * @brief Get the capacity of the channel.
@@ -149,7 +163,7 @@ public:
      */
     size_t size() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        return size_;
+        return size_inner_();
     }
 
     /**
@@ -158,7 +172,7 @@ public:
      */
     bool empty() const noexcept {
         std::lock_guard<std::mutex> lock(mutex_);
-        return size_ == 0;
+        return empty_inner_();
     }
 
     /**
@@ -186,6 +200,7 @@ public:
 private:
     class PushFinishHandleBase;
     template <typename Receiver> class PushFinishHandle;
+    class FakePushFinishHandle;
 
     class PopFinishHandleBase;
     template <typename Receiver> class PopFinishHandle;
@@ -281,7 +296,6 @@ private:
         auto mask = buffer_.capacity() - 1;
         buffer_[tail_ & mask].construct(std::forward<U>(item));
         tail_++;
-        size_++;
     }
 
     T pop_inner_() noexcept {
@@ -290,24 +304,15 @@ private:
         T item = std::move(buffer_[head_ & mask].get());
         buffer_[head_ & mask].destroy();
         head_++;
-        size_--;
         return item;
     }
 
     bool no_buffer_() const noexcept { return buffer_.capacity() == 0; }
 
-    bool empty_inner_() const noexcept {
-        if (no_buffer_()) {
-            return true;
-        }
-        return size_ == 0;
-    }
+    bool empty_inner_() const noexcept { return size_inner_() == 0; }
 
     bool full_inner_() const noexcept {
-        if (no_buffer_()) {
-            return true;
-        }
-        return size_ == buffer_.capacity();
+        return size_inner_() == buffer_.capacity();
     }
 
     void push_close_inner_() noexcept {
@@ -335,9 +340,10 @@ private:
         while (!empty_inner_()) {
             pop_inner_();
         }
-        assert(size_ == 0);
         assert(head_ == tail_);
     }
+
+    size_t size_inner_() const noexcept { return tail_ - head_; }
 
 private:
     template <typename Handle>
@@ -348,7 +354,6 @@ private:
     HandleList<PopFinishHandleBase> pop_awaiters_;
     size_t head_ = 0;
     size_t tail_ = 0;
-    size_t size_ = 0;
     SmallArray<RawStorage<T>, N> buffer_;
     bool closed_ = false;
 };
@@ -356,12 +361,13 @@ private:
 template <typename T, size_t N>
 class Channel<T, N>::PushFinishHandleBase : public WorkInvoker {
 public:
-    PushFinishHandleBase(T item) : item_(std::move(item)) {}
+    PushFinishHandleBase(T &item) : item_(item) {}
 
     void schedule() noexcept {
         if (runtime_ == nullptr) [[unlikely]] {
             // Fake handle, no need to schedule
-            delete this;
+            auto *this_fake = static_cast<FakePushFinishHandle *>(this);
+            delete this_fake;
         } else {
             runtime_->schedule(this);
         }
@@ -369,15 +375,15 @@ public:
 
     T &get_item() noexcept { return item_; }
 
-    void set_result(int result) noexcept { result_ = result; }
+    void set_result(int32_t result) noexcept { result_ = result; }
 
 public:
     DoubleLinkEntry link_entry_;
 
 public:
     Runtime *runtime_ = nullptr;
-    T item_;
-    int result_ = -ENOTRECOVERABLE; // Internal error if not set
+    T &item_;
+    int32_t result_ = -ENOTRECOVERABLE; // Internal error if not set
 };
 
 template <typename T, size_t N>
@@ -388,13 +394,12 @@ public:
     using Base =
         InvokerAdapter<PushFinishHandle<Receiver>, PushFinishHandleBase>;
 
-    PushFinishHandle(Channel &channel, T item, Receiver receiver)
-        : Base(std::move(item)), channel_(channel),
-          receiver_(std::move(receiver)) {}
+    PushFinishHandle(Channel &channel, T &item, Receiver receiver)
+        : Base(item), channel_(channel), receiver_(std::move(receiver)) {}
 
     void start(Runtime *runtime) noexcept {
         this->runtime_ = runtime;
-        int r = channel_.request_push_(this);
+        int32_t r = channel_.request_push_(this);
         if (r != -EAGAIN) {
             std::move(receiver_)(r);
             return;
@@ -439,6 +444,16 @@ private:
 };
 
 template <typename T, size_t N>
+class Channel<T, N>::FakePushFinishHandle : public PushFinishHandleBase {
+public:
+    FakePushFinishHandle(T &&item)
+        : PushFinishHandleBase(item_copy_), item_copy_(std::move(item)) {}
+
+private:
+    T item_copy_;
+};
+
+template <typename T, size_t N>
 class Channel<T, N>::PopFinishHandleBase : public WorkInvoker {
 public:
     void schedule() noexcept {
@@ -446,7 +461,7 @@ public:
         runtime_->schedule(this);
     }
 
-    void set_result(std::pair<int, T> result) noexcept {
+    void set_result(std::pair<int32_t, T> result) noexcept {
         result_ = std::move(result);
     }
 
@@ -456,7 +471,7 @@ public:
 protected:
     Runtime *runtime_ = nullptr;
     // Internal error if not set
-    std::pair<int, T> result_ = {-ENOTRECOVERABLE, T()};
+    std::pair<int32_t, T> result_ = {-ENOTRECOVERABLE, T()};
 };
 
 template <typename T, size_t N>
@@ -514,11 +529,11 @@ private:
     std::optional<StopCallbackType> stop_callback_;
 };
 
-template <typename T, size_t N> class Channel<T, N>::PushSender {
+template <typename T, size_t N> class Channel<T, N>::MovePushSender {
 public:
     using ReturnType = int32_t;
 
-    PushSender(Channel &channel, T item)
+    MovePushSender(Channel &channel, T &&item)
         : channel_(channel), item_(std::move(item)) {}
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
@@ -533,7 +548,8 @@ private:
     public:
         using Base =
             typename Channel<T, N>::template PushFinishHandle<Receiver>;
-        using Base::Base;
+        OperationState(Channel &channel, T &&item, Receiver receiver)
+            : Base(channel, item, std::move(receiver)) {}
 
         void start(unsigned int /*flags*/) noexcept {
             auto *runtime = detail::Context::current().runtime();
@@ -542,7 +558,42 @@ private:
     };
 
     Channel &channel_;
-    T item_;
+    T &&item_;
+};
+
+template <typename T, size_t N> class Channel<T, N>::CopyPushSender {
+public:
+    using ReturnType = int32_t;
+
+    CopyPushSender(Channel &channel, const T &item)
+        : channel_(channel), item_(item) {}
+
+    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+        return OperationState<Receiver>(channel_, item_, std::move(receiver));
+    }
+
+private:
+    template <typename Receiver>
+    class OperationState
+        : public Channel<T, N>::template PushFinishHandle<Receiver> {
+    public:
+        using Base =
+            typename Channel<T, N>::template PushFinishHandle<Receiver>;
+        OperationState(Channel &channel, const T &item, Receiver receiver)
+            : Base(channel, item_copy_, std::move(receiver)), item_copy_(item) {
+        }
+
+        void start(unsigned int /*flags*/) noexcept {
+            auto *runtime = detail::Context::current().runtime();
+            Base::start(runtime);
+        }
+
+    private:
+        T item_copy_;
+    };
+
+    Channel &channel_;
+    const T &item_;
 };
 
 template <typename T, size_t N> class Channel<T, N>::PopSender {

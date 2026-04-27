@@ -274,6 +274,34 @@ TEST_CASE("test channel - channel cancel push") {
     REQUIRE(finished);
 }
 
+TEST_CASE("test channel - channel cancel push move only") {
+    using condy::operators::operator||;
+
+    condy::Runtime runtime(options);
+    condy::Channel<std::unique_ptr<int>> ch1(0);
+
+    bool finished = false;
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto ptr = std::make_unique<int>(42);
+        auto r = co_await (ch1.push(std::move(ptr)) || condy::async_nop());
+        REQUIRE(r.index() == 1);
+        // ptr should not be moved since push is canceled
+        REQUIRE(ptr != nullptr);
+        finished = true;
+    };
+
+    condy::co_spawn(runtime, func()).detach();
+
+    std::thread t([&]() {
+        runtime.allow_exit();
+        runtime.run();
+    });
+
+    t.join();
+    REQUIRE(finished);
+}
+
 TEST_CASE("test channel - move only type") {
     condy::Channel<std::unique_ptr<int>> channel(2);
 
@@ -289,6 +317,41 @@ TEST_CASE("test channel - move only type") {
     REQUIRE(r2 == 0);
     REQUIRE(item2 != nullptr);
     REQUIRE(*item2 == 43);
+}
+
+TEST_CASE("test channel - push with copy") {
+    condy::Runtime runtime(options);
+    condy::Channel<int> channel(2);
+
+    const size_t max_items = 10;
+
+    auto consumer = [&]() -> condy::Coro<void> {
+        for (size_t i = 0; i < max_items; ++i) {
+            auto [r, item] = co_await channel.pop();
+            REQUIRE(r == 0);
+            REQUIRE(item == static_cast<int>(i));
+        }
+        co_return;
+    };
+
+    auto func = [&]() -> condy::Coro<void> {
+        auto t = condy::co_spawn(consumer());
+        for (size_t i = 0; i < max_items; ++i) {
+            int item = static_cast<int>(i);
+            auto aw = channel.push(item);
+            static_assert(std::is_same_v<decltype(aw),
+                                         condy::Channel<int>::CopyPushSender>);
+            co_await aw;
+        }
+        co_await std::move(t);
+    };
+
+    auto task = condy::co_spawn(runtime, func());
+
+    runtime.allow_exit();
+    runtime.run();
+
+    task.wait();
 }
 
 TEST_CASE("test channel - move only in coroutine") {
