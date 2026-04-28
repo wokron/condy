@@ -27,17 +27,38 @@
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
-#include <sanitizer/tsan_interface.h>
-#define tsan_acquire(addr) __tsan_acquire(addr)
-#define tsan_release(addr) __tsan_release(addr)
-#else
-#define tsan_acquire(addr) static_cast<void>(0)
-#define tsan_release(addr) static_cast<void>(0)
+#define CONDY_DETAIL_HAS_TSAN
 #endif
-#else
-#define tsan_acquire(addr) static_cast<void>(0)
-#define tsan_release(addr) static_cast<void>(0)
 #endif
+
+#if defined(__SANITIZE_THREAD__)
+#define CONDY_DETAIL_HAS_TSAN
+#endif
+
+#if defined(CONDY_DETAIL_HAS_TSAN)
+extern "C" {
+void __tsan_acquire(void *addr); // NOLINT(bugprone-reserved-identifier)
+void __tsan_release(void *addr); // NOLINT(bugprone-reserved-identifier)
+}
+#endif
+
+namespace condy {
+
+inline void tsan_acquire([[maybe_unused]] void *addr) noexcept {
+#if defined(CONDY_DETAIL_HAS_TSAN)
+    __tsan_acquire(addr);
+#endif
+}
+
+inline void tsan_release([[maybe_unused]] void *addr) noexcept {
+#if defined(CONDY_DETAIL_HAS_TSAN)
+    __tsan_release(addr);
+#endif
+}
+
+} // namespace condy
+
+#undef CONDY_DETAIL_HAS_TSAN
 
 namespace condy {
 
