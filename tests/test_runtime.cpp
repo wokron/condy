@@ -70,6 +70,7 @@ TEST_CASE("test runtime - single thread schedule coroutine") {
     runtime.run();
 
     REQUIRE(finished);
+    h.destroy();
 }
 
 TEST_CASE("test runtime - single thread schedule multiple coroutines") {
@@ -83,14 +84,16 @@ TEST_CASE("test runtime - single thread schedule multiple coroutines") {
     const int num_coros = 20;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    std::vector<std::coroutine_handle<condy::Coro<void>::promise_type>> handles;
     coros.reserve(num_coros);
+    handles.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }
 
     for (int i = 0; i < num_coros; ++i) {
-        auto h = coros[i].release();
-        runtime.schedule(&h.promise());
+        handles.emplace_back(coros[i].release());
+        runtime.schedule(&handles[i].promise());
     }
 
     runtime.allow_exit();
@@ -98,6 +101,7 @@ TEST_CASE("test runtime - single thread schedule multiple coroutines") {
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
+        handles[i].destroy();
     }
 }
 
@@ -112,14 +116,16 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
     const int num_coros = 10;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    std::vector<std::coroutine_handle<condy::Coro<void>::promise_type>> handles;
     coros.reserve(num_coros);
+    handles.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }
 
     for (int i = 0; i < num_coros; ++i) {
-        auto h = coros[i].release();
-        runtime.schedule(&h.promise());
+        handles.emplace_back(coros[i].release());
+        runtime.schedule(&handles[i].promise());
     }
 
     runtime.allow_exit();
@@ -127,6 +133,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with operation") {
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
+        handles[i].destroy();
     }
 }
 
@@ -144,14 +151,16 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
     const int num_coros = 10;
     std::vector<int> finished_flags(num_coros, 0);
     std::vector<condy::Coro<void>> coros;
+    std::vector<std::coroutine_handle<condy::Coro<void>::promise_type>> handles;
     coros.reserve(num_coros);
+    handles.reserve(num_coros);
     for (int i = 0; i < num_coros; ++i) {
         coros.emplace_back(func(finished_flags[i]));
     }
 
     for (int i = 0; i < num_coros; ++i) {
-        auto h = coros[i].release();
-        runtime.schedule(&h.promise());
+        handles.emplace_back(coros[i].release());
+        runtime.schedule(&handles[i].promise());
     }
 
     runtime.allow_exit();
@@ -159,6 +168,7 @@ TEST_CASE("test runtime - single thread schedule coroutines with parallel "
 
     for (int i = 0; i < num_coros; ++i) {
         REQUIRE(finished_flags[i]);
+        handles[i].destroy();
     }
 }
 
@@ -187,6 +197,7 @@ TEST_CASE("test runtime - single thread schedule coroutine with cancel") {
     runtime.run();
 
     REQUIRE(finished);
+    h.destroy();
 }
 
 TEST_CASE("test runtime - allow_exit from other runtime") {

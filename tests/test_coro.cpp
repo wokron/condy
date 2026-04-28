@@ -15,8 +15,10 @@ TEST_CASE("test coro - run coro") {
     auto coro = func();
     REQUIRE(!executed);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(executed);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - await coro") {
@@ -34,8 +36,10 @@ TEST_CASE("test coro - await coro") {
     auto outer_coro = outer_func(std::move(inner_coro));
     REQUIRE(!executed);
 
-    outer_coro.release().resume();
+    auto handle = outer_coro.release();
+    handle.resume();
     REQUIRE(executed);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - nested await") {
@@ -58,8 +62,10 @@ TEST_CASE("test coro - nested await") {
     auto outer_coro = outer_func(std::move(middle_coro));
     REQUIRE(!executed);
 
-    outer_coro.release().resume();
+    auto handle = outer_coro.release();
+    handle.resume();
     REQUIRE(executed);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - resume by awaiter") {
@@ -81,12 +87,14 @@ TEST_CASE("test coro - resume by awaiter") {
     REQUIRE(!executed);
     REQUIRE(awaiter.handle == nullptr);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(!executed);
     REQUIRE(awaiter.handle != nullptr);
 
     awaiter.handle.resume();
     REQUIRE(executed);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - exception handling") {
@@ -115,8 +123,10 @@ TEST_CASE("test coro - exception handling") {
     auto coro = func();
     REQUIRE(!caught);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(caught);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - return value") {
@@ -133,8 +143,10 @@ TEST_CASE("test coro - return value") {
     auto coro = func();
     REQUIRE(!finished);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - return value with exception") {
@@ -164,8 +176,10 @@ TEST_CASE("test coro - return value with exception") {
     auto coro = func();
     REQUIRE(!caught);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(caught);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - return move-only type") {
@@ -184,8 +198,10 @@ TEST_CASE("test coro - return move-only type") {
     auto coro = func();
     REQUIRE(!finished);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished);
+    handle.destroy();
 }
 
 TEST_CASE("test coro - return no default constructible type") {
@@ -207,8 +223,10 @@ TEST_CASE("test coro - return no default constructible type") {
     auto coro = func();
     REQUIRE(!finished);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished);
+    handle.destroy();
 }
 
 namespace {
@@ -243,9 +261,11 @@ TEST_CASE("test coro - custom allocator") {
     bool finished = false;
     CustomAllocator allocator;
     auto coro = test_custom_allocator_func(allocator, finished);
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished);
     REQUIRE(allocator.allocated);
+    handle.destroy();
 }
 
 namespace {
@@ -262,8 +282,10 @@ TEST_CASE("test coro - pmr allocator") {
     std::pmr::polymorphic_allocator<std::byte> allocator(&pool);
     bool finished = false;
     auto coro = test_pmr_func(allocator, finished);
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished);
+    handle.destroy();
 }
 
 namespace {
@@ -325,9 +347,11 @@ TEST_CASE("test coro - different allocators") {
         test_allocator_func2(allocatorB, allocatorA, finished2, finished1);
     REQUIRE(!finished1);
     REQUIRE(!finished2);
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(finished1);
     REQUIRE(finished2);
     REQUIRE(allocatorA.allocated);
     REQUIRE(allocatorB.allocated);
+    handle.destroy();
 }
