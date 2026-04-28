@@ -10,5 +10,5 @@ target_link_libraries(custom-allocator PRIVATE condy uring)
 add_executable(file-server file-server.cpp)
 target_link_libraries(file-server PRIVATE condy uring)
 
-add_executable(futex-semaphore futex-semaphore.cpp)
-target_link_libraries(futex-semaphore PRIVATE condy uring)
+add_executable(queue-kernel-futex queue-kernel-futex.cpp)
+target_link_libraries(queue-kernel-futex PRIVATE condy uring)

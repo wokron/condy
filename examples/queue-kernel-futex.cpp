@@ -1,6 +1,7 @@
 /**
- * @file futex-semaphore.cpp
- * @brief Implementation of semaphore and mutex using futexes with Condy
+ * @file queue-kernel-futex.cpp
+ * @brief Producer-consumer queue example using async futex syscalls
+ * @details Synchronization style: semaphore
  */
 
 #include <atomic>
