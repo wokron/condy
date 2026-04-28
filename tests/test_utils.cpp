@@ -84,6 +84,11 @@ TEST_CASE("test small_array - large") {
     }
 }
 
+// False positive with GCC
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 TEST_CASE("test small_array - small with raw_storage") {
     condy::SmallArray<condy::RawStorage<std::string>, 2> arr(2);
     arr[0].construct("Hello");
@@ -95,6 +100,9 @@ TEST_CASE("test small_array - small with raw_storage") {
     arr[0].destroy();
     arr[1].destroy();
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("test small_array - large with raw_storage") {
     condy::SmallArray<condy::RawStorage<std::string>, 2> arr(3);
