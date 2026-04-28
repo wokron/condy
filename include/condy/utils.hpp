@@ -227,4 +227,10 @@ std::variant<Ts...> tuple_at(std::tuple<Ts...> &results, size_t idx) {
     }
 }
 
+template <typename T> inline T align_up(T value, size_t alignment) noexcept {
+    // alignment must be a power of two
+    assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
 } // namespace condy

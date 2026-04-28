@@ -55,7 +55,9 @@ struct SimpleCQEHandler {
  * result of the operation (the value of `cqe->res`) and the selected buffer,
  * whose type is determined by the buffer ring.
  */
-template <BufferRingLike Br> class SelectBufferCQEHandler {
+template <typename Br>
+    requires(requires(Br *br, io_uring_cqe *cqe) { br->handle_finish(cqe); })
+class SelectBufferCQEHandler {
 public:
     SelectBufferCQEHandler(Br *buffers) : buffers_(buffers) {}
 

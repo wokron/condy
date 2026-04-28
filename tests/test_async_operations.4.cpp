@@ -4,6 +4,7 @@
 #include "condy/runtime.hpp"
 #include "condy/runtime_options.hpp"
 #include "condy/sync_wait.hpp"
+#include "condy/zcrx.hpp"
 #include "helpers.hpp"
 #include <cerrno>
 #include <condy/async_operations.hpp>
@@ -1078,5 +1079,59 @@ TEST_CASE("test async_operations - test pipe - direct") {
         REQUIRE(std::string_view(buf, r) == msg);
     };
     condy::sync_wait(func());
+}
+#endif
+
+#if !IO_URING_CHECK_VERSION(2, 15) // >= 2.15
+TEST_CASE("test async_operations - test recv - zc multishot") {
+    int sv[2];
+    create_tcp_socketpair(sv);
+
+    condy::Runtime runtime(
+        condy::RuntimeOptions().enable_cqe32().enable_defer_taskrun());
+
+    auto msg = generate_data(9ul * 4096);
+    ssize_t r = send(sv[1], msg.data(), msg.size(), 0);
+    REQUIRE(r == msg.size());
+    close(sv[1]);
+
+    auto func = [&]() -> condy::Coro<void> {
+        size_t count = 0;
+        std::string actual;
+
+        condy::ZeroCopyRxBufferPool pool(
+            256, condy::ZeroCopyRxArea{.size = 8ul * 4096});
+
+        condy::Channel<condy::ZeroCopyRxBuffer> channel(16);
+
+        auto [n, buf] =
+            co_await condy::async_recv_multishot(sv[0], pool, 0, [&](auto res) {
+                auto &[n, buf] = res;
+                REQUIRE(n == 4096);
+                actual.append(static_cast<char *>(buf.data()), n);
+                count++;
+                REQUIRE(channel.try_push(std::move(buf)) == 0);
+            });
+        REQUIRE(n == -ENOMEM);
+        REQUIRE(count == 8);
+
+        auto [r, tmp] = co_await channel.pop();
+        tmp.reset(); // Release the buffer back to the pool
+
+        auto [n2, buf2] =
+            co_await condy::async_recv_multishot(sv[0], pool, 0, [&](auto res) {
+                auto &[n, buf] = res;
+                REQUIRE(n == 4096);
+                actual.append(static_cast<char *>(buf.data()), n);
+                count++;
+            });
+        REQUIRE(n2 == 0);
+        REQUIRE(count == 9);
+
+        REQUIRE(actual == msg);
+    };
+    condy::sync_wait(runtime, func());
+
+    close(sv[0]);
 }
 #endif
