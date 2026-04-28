@@ -151,18 +151,17 @@ public:
 
 public:
     condy::Coro<void> acquire() {
-        uint32_t c;
         while (true) {
-            size_t retries = 0;
-            while (retries++ < MAX_RETRIES) {
-                c = count_.load(std::memory_order_relaxed);
-                if (c > 0 && count_.compare_exchange_weak(
-                                 c, c - 1, std::memory_order_acquire,
-                                 std::memory_order_relaxed)) {
+            uint32_t c = count_.load(std::memory_order_relaxed);
+            if (c > 0) {
+                if (count_.compare_exchange_strong(c, c - 1,
+                                                   std::memory_order_acquire,
+                                                   std::memory_order_relaxed)) {
                     co_return;
                 }
+                continue;
             }
-            co_await futex_.wait(c);
+            co_await futex_.wait(0);
         }
     }
 
@@ -174,8 +173,6 @@ public:
     }
 
 private:
-    static constexpr size_t MAX_RETRIES = 32;
-
     std::atomic<uint32_t> count_;
     condy::Futex<uint32_t> futex_{count_};
 };

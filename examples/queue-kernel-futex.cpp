@@ -38,37 +38,35 @@ public:
 
 public:
     condy::Coro<void> async_acquire() {
-        uint32_t c;
         while (true) {
-            size_t retries = 0;
-            while (retries++ < MAX_RETRIES) {
-                c = count.load(std::memory_order_relaxed);
-                if (c > 0 && count.compare_exchange_weak(
-                                 c, c - 1, std::memory_order_acquire,
-                                 std::memory_order_relaxed)) {
+            uint32_t c = count.load(std::memory_order_relaxed);
+            if (c > 0) {
+                if (count.compare_exchange_strong(c, c - 1,
+                                                  std::memory_order_acquire,
+                                                  std::memory_order_relaxed)) {
                     co_return;
                 }
+                continue;
             }
             [[maybe_unused]] int r = co_await condy::async_futex_wait(
-                raw_count_ptr_(), c, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32,
+                raw_count_ptr_(), 0, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32,
                 0);
             assert(r == 0 || r == -EAGAIN);
         }
     }
 
     void acquire() {
-        uint32_t c;
         while (true) {
-            size_t retries = 0;
-            while (retries++ < MAX_RETRIES) {
-                c = count.load(std::memory_order_relaxed);
-                if (c > 0 && count.compare_exchange_weak(
-                                 c, c - 1, std::memory_order_acquire,
-                                 std::memory_order_relaxed)) {
+            uint32_t c = count.load(std::memory_order_relaxed);
+            if (c > 0) {
+                if (count.compare_exchange_strong(c, c - 1,
+                                                  std::memory_order_acquire,
+                                                  std::memory_order_relaxed)) {
                     return;
                 }
+                continue;
             }
-            futex_wait(raw_count_ptr_(), c, FUTEX_BITSET_MATCH_ANY,
+            futex_wait(raw_count_ptr_(), 0, FUTEX_BITSET_MATCH_ANY,
                        FUTEX2_SIZE_U32, nullptr, 0);
         }
     }
@@ -92,8 +90,6 @@ private:
     uint32_t *raw_count_ptr_() { return reinterpret_cast<uint32_t *>(&count); }
 
 private:
-    static constexpr size_t MAX_RETRIES = 32;
-
     std::atomic<uint32_t> count;
 };
 
