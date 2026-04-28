@@ -4,7 +4,7 @@ target_link_libraries(tests PRIVATE doctest condy uring)
 
 if (TESTS_STATIC_LINK)
     target_link_options(tests PRIVATE -static)
-else()
+elseif (TESTS_TSAN)
     target_compile_options(tests PRIVATE -fsanitize=thread)
     target_link_options(tests PRIVATE -fsanitize=thread)
 endif()

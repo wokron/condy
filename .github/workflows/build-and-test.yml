@@ -47,6 +47,7 @@ jobs:
               -DBUILD_EXAMPLES=ON \
               -DBUILD_BENCHMARKS=ON \
               -DBUILD_TESTS=ON \
+              -DTESTS_TSAN=ON \
               -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} \
               -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}} \
               -DCMAKE_BUILD_TYPE=${{matrix.build-type}}

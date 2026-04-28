@@ -7,6 +7,7 @@ option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(TESTS_STATIC_LINK "Use static linking for tests" OFF)
+option(TESTS_TSAN "Enable thread sanitizer for tests" OFF)
 option(LINK_LIBURING "Use liburing from third_party and link it to condy" ON)
 
 if (ENABLE_CLANG_TIDY)
