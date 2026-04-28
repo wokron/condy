@@ -18,9 +18,6 @@ struct SingleLinkEntry {
 struct DoubleLinkEntry {
     DoubleLinkEntry *next = nullptr;
     DoubleLinkEntry *prev = nullptr;
-#ifndef NDEBUG
-    void *owner = nullptr;
-#endif
 };
 
 template <typename T, SingleLinkEntry T::*Member> class IntrusiveSingleList {
@@ -31,6 +28,7 @@ public:
           tail_(std::exchange(other.tail_, nullptr)) {}
     IntrusiveSingleList &operator=(IntrusiveSingleList &&other) noexcept {
         if (this != &other) {
+            assert(empty());
             head_ = std::exchange(other.head_, nullptr);
             tail_ = std::exchange(other.tail_, nullptr);
         }
@@ -40,6 +38,7 @@ public:
     IntrusiveSingleList(const IntrusiveSingleList &) = delete;
     IntrusiveSingleList &operator=(const IntrusiveSingleList &) = delete;
 
+public:
     void push_back(T *item) noexcept {
         assert(item != nullptr);
         SingleLinkEntry *entry = &(item->*Member);
@@ -90,7 +89,22 @@ private:
 template <typename T, DoubleLinkEntry T::*Member> class IntrusiveDoubleList {
 public:
     IntrusiveDoubleList() = default;
+    IntrusiveDoubleList(IntrusiveDoubleList &&other) noexcept
+        : head_(std::exchange(other.head_, nullptr)),
+          tail_(std::exchange(other.tail_, nullptr)) {}
+    IntrusiveDoubleList &operator=(IntrusiveDoubleList &&other) noexcept {
+        if (this != &other) {
+            assert(empty());
+            head_ = std::exchange(other.head_, nullptr);
+            tail_ = std::exchange(other.tail_, nullptr);
+        }
+        return *this;
+    }
 
+    IntrusiveDoubleList(const IntrusiveDoubleList &) = delete;
+    IntrusiveDoubleList &operator=(const IntrusiveDoubleList &) = delete;
+
+public:
     void push_back(T *item) noexcept {
         assert(item != nullptr);
         DoubleLinkEntry *entry = &(item->*Member);
@@ -104,10 +118,6 @@ public:
             tail_->next = entry;
             tail_ = entry;
         }
-#ifndef NDEBUG
-        assert(entry->owner == nullptr);
-        entry->owner = this;
-#endif
     }
 
     bool empty() const noexcept { return head_ == nullptr; }
@@ -125,20 +135,12 @@ public:
         }
         entry->next = nullptr;
         entry->prev = nullptr;
-#ifndef NDEBUG
-        assert(entry->owner == this);
-        entry->owner = nullptr;
-#endif
         return container_of(Member, entry);
     }
 
     bool remove(T *item) noexcept {
         assert(item != nullptr);
         DoubleLinkEntry *entry = &(item->*Member);
-#ifndef NDEBUG
-        assert(entry->owner == this);
-        entry->owner = nullptr;
-#endif
         if (entry->prev == nullptr && entry->next == nullptr &&
             head_ != entry) {
             return false;
