@@ -12,3 +12,6 @@ target_link_libraries(file-server PRIVATE condy uring)
 
 add_executable(queue-kernel-futex queue-kernel-futex.cpp)
 target_link_libraries(queue-kernel-futex PRIVATE condy uring)
+
+add_executable(queue-condy-futex queue-condy-futex.cpp)
+target_link_libraries(queue-condy-futex PRIVATE condy uring)
