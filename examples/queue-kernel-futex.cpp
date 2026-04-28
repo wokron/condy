@@ -29,7 +29,7 @@ long futex_wake(void *uaddr, unsigned long mask, int nr, unsigned int flags) {
 
 class FutexSemaphore {
 public:
-    FutexSemaphore(uint32_t initial_count = 0) : count(initial_count) {}
+    FutexSemaphore(uint32_t initial_count = 0) : count_(initial_count) {}
 
     FutexSemaphore(const FutexSemaphore &) = delete;
     FutexSemaphore &operator=(const FutexSemaphore &) = delete;
@@ -39,11 +39,11 @@ public:
 public:
     condy::Coro<void> async_acquire() {
         while (true) {
-            uint32_t c = count.load(std::memory_order_relaxed);
+            uint32_t c = count_.load(std::memory_order_relaxed);
             if (c > 0) {
-                if (count.compare_exchange_strong(c, c - 1,
-                                                  std::memory_order_acquire,
-                                                  std::memory_order_relaxed)) {
+                if (count_.compare_exchange_strong(c, c - 1,
+                                                   std::memory_order_acquire,
+                                                   std::memory_order_relaxed)) {
                     co_return;
                 }
                 continue;
@@ -57,11 +57,11 @@ public:
 
     void acquire() {
         while (true) {
-            uint32_t c = count.load(std::memory_order_relaxed);
+            uint32_t c = count_.load(std::memory_order_relaxed);
             if (c > 0) {
-                if (count.compare_exchange_strong(c, c - 1,
-                                                  std::memory_order_acquire,
-                                                  std::memory_order_relaxed)) {
+                if (count_.compare_exchange_strong(c, c - 1,
+                                                   std::memory_order_acquire,
+                                                   std::memory_order_relaxed)) {
                     return;
                 }
                 continue;
@@ -72,14 +72,14 @@ public:
     }
 
     condy::Coro<void> async_release(uint32_t n = 1) {
-        count.fetch_add(n, std::memory_order_release);
+        count_.fetch_add(n, std::memory_order_release);
         [[maybe_unused]] int r = co_await condy::async_futex_wake(
             raw_count_ptr_(), n, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
         assert(r >= 0);
     }
 
     void release(uint32_t n = 1) {
-        count.fetch_add(n, std::memory_order_release);
+        count_.fetch_add(n, std::memory_order_release);
         [[maybe_unused]] long r =
             futex_wake(raw_count_ptr_(), FUTEX_BITSET_MATCH_ANY,
                        static_cast<int>(n), FUTEX2_SIZE_U32);
@@ -87,10 +87,10 @@ public:
     }
 
 private:
-    uint32_t *raw_count_ptr_() { return reinterpret_cast<uint32_t *>(&count); }
+    uint32_t *raw_count_ptr_() { return reinterpret_cast<uint32_t *>(&count_); }
 
 private:
-    std::atomic<uint32_t> count;
+    std::atomic<uint32_t> count_;
 };
 
 class FutexMutex {
@@ -103,16 +103,16 @@ public:
     FutexMutex &operator=(FutexMutex &&) = delete;
 
 public:
-    auto async_lock() { return sem.async_acquire(); }
+    auto async_lock() { return sem_.async_acquire(); }
 
-    auto async_unlock() { return sem.async_release(); }
+    auto async_unlock() { return sem_.async_release(); }
 
-    void lock() { sem.acquire(); }
+    void lock() { sem_.acquire(); }
 
-    void unlock() { sem.release(); }
+    void unlock() { sem_.release(); }
 
 private:
-    FutexSemaphore sem{1};
+    FutexSemaphore sem_{1};
 };
 
 struct State {
