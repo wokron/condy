@@ -2,15 +2,18 @@ name: Build and Test Condy
 
 on:
   push:
-    branches: ["master"]
+    branches: [ "master" ]
     paths-ignore:
       - "docs/**"
       - "**.md"
   pull_request:
-    branches: ["master"]
+    branches: [ "master" ]
     paths-ignore:
       - "docs/**"
       - "**.md"
+
+env:
+  LIBURING_VERSION: "2.6"
 
 jobs:
   build-and-test:
@@ -23,8 +26,8 @@ jobs:
         compiler:
           - { cc: clang, cxx: clang++ }
           - { cc: gcc, cxx: g++ }
-        build-type: [Release, Debug]
-        liburing-version: [2.3, 2.6]
+        build-type: [ Debug, Release ]
+        sanitizer: [ tsan, asan ]
 
     steps:
       - name: Checkout Repository and Submodules
@@ -36,24 +39,31 @@ jobs:
         run: |
           cd ./third_party/liburing
           git fetch --tags
-          git checkout liburing-${{ matrix.liburing-version }}
+          git checkout liburing-${{ env.LIBURING_VERSION }}
           cd ../../
 
       - name: Configure CMake
         run: |
           COMPILER=$(${{matrix.compiler.cc}} --version | head -n 1)
           echo "Using compiler: $COMPILER"
+          SANITIZER_FLAG=""
+          if [ "${{ matrix.sanitizer }}" = "tsan" ]; then
+            SANITIZER_FLAG="-DTESTS_TSAN=ON"
+          elif [ "${{ matrix.sanitizer }}" = "asan" ]; then
+            SANITIZER_FLAG="-DTESTS_ASAN=ON"
+          fi
           cmake -B ${{github.workspace}}/build \
               -DBUILD_EXAMPLES=ON \
               -DBUILD_BENCHMARKS=ON \
               -DBUILD_TESTS=ON \
-              -DTESTS_TSAN=ON \
+              $SANITIZER_FLAG \
               -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} \
               -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}} \
               -DCMAKE_BUILD_TYPE=${{matrix.build-type}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.build-type}} -j$(nproc)
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.build-type}}
+          -j$(nproc)
 
       - name: Run Tests
         timeout-minutes: 5

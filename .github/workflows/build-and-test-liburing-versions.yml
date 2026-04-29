@@ -1,0 +1,54 @@
+name: Build and Test Condy Against liburing Versions
+
+on:
+  push:
+    branches: [ "master" ]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+    branches: [ "master" ]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        liburing-version: [ "2.3", "2.6" ]
+
+    steps:
+      - name: Checkout Repository and Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Checkout Liburing Version
+        run: |
+          cd ./third_party/liburing
+          git fetch --tags
+          git checkout liburing-${{ matrix.liburing-version }}
+          cd ../../
+
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build \
+              -DBUILD_EXAMPLES=ON \
+              -DBUILD_BENCHMARKS=ON \
+              -DBUILD_TESTS=ON \
+              -DCMAKE_C_COMPILER=clang \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config Debug -j$(nproc)
+
+      - name: Run Tests
+        timeout-minutes: 5
+        working-directory: ${{github.workspace}}/build
+        run: ctest --verbose -C Debug
