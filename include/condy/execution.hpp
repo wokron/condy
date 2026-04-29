@@ -121,6 +121,8 @@ private:
     Runtime &runtime_;
 };
 
+} // namespace detail
+
 class RuntimeScheduler {
 public:
     RuntimeScheduler(Runtime &runtime) : runtime_(&runtime) {}
@@ -137,10 +139,6 @@ private:
     Runtime *runtime_;
 };
 
-} // namespace detail
-
-inline detail::RuntimeScheduler get_scheduler(Runtime &runtime) {
-    return {runtime};
-}
+inline RuntimeScheduler get_scheduler(Runtime &runtime) { return {runtime}; }
 
 } // namespace condy
