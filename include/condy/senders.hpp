@@ -6,6 +6,7 @@
 #pragma once
 
 #include "condy/concepts.hpp"
+#include "condy/execution.hpp"
 #include "condy/op_states.hpp"
 #include <array>
 #include <stdexcept>
@@ -290,57 +291,68 @@ private:
 } // namespace detail
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler>
-using OpSender = detail::OpSenderImpl<PrepFunc, CQEHandler>;
+using OpSender =
+    detail::StandardSender<detail::OpSenderImpl<PrepFunc, CQEHandler>>;
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc>
-using MultiShotOpSender =
-    detail::MultiShotOpSenderImpl<PrepFunc, CQEHandler, MultiShotFunc>;
+using MultiShotOpSender = detail::StandardSender<
+    detail::MultiShotOpSenderImpl<PrepFunc, CQEHandler, MultiShotFunc>>;
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
-using ZeroCopyOpSender =
-    detail::ZeroCopyOpSenderImpl<PrepFunc, CQEHandler, FreeFunc>;
+using ZeroCopyOpSender = detail::StandardSender<
+    detail::ZeroCopyOpSenderImpl<PrepFunc, CQEHandler, FreeFunc>>;
 
 template <unsigned int Flags, typename Sender>
-using FlaggedOpSender = detail::FlaggedOpSenderImpl<Flags, Sender>;
+using FlaggedOpSender =
+    detail::StandardSender<detail::FlaggedOpSenderImpl<Flags, Sender>>;
 
 template <typename... Senders>
-using ParallelAllSender = detail::ParallelAllSenderImpl<Senders...>;
+using ParallelAllSender =
+    detail::StandardSender<detail::ParallelAllSenderImpl<Senders...>>;
 
 template <typename... Senders>
-using ParallelAnySender = detail::ParallelAnySenderImpl<Senders...>;
+using ParallelAnySender =
+    detail::StandardSender<detail::ParallelAnySenderImpl<Senders...>>;
 
 template <typename... Senders>
-using WhenAllSender = detail::WhenAllSenderImpl<Senders...>;
+using WhenAllSender =
+    detail::StandardSender<detail::WhenAllSenderImpl<Senders...>>;
 
 template <typename... Senders>
-using WhenAnySender = detail::WhenAnySenderImpl<Senders...>;
+using WhenAnySender =
+    detail::StandardSender<detail::WhenAnySenderImpl<Senders...>>;
 
 template <typename... Senders>
-using LinkSender = detail::LinkSenderImplBase<IOSQE_IO_LINK, Senders...>;
+using LinkSender = detail::StandardSender<
+    detail::LinkSenderImplBase<IOSQE_IO_LINK, Senders...>>;
 
 template <typename... Senders>
-using HardLinkSender =
-    detail::LinkSenderImplBase<IOSQE_IO_HARDLINK, Senders...>;
+using HardLinkSender = detail::StandardSender<
+    detail::LinkSenderImplBase<IOSQE_IO_HARDLINK, Senders...>>;
 
 template <typename Sender>
-using RangedParallelAllSender = detail::RangedParallelAllSenderImpl<Sender>;
+using RangedParallelAllSender =
+    detail::StandardSender<detail::RangedParallelAllSenderImpl<Sender>>;
 
 template <typename Sender>
-using RangedParallelAnySender = detail::RangedParallelAnySenderImpl<Sender>;
+using RangedParallelAnySender =
+    detail::StandardSender<detail::RangedParallelAnySenderImpl<Sender>>;
 
 template <typename Sender>
-using RangedWhenAllSender = detail::RangedWhenAllSenderImpl<Sender>;
+using RangedWhenAllSender =
+    detail::StandardSender<detail::RangedWhenAllSenderImpl<Sender>>;
 
 template <typename Sender>
-using RangedWhenAnySender = detail::RangedWhenAnySenderImpl<Sender>;
+using RangedWhenAnySender =
+    detail::StandardSender<detail::RangedWhenAnySenderImpl<Sender>>;
 
 template <typename Sender>
-using RangedLinkSender =
-    detail::RangedLinkSenderImplBase<IOSQE_IO_LINK, Sender>;
+using RangedLinkSender = detail::StandardSender<
+    detail::RangedLinkSenderImplBase<IOSQE_IO_LINK, Sender>>;
 
 template <typename Sender>
-using RangedHardLinkSender =
-    detail::RangedLinkSenderImplBase<IOSQE_IO_HARDLINK, Sender>;
+using RangedHardLinkSender = detail::StandardSender<
+    detail::RangedLinkSenderImplBase<IOSQE_IO_HARDLINK, Sender>>;
 
 } // namespace condy

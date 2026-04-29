@@ -38,11 +38,10 @@ TEST_CASE("test execution - sender") {
     auto scheduler = condy::get_scheduler(runtime);
 
     bool executed = false;
-    ex::sender auto sender =
-        ex::schedule(scheduler) | ex::let_value([&] {
-            executed = true;
-            return condy::detail::as_sender(condy::async_nop());
-        });
+    ex::sender auto sender = ex::schedule(scheduler) | ex::let_value([&] {
+                                 executed = true;
+                                 return condy::async_nop();
+                             });
 
     auto [r] = ex::sync_wait(sender).value();
     REQUIRE(executed);
@@ -92,12 +91,10 @@ TEST_CASE("test execution - when_any") {
         .tv_sec = 60ll * 60ll,
         .tv_nsec = 0,
     };
-    auto sender =
-        ex::schedule(scheduler) | ex::let_value([&] {
-            return exec::when_any(
-                condy::detail::as_sender(condy::async_timeout(&ts, 0, 0)),
-                condy::detail::as_sender(condy::async_nop()));
-        });
+    auto sender = ex::schedule(scheduler) | ex::let_value([&] {
+                      return exec::when_any(condy::async_timeout(&ts, 0, 0),
+                                            condy::async_nop());
+                  });
 
     auto [r] = ex::sync_wait(sender).value();
     REQUIRE(r == 0);
@@ -118,10 +115,9 @@ TEST_CASE("test execution - when_any with different thread") {
         .tv_sec = 60ll * 60ll,
         .tv_nsec = 0,
     };
-    auto sender1 =
-        ex::schedule(scheduler1) | ex::let_value([&] {
-            return condy::detail::as_sender(condy::async_timeout(&ts, 0, 0));
-        });
+    auto sender1 = ex::schedule(scheduler1) | ex::let_value([&] {
+                       return condy::async_timeout(&ts, 0, 0);
+                   });
     auto sender2 = ex::schedule(scheduler2) | ex::then([] { return 42; });
     auto when_any_sender = exec::when_any(sender1, sender2);
     auto [r] = ex::sync_wait(when_any_sender).value();

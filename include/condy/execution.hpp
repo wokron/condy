@@ -9,23 +9,20 @@ namespace ex = stdexec;
 
 namespace detail {
 
-class RuntimeScheduler;
-
-template <typename Sender> class StandardSenderWrapper {
+template <typename SenderImpl> class StandardSender : public SenderImpl {
 public:
-    using sender_concept = ex::sender_t;
-    using completion_signatures =
-        ex::completion_signatures<ex::set_value_t(typename Sender::ReturnType),
-                                  ex::set_error_t(std::error_code),
-                                  ex::set_stopped_t()>;
+    using SenderImpl::SenderImpl;
 
-    StandardSenderWrapper(Sender sender) : sender_(std::move(sender)) {}
+    using sender_concept = ex::sender_t;
+    using completion_signatures = ex::completion_signatures<
+        ex::set_value_t(typename SenderImpl::ReturnType),
+        ex::set_error_t(std::error_code), ex::set_stopped_t()>;
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
-        using OpState =
-            decltype(sender_.connect(ReceiverWrapper<Receiver>{receiver}));
+        using OpState = decltype(this->connect_impl(
+            ReceiverWrapper<Receiver>{std::move(receiver)}));
         return OperationStateWrapper<OpState>{
-            sender_.connect(ReceiverWrapper<Receiver>{std::move(receiver)})};
+            this->connect_impl(ReceiverWrapper<Receiver>{std::move(receiver)})};
     }
 
 private:
@@ -67,14 +64,7 @@ private:
         OperationState op_state;
         void start() noexcept { op_state.start(0); }
     };
-
-    Sender sender_;
 };
-
-template <typename Sender> auto as_sender(Sender &&sender) {
-    return StandardSenderWrapper<std::decay_t<Sender>>(
-        std::forward<Sender>(sender));
-}
 
 class ScheduleSender {
 public:
