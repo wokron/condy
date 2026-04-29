@@ -242,6 +242,71 @@ Consumed: 9
 
 How to combine `condy::Channel` with other Condy features will be introduced in later sections.
 
+### Futex
+
+Condy also provides `condy::Futex<T>`, a user-space synchronization primitive for coroutine scheduling.
+
+`condy::Futex<T>` works with an external `std::atomic<T>` value:
+
+- Use `co_await futex.wait(old)` to suspend the current coroutine only when the atomic value is still equal to `old`.
+- Use `futex.notify_one()` / `futex.notify_all()` to wake waiting coroutines.
+
+Compared with kernel-level futex syscalls, `condy::Futex<T>` is designed for coroutine-to-coroutine coordination inside Condy runtimes.
+
+The following example uses an atomic flag and two runtimes running in two OS threads. A waiter coroutine runs on one runtime and waits until the flag changes from `0` to `1`. A notifier coroutine runs on another runtime, updates the flag, and calls `notify_all()`.
+
+```cpp
+#include <atomic>
+#include <cerrno>
+#include <condy.hpp>
+#include <iostream>
+#include <thread>
+
+condy::Coro<void> waiter(std::atomic<int> &flag, condy::Futex<int> &fut) {
+    // Loop to handle races/spurious wakeups in a standard wait-notify pattern.
+    while (flag.load(std::memory_order_acquire) == 0) {
+        int r = co_await fut.wait(0);
+        assert(r == 0); // Ensure no errors
+    }
+    std::cout << "waiter: observed flag = 1\n";
+}
+
+condy::Coro<void> notifier(std::atomic<int> &flag, condy::Futex<int> &fut) {
+    __kernel_timespec ts = {.tv_sec = 1, .tv_nsec = 0};
+    co_await condy::async_timeout(&ts, 0, 0);
+
+    flag.store(1, std::memory_order_release);
+    fut.notify_all();
+}
+
+int main() {
+    std::atomic<int> flag{0};
+    condy::Futex<int> fut(flag);
+
+    condy::Runtime runtime_waiter;
+    condy::Runtime runtime_notifier;
+
+    condy::co_spawn(runtime_waiter, waiter(flag, fut)).detach();
+    condy::co_spawn(runtime_notifier, notifier(flag, fut)).detach();
+
+    std::thread t1([&] {
+        runtime_waiter.allow_exit();
+        runtime_waiter.run();
+    });
+
+    std::thread t2([&] {
+        runtime_notifier.allow_exit();
+        runtime_notifier.run();
+    });
+
+    t1.join();
+    t2.join();
+    return 0;
+}
+```
+
+This pattern is useful for lightweight notifications between coroutines, and it can also serve as a building block for asynchronous synchronization primitives such as mutexes and condition variables.
+
 ## Composing and Controlling Asynchronous Operations
 
 This section introduces methods for composing and controlling asynchronous operations in Condy. These methods provide support for certain io_uring features, enabling richer semantics and finer-grained control over program flow.
