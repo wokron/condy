@@ -13,6 +13,7 @@
 #include "condy/buffers.hpp"            // IWYU pragma: export
 #include "condy/channel.hpp"            // IWYU pragma: export
 #include "condy/coro.hpp"               // IWYU pragma: export
+#include "condy/futex.hpp"              // IWYU pragma: export
 #include "condy/helpers.hpp"            // IWYU pragma: export
 #include "condy/pmr.hpp"                // IWYU pragma: export
 #include "condy/provided_buffers.hpp"   // IWYU pragma: export
