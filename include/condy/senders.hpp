@@ -17,7 +17,8 @@
 
 namespace condy {
 
-template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler> class OpSender {
+template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler>
+class [[nodiscard]] OpSender {
 public:
     using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
@@ -38,7 +39,7 @@ private:
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler,
           typename MultiShotFunc>
-class MultiShotOpSender {
+class [[nodiscard]] MultiShotOpSender {
 public:
     using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
@@ -61,7 +62,7 @@ private:
 };
 
 template <PrepFuncLike PrepFunc, CQEHandlerLike CQEHandler, typename FreeFunc>
-class ZeroCopyOpSender {
+class [[nodiscard]] ZeroCopyOpSender {
 public:
     using ReturnType = std::invoke_result_t<CQEHandler &, io_uring_cqe *>;
 
@@ -82,7 +83,8 @@ private:
     FreeFunc free_func_;
 };
 
-template <unsigned int Flags, typename Sender> class FlaggedOpSender {
+template <unsigned int Flags, typename Sender>
+class [[nodiscard]] FlaggedOpSender {
 public:
     using ReturnType = typename Sender::ReturnType;
 
@@ -97,7 +99,7 @@ private:
     Sender sender_;
 };
 
-template <typename... Senders> class ParallelAllSender {
+template <typename... Senders> class [[nodiscard]] ParallelAllSender {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
                                  std::tuple<typename Senders::ReturnType...>>;
@@ -113,7 +115,7 @@ private:
     std::tuple<Senders...> senders_;
 };
 
-template <typename... Senders> class ParallelAnySender {
+template <typename... Senders> class [[nodiscard]] ParallelAnySender {
 public:
     using ReturnType = std::pair<std::array<size_t, sizeof...(Senders)>,
                                  std::tuple<typename Senders::ReturnType...>>;
@@ -129,7 +131,7 @@ private:
     std::tuple<Senders...> senders_;
 };
 
-template <typename... Senders> class WhenAllSender {
+template <typename... Senders> class [[nodiscard]] WhenAllSender {
 public:
     using ReturnType = std::tuple<typename Senders::ReturnType...>;
 
@@ -151,7 +153,7 @@ private:
     template <typename...> friend class WhenAllSender;
 };
 
-template <typename... Senders> class WhenAnySender {
+template <typename... Senders> class [[nodiscard]] WhenAnySender {
 public:
     using ReturnType = std::variant<typename Senders::ReturnType...>;
 
@@ -173,7 +175,8 @@ private:
     template <typename...> friend class WhenAnySender;
 };
 
-template <unsigned int Flags, typename... Senders> class LinkSenderBase {
+template <unsigned int Flags, typename... Senders>
+class [[nodiscard]] LinkSenderBase {
 public:
     using ReturnType = std::tuple<typename Senders::ReturnType...>;
 
@@ -201,7 +204,7 @@ using LinkSender = LinkSenderBase<IOSQE_IO_LINK, Senders...>;
 template <typename... Senders>
 using HardLinkSender = LinkSenderBase<IOSQE_IO_HARDLINK, Senders...>;
 
-template <typename Sender> class RangedParallelAllSender {
+template <typename Sender> class [[nodiscard]] RangedParallelAllSender {
 public:
     using ReturnType = std::pair<std::vector<size_t>,
                                  std::vector<typename Sender::ReturnType>>;
@@ -218,7 +221,7 @@ private:
     std::vector<Sender> senders_;
 };
 
-template <typename Sender> class RangedParallelAnySender {
+template <typename Sender> class [[nodiscard]] RangedParallelAnySender {
 public:
     using ReturnType = std::pair<std::vector<size_t>,
                                  std::vector<typename Sender::ReturnType>>;
@@ -235,7 +238,7 @@ private:
     std::vector<Sender> senders_;
 };
 
-template <typename Sender> class RangedWhenAllSender {
+template <typename Sender> class [[nodiscard]] RangedWhenAllSender {
 public:
     using ReturnType = std::vector<typename Sender::ReturnType>;
 
@@ -251,7 +254,7 @@ private:
     std::vector<Sender> senders_;
 };
 
-template <typename Sender> class RangedWhenAnySender {
+template <typename Sender> class [[nodiscard]] RangedWhenAnySender {
 public:
     using ReturnType = std::pair<size_t, typename Sender::ReturnType>;
 
@@ -272,7 +275,8 @@ private:
     std::vector<Sender> senders_;
 };
 
-template <unsigned int Flags, typename Sender> class RangedLinkSenderBase {
+template <unsigned int Flags, typename Sender>
+class [[nodiscard]] RangedLinkSenderBase {
 public:
     using ReturnType = std::vector<typename Sender::ReturnType>;
 
