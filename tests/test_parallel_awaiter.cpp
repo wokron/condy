@@ -36,7 +36,7 @@ struct SimpleFinishHandle {
 struct SimpleSender {
     using ReturnType = int;
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return OperationState<Receiver>{handle_ptr_, std::move(receiver)};
     }
 

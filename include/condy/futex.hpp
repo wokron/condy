@@ -197,7 +197,7 @@ public:
 
     WaitSender(Futex &futex, T old) : futex_(futex), old_(old) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return OperationState<Receiver>(futex_, old_, std::move(receiver));
     }
 

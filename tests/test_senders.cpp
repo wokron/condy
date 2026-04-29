@@ -443,7 +443,7 @@ TEST_CASE("test senders - cancel from other task") {
         auto aw =
             condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto t = condy::co_spawn(runtime, cancel_task());
-        auto op_state = aw.connect(WithCancelReceiver{
+        auto op_state = aw.connect_impl(WithCancelReceiver{
             .callback =
                 [&](int result) { CHECK(channel.try_push(result) == 0); },
             .token = stop_source.get_token(),
@@ -482,7 +482,7 @@ TEST_CASE("test senders - cancel from other thread") {
         auto aw =
             condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto t = condy::co_spawn(runtime, notify_task());
-        auto op_state = aw.connect(WithCancelReceiver{
+        auto op_state = aw.connect_impl(WithCancelReceiver{
             .callback =
                 [&](int result) { REQUIRE(channel.try_push(result) == 0); },
             .token = stop_source.get_token(),
@@ -529,7 +529,7 @@ TEST_CASE("test senders - cancel from other runtime thread") {
         auto aw =
             condy::detail::make_op_awaiter(io_uring_prep_timeout, &ts, 0, 0);
         auto t = condy::co_spawn(runtime, notify_task());
-        auto op_state = aw.connect(WithCancelReceiver{
+        auto op_state = aw.connect_impl(WithCancelReceiver{
             .callback =
                 [&](int result) { REQUIRE(channel.try_push(result) == 0); },
             .token = stop_source.get_token(),

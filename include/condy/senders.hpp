@@ -24,7 +24,7 @@ public:
     OpSender(PrepFunc func, CQEHandler cqe_handler)
         : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::OpSenderOperationState<
             OpFinishHandle<CQEHandler, Receiver>, PrepFunc>(
             std::move(prep_func_), std::move(cqe_handler_),
@@ -47,7 +47,7 @@ public:
         : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)),
           multi_shot_func_(std::move(multi_shot_func)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::OpSenderOperationState<
             MultiShotOpFinishHandle<CQEHandler, MultiShotFunc, Receiver>,
             PrepFunc>(std::move(prep_func_), std::move(cqe_handler_),
@@ -69,7 +69,7 @@ public:
         : prep_func_(std::move(func)), cqe_handler_(std::move(cqe_handler)),
           free_func_(std::move(free_func)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::OpSenderOperationState<
             ZeroCopyOpFinishHandle<CQEHandler, FreeFunc, Receiver>, PrepFunc>(
             std::move(prep_func_), std::move(cqe_handler_), std::move(receiver),
@@ -88,7 +88,7 @@ public:
 
     FlaggedOpSender(Sender sender) : sender_(std::move(sender)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::FlaggedOpState<Flags, Sender, Receiver>(
             std::move(sender_), std::move(receiver));
     }
@@ -104,7 +104,7 @@ public:
 
     ParallelAllSender(Senders... senders) : senders_(std::move(senders)...) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::ParallelAllOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
     }
@@ -120,7 +120,7 @@ public:
 
     ParallelAnySender(Senders... senders) : senders_(std::move(senders)...) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::ParallelAnyOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
     }
@@ -140,7 +140,7 @@ public:
         : senders_(std::tuple_cat(std::move(other.senders_),
                                   std::make_tuple(std::move(sender)))) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::WhenAllOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
     }
@@ -162,7 +162,7 @@ public:
         : senders_(std::tuple_cat(std::move(other.senders_),
                                   std::make_tuple(std::move(sender)))) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::WhenAnyOperationState<Receiver, Senders...>(
             std::move(senders_), std::move(receiver));
     }
@@ -184,7 +184,7 @@ public:
         : senders_(std::tuple_cat(std::move(other.senders_),
                                   std::make_tuple(std::move(sender)))) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::LinkOperationState<Receiver, Flags, Senders...>(
             std::move(senders_), std::move(receiver));
     }
@@ -209,7 +209,7 @@ public:
     RangedParallelAllSender(std::vector<Sender> senders)
         : senders_(std::move(senders)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::RangedParallelAllOperationState<Receiver, Sender>(
             std::move(senders_), std::move(receiver));
     }
@@ -226,7 +226,7 @@ public:
     RangedParallelAnySender(std::vector<Sender> senders)
         : senders_(std::move(senders)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::RangedParallelAnyOperationState<Receiver, Sender>(
             std::move(senders_), std::move(receiver));
     }
@@ -242,7 +242,7 @@ public:
     RangedWhenAllSender(std::vector<Sender> senders)
         : senders_(std::move(senders)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::WhenAllRangeOperationState<Receiver, Sender>(
             std::move(senders_), std::move(receiver));
     }
@@ -263,7 +263,7 @@ public:
         }
     }
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::WhenAnyRangeOperationState<Receiver, Sender>(
             std::move(senders_), std::move(receiver));
     }
@@ -279,7 +279,7 @@ public:
     RangedLinkSenderBase(std::vector<Sender> senders)
         : senders_(std::move(senders)) {}
 
-    template <typename Receiver> auto connect(Receiver receiver) noexcept {
+    template <typename Receiver> auto connect_impl(Receiver receiver) noexcept {
         return detail::RangedLinkOperationState<Receiver, Flags, Sender>(
             std::move(senders_), std::move(receiver));
     }
