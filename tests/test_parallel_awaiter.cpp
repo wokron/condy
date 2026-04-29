@@ -108,7 +108,8 @@ TEST_CASE("test parallel_awaiter - RangedWhenAllAwaiter") {
     auto coro = func();
     REQUIRE(!finished);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(!finished);
     // Now all awaiters should be registered
     REQUIRE(h1->registered_);
@@ -123,6 +124,7 @@ TEST_CASE("test parallel_awaiter - RangedWhenAllAwaiter") {
 
     h3->invoke(3);
     REQUIRE(finished);
+    handle.destroy();
 }
 
 TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
@@ -146,7 +148,8 @@ TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
         auto coro = func(0, 2);
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -160,13 +163,15 @@ TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
         h2->invoke(-1);
         h3->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 
     SUBCASE("a2 finish first") {
         auto coro = func(1, 3);
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -180,13 +185,15 @@ TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
         h1->invoke(-1);
         h3->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 
     SUBCASE("a3 finish first") {
         auto coro = func(2, 1);
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -200,6 +207,7 @@ TEST_CASE("test parallel_awaiter - RangedWhenAnyAwaiter") {
         h1->invoke(-1);
         h2->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 }
 
@@ -231,7 +239,8 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
         auto coro = func(0, {2, 3});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
 
         h1->invoke(2);
@@ -246,6 +255,7 @@ TEST_CASE("test parallel_awaiter - Ranged (a && b) || (c && d)") {
 
         h4->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
+        handle.destroy();
     }
 }
 
@@ -269,7 +279,8 @@ TEST_CASE("test parallel_awaiter - WhenAllAwaiter") {
     auto coro = func();
     REQUIRE(!finished);
 
-    coro.release().resume();
+    auto handle = coro.release();
+    handle.resume();
     REQUIRE(!finished);
     // Now all awaiters should be registered
     REQUIRE(h1->registered_);
@@ -284,6 +295,7 @@ TEST_CASE("test parallel_awaiter - WhenAllAwaiter") {
 
     h3->invoke(3);
     REQUIRE(finished);
+    handle.destroy();
 }
 
 TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
@@ -309,7 +321,8 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
             func(0, std::variant<int, int, int>{std::in_place_index<0>, 2});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -323,6 +336,7 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
         h2->invoke(-1);
         h3->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 
     SUBCASE("a2 finish first") {
@@ -330,7 +344,8 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
             func(1, std::variant<int, int, int>{std::in_place_index<1>, 3});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -344,6 +359,7 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
         h1->invoke(-1);
         h3->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 
     SUBCASE("a3 finish first") {
@@ -351,7 +367,8 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
             func(2, std::variant<int, int, int>{std::in_place_index<2>, 1});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
         // Now all awaiters should be registered
         REQUIRE(h1->registered_);
@@ -365,6 +382,7 @@ TEST_CASE("test parallel_awaiter - WhenAnyAwaiter") {
         h1->invoke(-1);
         h2->invoke(-1);
         REQUIRE(finished);
+        handle.destroy();
     }
 }
 
@@ -397,7 +415,8 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
                         std::in_place_index<0>, std::make_tuple(2, 3)});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
 
         h1->invoke(2);
@@ -412,6 +431,7 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
 
         h4->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
+        handle.destroy();
     }
 
     SUBCASE("a1 -> a3 -> a2 -> a4") {
@@ -420,7 +440,8 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
                         std::in_place_index<1>, std::make_tuple(4, 5)});
         REQUIRE(!finished);
 
-        coro.release().resume();
+        auto handle = coro.release();
+        handle.resume();
         REQUIRE(!finished);
 
         h3->invoke(4);
@@ -435,5 +456,6 @@ TEST_CASE("test parallel_awaiter - (a && b) || (c && d) with WaitAllAwaiter "
 
         h2->invoke(-1); // finish due to cancellation
         REQUIRE(finished);
+        handle.destroy();
     }
 }

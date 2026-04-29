@@ -29,6 +29,9 @@ TEST_CASE("test task - construct") {
 
     task.detach();
     REQUIRE(!task.joinable());
+
+    runtime.allow_exit();
+    runtime.run();
 }
 
 TEST_CASE("test task - joinable check") {
@@ -75,6 +78,7 @@ TEST_CASE("test task - local spawn and await") {
     runtime.run();
 
     REQUIRE(finished);
+    h.destroy();
 }
 
 TEST_CASE("test task - remote spawn and await") {
@@ -104,6 +108,7 @@ TEST_CASE("test task - remote spawn and await") {
     rt2_thread.join();
 
     REQUIRE(finished);
+    h.destroy();
 }
 
 TEST_CASE("test task - remote spawn and wait 1") {
@@ -400,6 +405,7 @@ TEST_CASE("test task - spawn task with custom allocator") {
 
     REQUIRE(finished);
     REQUIRE(allocator.allocated);
+    h.destroy();
 }
 
 TEST_CASE("test task - co_switch") {
