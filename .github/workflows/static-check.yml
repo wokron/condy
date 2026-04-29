@@ -12,9 +12,6 @@ on:
       - "docs/**"
       - "**.md"
 
-env:
-  LIBURING_VERSION: 2.13
-
 jobs:
   static-check:
     runs-on: ubuntu-24.04
@@ -23,18 +20,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Formatting Check
         run: |
           bash ./scripts/format-all.sh
-
-      - name: Checkout Liburing to Latest Version
-        run: |
-          git submodule update --init --recursive
-          cd ./third_party/liburing
-          git fetch --tags
-          git checkout liburing-${{ env.LIBURING_VERSION }}
-          cd ../../
 
       - name: Configure CMake
         run: |
