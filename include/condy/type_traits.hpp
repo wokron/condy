@@ -36,8 +36,8 @@ using stop_callback_t =
     typename detail::stop_callback_traits<T, Callback>::type;
 
 template <typename Sender, typename Receiver>
-using operation_state_t =
-    decltype(std::declval<Sender &&>().connect(std::declval<Receiver &&>()));
+using operation_state_t = decltype(std::declval<Sender &&>().connect_impl(
+    std::declval<Receiver &&>()));
 
 template <typename Receiver>
 using stop_token_t =

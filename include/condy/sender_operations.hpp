@@ -58,7 +58,7 @@ public:
 template <typename Sender> class SenderAwaiter {
 public:
     SenderAwaiter(Sender sender)
-        : operation_state_(std::move(sender).connect(Receiver{this})) {}
+        : operation_state_(std::move(sender).connect_impl(Receiver{this})) {}
 
     SenderAwaiter(const SenderAwaiter &) = delete;
     SenderAwaiter &operator=(const SenderAwaiter &) = delete;
