@@ -1,6 +1,7 @@
 #include "condy/async_operations.hpp"
 #include "condy/execution.hpp"
 #include "condy/runtime.hpp"
+#include "condy/sender_operations.hpp"
 #include <doctest/doctest.h>
 #include <exec/when_any.hpp>
 
@@ -127,4 +128,30 @@ TEST_CASE("test execution - when_any with different thread") {
     runtime2.allow_exit();
     thread1.join();
     thread2.join();
+}
+
+TEST_CASE("test execution - condy when_all") {
+    using condy::operators::operator&&;
+
+    condy::Runtime runtime;
+    std::thread runtime_thread([&] { runtime.run(); });
+
+    auto scheduler = condy::get_scheduler(runtime);
+
+    bool executed = false;
+    ex::sender auto sender = ex::schedule(scheduler) | ex::let_value([&] {
+                                 executed = true;
+                                 return condy::async_nop() &&
+                                        condy::async_nop() &&
+                                        condy::async_nop();
+                             });
+
+    auto [r1, r2, r3] = ex::sync_wait(sender).value();
+    REQUIRE(executed);
+    REQUIRE(r1 == 0);
+    REQUIRE(r2 == 0);
+    REQUIRE(r3 == 0);
+
+    runtime.allow_exit();
+    runtime_thread.join();
 }

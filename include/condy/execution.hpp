@@ -9,13 +9,25 @@ namespace ex = stdexec;
 
 namespace detail {
 
+template <typename R> struct set_value_traits {
+    using type = ex::set_value_t(R);
+};
+template <typename R1, typename R2> struct set_value_traits<std::pair<R1, R2>> {
+    using type = ex::set_value_t(R1, R2);
+};
+template <typename... R> struct set_value_traits<std::tuple<R...>> {
+    using type = ex::set_value_t(R...);
+};
+template <typename R>
+using set_value_traits_t = typename set_value_traits<R>::type;
+
 template <typename SenderImpl> class StandardSender : public SenderImpl {
 public:
     using SenderImpl::SenderImpl;
 
     using sender_concept = ex::sender_t;
     using completion_signatures = ex::completion_signatures<
-        ex::set_value_t(typename SenderImpl::ReturnType),
+        set_value_traits_t<typename SenderImpl::ReturnType>,
         ex::set_error_t(std::error_code), ex::set_stopped_t()>;
 
     template <typename Receiver> auto connect(Receiver receiver) noexcept {
@@ -52,6 +64,10 @@ private:
                     std::move(receiver),
                     std::error_code(-res_code, std::generic_category()));
             }
+        }
+
+        template <typename T> void operator()(T &&res) noexcept {
+            ex::set_value(std::move(receiver), std::forward<T>(res));
         }
 
         auto get_stop_token() const noexcept {
