@@ -24,7 +24,7 @@ jobs:
           - { cc: clang, cxx: clang++ }
           - { cc: gcc, cxx: g++ }
         build-type: [Release, Debug]
-        liburing-version: [2.3, 2.6]
+        liburing-version: [2.3, default]
 
     steps:
       - name: Checkout Repository and Submodules
@@ -33,6 +33,7 @@ jobs:
           submodules: true
 
       - name: Checkout Liburing to Specified Version
+        if: matrix.liburing-version != 'default'
         run: |
           cd ./third_party/liburing
           git fetch --tags
